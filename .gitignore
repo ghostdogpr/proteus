@@ -1,5 +1,22 @@
 *.class
 *.log
 
-# virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
 hs_err_pid*
+
+target/
+.idea
+.bsp
+.bloop
+.metals
+.vscode
+project/metals.sbt
+
+vuepress/node_modules/*
+*.lock
+vuepress/package-lock.json
+
+package-lock.json
+node_modules/
+.DS_Store
+project/project/metals.sbt
+.cursor/mcp.json
