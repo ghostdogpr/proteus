@@ -24,7 +24,7 @@ addCommandAlias("check", "all scalafmtSbtCheck scalafmtCheck test:scalafmtCheck"
 lazy val root = project
   .in(file("."))
   .settings(publish / skip := true)
-  .aggregate(core)
+  .aggregate(core, benchmarks)
 
 lazy val core = project
   .in(file("core"))
@@ -39,6 +39,13 @@ lazy val core = project
         "dev.zio" %% "zio-test-sbt"      % zioVersion % Test
       )
   )
+
+lazy val benchmarks = project
+  .in(file("benchmarks"))
+  .settings(commonSettings)
+  .settings(publish / skip := true)
+  .dependsOn(core)
+  .enablePlugins(JmhPlugin)
 
 lazy val commonSettings = Def.settings(
   scalacOptions ++= Seq(
