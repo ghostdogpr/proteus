@@ -1,12 +1,9 @@
 package proteus
 
+// inspired by https://github.com/disneystreaming/smithy-translate/blob/main/modules/proto/src/smithytranslate/proto3/internals/ProtoIR.scala
 object ProtoIR {
 
-  final case class CompilationUnit(
-    packageName: Option[String],
-    statements: List[Statement],
-    options: List[TopLevelOption]
-  )
+  final case class CompilationUnit(packageName: Option[String], statements: List[Statement], options: List[TopLevelOption])
 
   final case class TopLevelOption(key: String, value: String)
 
@@ -31,11 +28,7 @@ object ProtoIR {
     }
   }
 
-  final case class Message(
-    name: String,
-    elements: List[MessageElement],
-    reserved: List[Reserved]
-  )
+  final case class Message(name: String, elements: List[MessageElement], reserved: List[Reserved])
 
   sealed trait MessageElement
   object MessageElement {
@@ -47,13 +40,7 @@ object ProtoIR {
 
   final case class Oneof(name: String, fields: List[Field])
 
-  final case class Field(
-    ty: Type,
-    name: String,
-    number: Int,
-    deprecated: Boolean = false,
-    optional: Boolean = false
-  )
+  final case class Field(ty: Type, name: String, number: Int, deprecated: Boolean = false, optional: Boolean = false)
 
   sealed trait Reserved
   object Reserved {
@@ -73,13 +60,7 @@ object ProtoIR {
 
   final case class RpcMessage(fqn: Fqn)
 
-  final case class Rpc(
-    name: String,
-    request: RpcMessage,
-    response: RpcMessage,
-    streamingRequest: Boolean,
-    streamingResponse: Boolean
-  )
+  final case class Rpc(name: String, request: RpcMessage, response: RpcMessage, streamingRequest: Boolean, streamingResponse: Boolean)
 
   sealed trait Type
   object Type {
@@ -105,10 +86,6 @@ object ProtoIR {
     final case class ListType(valueType: Type)               extends Type
     final case class RefType(fqn: Fqn)                       extends Type
     final case class EnumRefType(fqn: Fqn)                   extends Type
-
-    val Time  = RefType(Fqn(None, "Time"))
-    val Empty = RefType(Fqn(None, "Empty"))
-    val Dummy = RefType(Fqn(None, "Dummy"))
   }
 
   final case class Fqn(packageName: Option[List[String]], name: String) {
