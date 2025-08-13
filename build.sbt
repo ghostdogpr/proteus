@@ -1,8 +1,10 @@
 val scala3Version = "3.7.2"
 
 val grpcVersion            = "1.74.0"
-val zioVersion             = "2.1.20"
 val zioBlocksSchemaVersion = "0.0.0+519-f9a5c6a6-SNAPSHOT"
+val zioTestVersion         = "2.1.20"
+val zioGrpcVersion         = "0.6.3"
+val fs2GrpcVersion         = "2.8.2"
 
 inThisBuild(
   List(
@@ -24,7 +26,7 @@ addCommandAlias("check", "all scalafmtSbtCheck scalafmtCheck test:scalafmtCheck"
 lazy val root = project
   .in(file("."))
   .settings(publish / skip := true)
-  .aggregate(core, benchmarks)
+  .aggregate(core, grpc, zioGrpc, fs2Grpc, benchmarks)
 
 lazy val core = project
   .in(file("core"))
@@ -35,14 +37,14 @@ lazy val core = project
       Seq(
         "dev.zio" %% "zio-blocks-schema" % zioBlocksSchemaVersion,
         "io.grpc"  % "grpc-protobuf"     % grpcVersion,
-        "dev.zio" %% "zio-test"          % zioVersion % Test,
-        "dev.zio" %% "zio-test-sbt"      % zioVersion % Test
+        "dev.zio" %% "zio-test"          % zioTestVersion % Test,
+        "dev.zio" %% "zio-test-sbt"      % zioTestVersion % Test
       )
   )
 
-lazy val service = project
-  .in(file("service"))
-  .settings(name := "proteus-service")
+lazy val grpc = project
+  .in(file("grpc"))
+  .settings(name := "proteus-grpc")
   .settings(commonSettings)
   .settings(
     libraryDependencies ++=
@@ -51,6 +53,30 @@ lazy val service = project
       )
   )
   .dependsOn(core)
+
+lazy val zioGrpc = project
+  .in(file("grpc-zio"))
+  .settings(name := "proteus-grpc-zio")
+  .settings(commonSettings)
+  .settings(
+    libraryDependencies ++=
+      Seq(
+        "com.thesamet.scalapb.zio-grpc" %% "zio-grpc-core" % zioGrpcVersion
+      )
+  )
+  .dependsOn(grpc)
+
+lazy val fs2Grpc = project
+  .in(file("grpc-fs2"))
+  .settings(name := "proteus-grpc-fs2")
+  .settings(commonSettings)
+  .settings(
+    libraryDependencies ++=
+      Seq(
+        "org.typelevel" %% "fs2-grpc-runtime" % fs2GrpcVersion
+      )
+  )
+  .dependsOn(grpc)
 
 lazy val benchmarks = project
   .in(file("benchmarks"))
