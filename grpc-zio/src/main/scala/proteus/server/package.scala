@@ -9,16 +9,16 @@ import zio.stream.*
 
 import proteus.server.ServerInterceptor
 
-val zioBackend: ServerBackend[[A] =>> IO[StatusException, A], [A] =>> ZStream[Any, StatusException, A], RequestContext] =
+val zioBackend: ServerBackend[IO[StatusException, *], ZStream[Any, StatusException, *], RequestContext] =
   zioBackendWith(ServerInterceptor.empty)
 
 def zioBackendWith[Context](
-  interceptor: ServerInterceptor[[A] =>> A, [A] =>> A, RequestContext, Context],
+  interceptor: ServerInterceptor[IO[StatusException, *], ZStream[Any, StatusException, *], RequestContext, Context],
   runtime: Runtime[Any] = Runtime.default
-): ServerBackend[[A] =>> IO[StatusException, A], [A] =>> ZStream[Any, StatusException, A], Context] =
-  new ServerBackend[[A] =>> IO[StatusException, A], [A] =>> ZStream[Any, StatusException, A], Context] {
+): ServerBackend[IO[StatusException, *], ZStream[Any, StatusException, *], Context] =
+  new ServerBackend[IO[StatusException, *], ZStream[Any, StatusException, *], Context] {
     def handler[Request, Response](
-      rpc: ServerRpc[[A] =>> IO[StatusException, A], [A] =>> ZStream[Any, StatusException, A], Context, Request, Response]
+      rpc: ServerRpc[IO[StatusException, *], ZStream[Any, StatusException, *], Context, Request, Response]
     ): ServerCallHandler[Request, Response] =
       rpc match {
         case ServerRpc.Unary(_, logic)           =>

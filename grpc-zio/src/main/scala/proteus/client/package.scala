@@ -7,8 +7,8 @@ import scalapb.zio_grpc.client.ClientCalls
 import zio.*
 import zio.stream.*
 
-def zioBackend(channel: ZChannel): ClientBackend[[A] =>> IO[StatusException, A], [A] =>> ZStream[Any, StatusException, A]] =
-  new ClientBackend[[A] =>> IO[StatusException, A], [A] =>> ZStream[Any, StatusException, A]] {
+def zioBackend(channel: ZChannel): ClientBackend[IO[StatusException, *], ZStream[Any, StatusException, *]] =
+  new ClientBackend[IO[StatusException, *], ZStream[Any, StatusException, *]] {
     def client[Request, Response](service: Service[?], rpc: Rpc.Unary[Request, Response]): UIO[Request => IO[StatusException, Response]] = {
       val descriptor = rpc.toMethodDescriptor(service.name, service.fileDescriptor)
       ZIO.succeed { req =>

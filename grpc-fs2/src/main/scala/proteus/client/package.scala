@@ -3,11 +3,12 @@ package client
 
 import cats.effect.kernel.Async
 import cats.effect.std.Dispatcher
+import fs2.Stream
 import fs2.grpc.client.*
 import io.grpc.*
 
-def fs2Backend[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F]): ClientBackend[F, [A] =>> _root_.fs2.Stream[F, A]] =
-  new ClientBackend[F, [A] =>> _root_.fs2.Stream[F, A]] {
+def fs2Backend[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F]): ClientBackend[F, Stream[F, *]] =
+  new ClientBackend[F, Stream[F, *]] {
     import cats.syntax.all.*
 
     def client[Request, Response](service: Service[?], rpc: Rpc.Unary[Request, Response]): F[Request => F[Response]] = {
@@ -19,7 +20,7 @@ def fs2Backend[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F]): Client
     def client[Request, Response](
       service: Service[?],
       rpc: Rpc.ClientStreaming[Request, Response]
-    ): F[_root_.fs2.Stream[F, Request] => F[Response]] = {
+    ): F[Stream[F, Request] => F[Response]] = {
       val methodDescriptor = rpc.toMethodDescriptor(service.name, service.fileDescriptor)
       Fs2ClientCall[F](channel, methodDescriptor, dispatcher, ClientOptions.default)
         .map(call => call.streamingToUnaryCall(_, new Metadata()))
@@ -28,7 +29,7 @@ def fs2Backend[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F]): Client
     def client[Request, Response](
       service: Service[?],
       rpc: Rpc.ServerStreaming[Request, Response]
-    ): F[Request => _root_.fs2.Stream[F, Response]] = {
+    ): F[Request => Stream[F, Response]] = {
       val methodDescriptor = rpc.toMethodDescriptor(service.name, service.fileDescriptor)
       Fs2ClientCall[F](channel, methodDescriptor, dispatcher, ClientOptions.default)
         .map(call => call.unaryToStreamingCall(_, new Metadata()))
@@ -37,7 +38,7 @@ def fs2Backend[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F]): Client
     def client[Request, Response](
       service: Service[?],
       rpc: Rpc.BidiStreaming[Request, Response]
-    ): F[_root_.fs2.Stream[F, Request] => _root_.fs2.Stream[F, Response]] = {
+    ): F[Stream[F, Request] => Stream[F, Response]] = {
       val methodDescriptor = rpc.toMethodDescriptor(service.name, service.fileDescriptor)
       Fs2ClientCall[F](channel, methodDescriptor, dispatcher, ClientOptions.default)
         .map(call => call.streamingToStreamingCall(_, new Metadata()))
@@ -55,7 +56,7 @@ def fs2Backend[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F]): Client
     def clientWithMetadata[Request, Response](
       service: Service[?],
       rpc: Rpc.ClientStreaming[Request, Response]
-    ): F[(_root_.fs2.Stream[F, Request], Metadata) => F[(Response, Metadata)]] = {
+    ): F[(Stream[F, Request], Metadata) => F[(Response, Metadata)]] = {
       val methodDescriptor = rpc.toMethodDescriptor(service.name, service.fileDescriptor)
       Fs2ClientCall[F](channel, methodDescriptor, dispatcher, ClientOptions.default)
         .map(call => call.streamingToUnaryCallTrailers(_, _))
@@ -64,7 +65,7 @@ def fs2Backend[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F]): Client
     def clientWithMetadata[Request, Response](
       service: Service[?],
       rpc: Rpc.ServerStreaming[Request, Response]
-    ): F[(Request, Metadata) => _root_.fs2.Stream[F, Response]] = {
+    ): F[(Request, Metadata) => Stream[F, Response]] = {
       val methodDescriptor = rpc.toMethodDescriptor(service.name, service.fileDescriptor)
       Fs2ClientCall[F](channel, methodDescriptor, dispatcher, ClientOptions.default)
         .map(call => call.unaryToStreamingCall(_, _))
@@ -73,7 +74,7 @@ def fs2Backend[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F]): Client
     def clientWithMetadata[Request, Response](
       service: Service[?],
       rpc: Rpc.BidiStreaming[Request, Response]
-    ): F[(_root_.fs2.Stream[F, Request], Metadata) => _root_.fs2.Stream[F, Response]] = {
+    ): F[(Stream[F, Request], Metadata) => Stream[F, Response]] = {
       val methodDescriptor = rpc.toMethodDescriptor(service.name, service.fileDescriptor)
       Fs2ClientCall[F](channel, methodDescriptor, dispatcher, ClientOptions.default)
         .map(call => call.streamingToStreamingCall(_, _))

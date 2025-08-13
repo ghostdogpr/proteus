@@ -3,24 +3,25 @@ package server
 
 import cats.effect.kernel.Async
 import cats.effect.std.Dispatcher
+import fs2.Stream
 import fs2.grpc.server.*
 import io.grpc.*
 
 import proteus.server.ServerBackend.RequestResponseMetadata
 import proteus.server.ServerInterceptor
 
-def fs2Backend[F[_]: Async](dispatcher: Dispatcher[F]): ServerBackend[F, [A] =>> _root_.fs2.Stream[F, A], RequestResponseMetadata] =
+def fs2Backend[F[_]: Async](dispatcher: Dispatcher[F]): ServerBackend[F, Stream[F, *], RequestResponseMetadata] =
   fs2BackendWith(ServerInterceptor.empty, dispatcher)
 
 def fs2BackendWith[F[_]: Async, Context](
-  interceptor: ServerInterceptor[F, [A] =>> _root_.fs2.Stream[F, A], RequestResponseMetadata, Context],
+  interceptor: ServerInterceptor[F, Stream[F, *], RequestResponseMetadata, Context],
   dispatcher: Dispatcher[F],
   serverOptions: ServerOptions = ServerOptions.default
-): ServerBackend[F, [A] =>> _root_.fs2.Stream[F, A], Context] =
-  new ServerBackend[F, [A] =>> _root_.fs2.Stream[F, A], Context] {
+): ServerBackend[F, Stream[F, *], Context] =
+  new ServerBackend[F, Stream[F, *], Context] {
     import cats.syntax.all.*
     def handler[Request, Response](
-      rpc: ServerRpc[F, [A] =>> _root_.fs2.Stream[F, A], Context, Request, Response]
+      rpc: ServerRpc[F, Stream[F, *], Context, Request, Response]
     ): ServerCallHandler[Request, Response] =
       rpc match {
         case ServerRpc.Unary(_, logic)           =>
