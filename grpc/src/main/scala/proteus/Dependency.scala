@@ -22,7 +22,7 @@ case class Dependency(dependencyName: String, types: Set[ProtoIR.TopLevelDef] = 
   def add[A](codec: ProtobufCodec[A]): Dependency =
     copy(types = types ++ ProtobufCodec.toProtoIR(codec))
 
-  def exclude(dependency: Dependency): Dependency =
+  def dependsOn(dependency: Dependency): Dependency =
     copy(types = types -- dependency.types, imports = ProtoIR.Statement.ImportStatement(dependency.dependencyName) :: imports)
 
   def render(packageName: Option[String], options: List[ProtoIR.TopLevelOption]): String =

@@ -1,11 +1,9 @@
 package proteus
 package server
 
-import com.google.protobuf.Descriptors.FileDescriptor
-
 case class ServerServiceBuilder[Unary[_], Streaming[_], Context, Rpcs] private (
   serverRpcs: List[ServerRpc[Unary, Streaming, Context, ?, ?]],
-  dependencies: List[FileDescriptor] = Nil
+  dependencies: List[Dependency] = Nil
 )(
   using val backend: ServerBackend[Unary, Streaming, Context]
 ) {
@@ -58,7 +56,7 @@ case class ServerServiceBuilder[Unary[_], Streaming[_], Context, Rpcs] private (
     ServerServiceBuilder(serverRpcs :+ server.ServerRpc.BidiStreaming(rpc, logic(_, _)))
 
   def dependsOn(dependency: Dependency*): ServerServiceBuilder[Unary, Streaming, Context, Rpcs] =
-    copy(dependencies = dependencies ++ dependency.flatMap(_.fileDescriptor))
+    copy(dependencies = dependencies ++ dependency)
 
   def build(service: Service[Rpcs]): ServerService[Unary, Streaming, Context] =
     ServerService(service.dependsOn(dependencies), serverRpcs)(using backend)
