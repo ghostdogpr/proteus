@@ -77,7 +77,7 @@ object DirectBackendGrpcSpec extends ZIOSpecDefault {
       timestamp = java.lang.System.currentTimeMillis()
     )
 
-  val serverService = ServerServiceBuilder(using DirectServerBackend.apply)
+  val serverService = ServerServiceBuilder(using DirectServerBackend)
     .rpc(complexRpc, processComplexRequest)
     .build(testService)
 

@@ -31,7 +31,4 @@ class DirectServerBackend[Context](interceptor: ServerInterceptor[[A] =>> A, [A]
     }
 }
 
-object DirectServerBackend {
-  def apply: DirectServerBackend[RequestResponseMetadata] =
-    new DirectServerBackend(ServerInterceptor.empty)
-}
+object DirectServerBackend extends DirectServerBackend(ServerInterceptor.empty)

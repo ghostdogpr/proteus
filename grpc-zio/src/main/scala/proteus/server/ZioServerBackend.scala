@@ -28,7 +28,4 @@ class ZioServerBackend[Context](
     }
 }
 
-object ZioServerBackend {
-  def apply: ZioServerBackend[RequestContext] =
-    new ZioServerBackend(ServerInterceptor.empty)
-}
+object ZioServerBackend extends ZioServerBackend(ServerInterceptor.empty, Runtime.default)
