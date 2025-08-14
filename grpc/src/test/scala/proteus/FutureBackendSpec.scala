@@ -31,12 +31,12 @@ object FutureBackendSpec extends ZIOSpecDefault {
 
   def spec = suite("FutureBackendSpec")(
     test("should discover services via gRPC reflection") {
-      assertTrue(testReflection(8998, serverService.definition))
+      assertTrue(testReflection(8000, serverService.definition))
     },
     test("should handle complex gRPC request/response with future backend") {
-      val port         = 8999
+      val port         = 8001
       val server       = NettyServerBuilder.forPort(port).addService(serverService.definition).build().start()
-      val channel      = NettyChannelBuilder.forAddress("localhost", 8999).usePlaintext().build()
+      val channel      = NettyChannelBuilder.forAddress("localhost", port).usePlaintext().build()
       val clientFuture = new FutureClientBackend(channel).client(testService, complexRpc)
       val client       = Await.result(clientFuture, 5.seconds)
 
@@ -55,9 +55,9 @@ object FutureBackendSpec extends ZIOSpecDefault {
       assertTrue(validateComplexResponse(response, response2, response3))
     },
     test("should handle client and server metadata") {
-      val port         = 8997
+      val port         = 8002
       val server       = NettyServerBuilder.forPort(port).addService(metadataServerService.definition).build().start()
-      val channel      = NettyChannelBuilder.forAddress("localhost", 8997).usePlaintext().build()
+      val channel      = NettyChannelBuilder.forAddress("localhost", port).usePlaintext().build()
       val clientFuture = new FutureClientBackend(channel).clientWithMetadata(metadataService, metadataRpc)
       val client       = Await.result(clientFuture, 5.seconds)
 

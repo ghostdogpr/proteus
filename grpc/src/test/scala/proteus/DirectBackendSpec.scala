@@ -22,12 +22,12 @@ object DirectBackendSpec extends ZIOSpecDefault {
 
   def spec = suite("DirectBackendSpec")(
     test("should discover services via gRPC reflection") {
-      assertTrue(testReflection(9998, serverService.definition))
+      assertTrue(testReflection(9000, serverService.definition))
     },
     test("should handle complex gRPC request/response with direct backend") {
-      val port    = 9999
+      val port    = 9001
       val server  = NettyServerBuilder.forPort(port).addService(serverService.definition).build().start()
-      val channel = NettyChannelBuilder.forAddress("localhost", 9999).usePlaintext().build()
+      val channel = NettyChannelBuilder.forAddress("localhost", port).usePlaintext().build()
       val client  = new DirectClientBackend(channel).client(testService, complexRpc)
 
       val testRequest = sampleRequest
@@ -45,9 +45,9 @@ object DirectBackendSpec extends ZIOSpecDefault {
       assertTrue(validateComplexResponse(response, response2, response3))
     },
     test("should handle client and server metadata") {
-      val port    = 9997
+      val port    = 9002
       val server  = NettyServerBuilder.forPort(port).addService(metadataServerService.definition).build().start()
-      val channel = NettyChannelBuilder.forAddress("localhost", 9997).usePlaintext().build()
+      val channel = NettyChannelBuilder.forAddress("localhost", port).usePlaintext().build()
       val client  = new DirectClientBackend(channel).clientWithMetadata(metadataService, metadataRpc)
 
       val requestMetadata = new Metadata()

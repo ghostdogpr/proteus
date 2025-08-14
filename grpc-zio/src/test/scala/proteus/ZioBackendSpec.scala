@@ -50,12 +50,12 @@ object ZioBackendSpec extends ZIOSpecDefault {
 
   def spec = suite("ZioBackendSpec")(
     test("should discover services via gRPC reflection") {
-      assertTrue(testReflection(7998, serverService.definition))
+      assertTrue(testReflection(7010, serverService.definition))
     },
     test("should handle complex gRPC request/response with zio backend") {
-      val port          = 7999
+      val port          = 7011
       val server        = NettyServerBuilder.forPort(port).addService(serverService.definition).build().start()
-      val channel       = NettyChannelBuilder.forAddress("localhost", 7999).usePlaintext().build()
+      val channel       = NettyChannelBuilder.forAddress("localhost", port).usePlaintext().build()
       val zChannel      = ZChannel(channel, Seq.empty)
       val clientBackend = new ZioClientBackend(zChannel)
 
@@ -75,9 +75,9 @@ object ZioBackendSpec extends ZIOSpecDefault {
         }.ignore)
     },
     test("should handle client and server metadata") {
-      val port          = 7997
+      val port          = 7012
       val server        = NettyServerBuilder.forPort(port).addService(metadataServerService.definition).build().start()
-      val channel       = NettyChannelBuilder.forAddress("localhost", 7997).usePlaintext().build()
+      val channel       = NettyChannelBuilder.forAddress("localhost", port).usePlaintext().build()
       val zChannel      = ZChannel(channel, Seq.empty)
       val clientBackend = new ZioClientBackend(zChannel)
 
@@ -98,9 +98,9 @@ object ZioBackendSpec extends ZIOSpecDefault {
         }.ignore)
     },
     test("should handle client streaming") {
-      val port          = 7950
+      val port          = 7013
       val server        = NettyServerBuilder.forPort(port).addService(streamingServerService.definition).build().start()
-      val channel       = NettyChannelBuilder.forAddress("localhost", 7950).usePlaintext().build()
+      val channel       = NettyChannelBuilder.forAddress("localhost", port).usePlaintext().build()
       val zChannel      = ZChannel(channel, Seq.empty)
       val clientBackend = new ZioClientBackend(zChannel)
 
@@ -118,9 +118,9 @@ object ZioBackendSpec extends ZIOSpecDefault {
         }.ignore)
     },
     test("should handle server streaming") {
-      val port          = 7951
+      val port          = 7014
       val server        = NettyServerBuilder.forPort(port).addService(streamingServerService.definition).build().start()
-      val channel       = NettyChannelBuilder.forAddress("localhost", 7951).usePlaintext().build()
+      val channel       = NettyChannelBuilder.forAddress("localhost", port).usePlaintext().build()
       val zChannel      = ZChannel(channel, Seq.empty)
       val clientBackend = new ZioClientBackend(zChannel)
 
@@ -140,9 +140,9 @@ object ZioBackendSpec extends ZIOSpecDefault {
         }.ignore)
     },
     test("should handle bidirectional streaming") {
-      val port          = 7952
+      val port          = 7015
       val server        = NettyServerBuilder.forPort(port).addService(streamingServerService.definition).build().start()
-      val channel       = NettyChannelBuilder.forAddress("localhost", 7952).usePlaintext().build()
+      val channel       = NettyChannelBuilder.forAddress("localhost", port).usePlaintext().build()
       val zChannel      = ZChannel(channel, Seq.empty)
       val clientBackend = new ZioClientBackend(zChannel)
 
