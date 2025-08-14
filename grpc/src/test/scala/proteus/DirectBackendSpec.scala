@@ -2,11 +2,11 @@ package proteus
 
 import java.util.concurrent.TimeUnit
 
-import GrpcTestUtils.*
 import io.grpc.Metadata
 import io.grpc.netty.{NettyChannelBuilder, NettyServerBuilder}
 import zio.test.*
 
+import proteus.GrpcTestUtils.*
 import proteus.client.DirectClientBackend
 import proteus.server.{DirectServerBackend, RequestResponseMetadata, ServerServiceBuilder}
 

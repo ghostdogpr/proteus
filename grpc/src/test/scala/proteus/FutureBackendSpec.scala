@@ -5,11 +5,11 @@ import java.util.concurrent.TimeUnit
 import scala.concurrent.{Await, Future}
 import scala.concurrent.duration.*
 
-import GrpcTestUtils.*
 import io.grpc.Metadata
 import io.grpc.netty.{NettyChannelBuilder, NettyServerBuilder}
 import zio.test.*
 
+import proteus.GrpcTestUtils.*
 import proteus.client.FutureClientBackend
 import proteus.server.{FutureServerBackend, RequestResponseMetadata, ServerServiceBuilder}
 

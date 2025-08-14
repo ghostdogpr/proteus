@@ -2,14 +2,15 @@ package proteus
 
 import java.util.concurrent.TimeUnit
 
-import GrpcTestUtils.*
 import io.grpc.Metadata
 import io.grpc.StatusException
 import io.grpc.netty.{NettyChannelBuilder, NettyServerBuilder}
 import scalapb.zio_grpc.{RequestContext, ZChannel}
 import zio.*
+import zio.stream.*
 import zio.test.*
 
+import proteus.GrpcTestUtils.*
 import proteus.client.ZioClientBackend
 import proteus.server.{ServerServiceBuilder, ZioServerBackend}
 
@@ -18,19 +19,34 @@ object ZioBackendSpec extends ZIOSpecDefault {
   def processComplexRequestZio(req: ComplexRequest): IO[StatusException, ComplexResponse] =
     ZIO.succeed(processComplexRequest(req))
 
+  val serverService = ServerServiceBuilder(using ZioServerBackend)
+    .rpc(complexRpc, processComplexRequestZio)
+    .build(testService)
+
   def processWithMetadataZio(req: MetadataRequest, ctx: RequestContext): IO[StatusException, MetadataResponse] =
     for {
       requestMetadata <- ctx.metadata.get(Metadata.Key.of("client-id", Metadata.ASCII_STRING_MARSHALLER)).map(_.getOrElse("unknown"))
       _               <- ctx.responseMetadata.put(Metadata.Key.of("server-response", Metadata.ASCII_STRING_MARSHALLER), "processed")
     } yield MetadataResponse(req.message.toUpperCase, requestMetadata, "Server processed with metadata")
 
-  val serverService = ServerServiceBuilder(using ZioServerBackend)
-    .rpc(complexRpc, processComplexRequestZio)
-    .build(testService)
-
   val metadataServerService = ServerServiceBuilder(using ZioServerBackend)
     .rpcWithContext(metadataRpc, processWithMetadataZio)
     .build(metadataService)
+
+  def clientStreamingZio(stream: ZStream[Any, StatusException, StreamRequest]): IO[StatusException, StreamResponse] =
+    stream.runFold(0)((acc, req) => acc + req.value).map(sum => StreamResponse(sum))
+
+  def serverStreamingZio(req: StreamRequest): ZStream[Any, StatusException, StreamResponse] =
+    ZStream.range(1, req.value + 1).map(i => StreamResponse(i))
+
+  def bidiStreamingZio(stream: ZStream[Any, StatusException, StreamRequest]): ZStream[Any, StatusException, StreamResponse] =
+    stream.map(req => StreamResponse(req.value * 2))
+
+  val streamingServerService = ServerServiceBuilder(using ZioServerBackend)
+    .rpc(clientStreamingRpc, clientStreamingZio)
+    .rpc(serverStreamingRpc, serverStreamingZio)
+    .rpc(bidiStreamingRpc, bidiStreamingZio)
+    .build(streamingService)
 
   def spec = suite("ZioBackendSpec")(
     test("should discover services via gRPC reflection") {
@@ -76,6 +92,69 @@ object ZioBackendSpec extends ZIOSpecDefault {
 
       program
         .flatMap(result => assertTrue(validateMetadataResponse(result._1, result._2, "zio-client-789", "hello zio metadata")))
+        .ensuring(ZIO.attempt {
+          server.shutdown().awaitTermination(5, TimeUnit.SECONDS)
+          channel.shutdown().awaitTermination(5, TimeUnit.SECONDS)
+        }.ignore)
+    },
+    test("should handle client streaming") {
+      val port          = 7950
+      val server        = NettyServerBuilder.forPort(port).addService(streamingServerService.definition).build().start()
+      val channel       = NettyChannelBuilder.forAddress("localhost", 7950).usePlaintext().build()
+      val zChannel      = ZChannel(channel, Seq.empty)
+      val clientBackend = new ZioClientBackend(zChannel)
+
+      val program = for {
+        clientFactory <- clientBackend.client(streamingService, clientStreamingRpc)
+        requestStream  = ZStream(StreamRequest(1), StreamRequest(2), StreamRequest(3), StreamRequest(4))
+        response      <- clientFactory(requestStream)
+      } yield response
+
+      program
+        .flatMap(response => assertTrue(response.result == 10)) // 1+2+3+4 = 10
+        .ensuring(ZIO.attempt {
+          server.shutdown().awaitTermination(5, TimeUnit.SECONDS)
+          channel.shutdown().awaitTermination(5, TimeUnit.SECONDS)
+        }.ignore)
+    },
+    test("should handle server streaming") {
+      val port          = 7951
+      val server        = NettyServerBuilder.forPort(port).addService(streamingServerService.definition).build().start()
+      val channel       = NettyChannelBuilder.forAddress("localhost", 7951).usePlaintext().build()
+      val zChannel      = ZChannel(channel, Seq.empty)
+      val clientBackend = new ZioClientBackend(zChannel)
+
+      val program = for {
+        clientFactory <- clientBackend.client(streamingService, serverStreamingRpc)
+        responseStream = clientFactory(StreamRequest(5))
+        responses     <- responseStream.runCollect
+      } yield responses
+
+      program
+        .flatMap(responses =>
+          assertTrue(responses == Chunk(StreamResponse(1), StreamResponse(2), StreamResponse(3), StreamResponse(4), StreamResponse(5)))
+        )
+        .ensuring(ZIO.attempt {
+          server.shutdown().awaitTermination(5, TimeUnit.SECONDS)
+          channel.shutdown().awaitTermination(5, TimeUnit.SECONDS)
+        }.ignore)
+    },
+    test("should handle bidirectional streaming") {
+      val port          = 7952
+      val server        = NettyServerBuilder.forPort(port).addService(streamingServerService.definition).build().start()
+      val channel       = NettyChannelBuilder.forAddress("localhost", 7952).usePlaintext().build()
+      val zChannel      = ZChannel(channel, Seq.empty)
+      val clientBackend = new ZioClientBackend(zChannel)
+
+      val program = for {
+        clientFactory <- clientBackend.client(streamingService, bidiStreamingRpc)
+        requestStream  = ZStream(StreamRequest(10), StreamRequest(20), StreamRequest(30))
+        responseStream = clientFactory(requestStream)
+        responses     <- responseStream.runCollect
+      } yield responses
+
+      program
+        .flatMap(responses => assertTrue(responses == Chunk(StreamResponse(20), StreamResponse(40), StreamResponse(60))))
         .ensuring(ZIO.attempt {
           server.shutdown().awaitTermination(5, TimeUnit.SECONDS)
           channel.shutdown().awaitTermination(5, TimeUnit.SECONDS)

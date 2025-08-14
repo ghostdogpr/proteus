@@ -11,6 +11,10 @@ import proteus.server.RequestResponseMetadata
 
 object GrpcTestUtils {
 
+  // =============================================================================
+  // Complex Message Types (for testing all protobuf features)
+  // =============================================================================
+
   enum Priority derives Schema {
     case Low, Medium, High, Critical
   }
@@ -52,8 +56,63 @@ object GrpcTestUtils {
     timestamp: Long
   ) derives Schema
 
+  // =============================================================================
+  // Simple Metadata Types (for testing client/server metadata)
+  // =============================================================================
+
+  case class MetadataRequest(message: String) derives Schema
+  case class MetadataResponse(echo: String, clientId: String, serverNote: String) derives Schema
+
+  // =============================================================================
+  // Simple Streaming Types (for testing all streaming patterns)
+  // =============================================================================
+
+  case class StreamRequest(value: Int) derives Schema
+  case class StreamResponse(result: Int) derives Schema
+
+  // =============================================================================
+  // RPC Definitions
+  // =============================================================================
+
+  // Unary RPC with complex messages
   val complexRpc = Rpc.unary[ComplexRequest, ComplexResponse]("ProcessComplex")
   val testService = Service("TestService").rpc(complexRpc)
+
+  // Unary RPC with metadata
+  val metadataRpc = Rpc.unary[MetadataRequest, MetadataResponse]("ProcessWithMetadata")
+  val metadataService = Service("MetadataService").rpc(metadataRpc)
+
+  // Streaming RPCs
+  val clientStreamingRpc = Rpc.clientStreaming[StreamRequest, StreamResponse]("ClientStreaming")
+  val serverStreamingRpc = Rpc.serverStreaming[StreamRequest, StreamResponse]("ServerStreaming")
+  val bidiStreamingRpc = Rpc.bidiStreaming[StreamRequest, StreamResponse]("BidiStreaming")
+
+  val streamingService = Service("StreamingService")
+    .rpc(clientStreamingRpc)
+    .rpc(serverStreamingRpc)
+    .rpc(bidiStreamingRpc)
+
+  // =============================================================================
+  // Test Data
+  // =============================================================================
+
+  val sampleRequest = ComplexRequest(
+    12345L,
+    "test-service",
+    true,
+    95.5,
+    List(1, 2, 3, 5, 8, 13),
+    List("important", "test", "grpc"),
+    Map("version" -> 1, "env" -> 2),
+    Priority.High,
+    ContactMethod.Email("test@example.com"),
+    Address("123 Test St", "Test City", "Test Country", 12345),
+    Some(42)
+  )
+
+  // =============================================================================
+  // Server Logic (shared implementations for testing)
+  // =============================================================================
 
   def processComplexRequest(req: ComplexRequest): ComplexResponse =
     ComplexResponse(
@@ -76,19 +135,15 @@ object GrpcTestUtils {
       timestamp = java.lang.System.currentTimeMillis()
     )
 
-  val sampleRequest = ComplexRequest(
-    12345L,
-    "test-service",
-    true,
-    95.5,
-    List(1, 2, 3, 5, 8, 13),
-    List("important", "test", "grpc"),
-    Map("version" -> 1, "env" -> 2),
-    Priority.High,
-    ContactMethod.Email("test@example.com"),
-    Address("123 Test St", "Test City", "Test Country", 12345),
-    Some(42)
-  )
+  def processWithMetadata(req: MetadataRequest, ctx: RequestResponseMetadata): MetadataResponse = {
+    val clientId = Option(ctx.requestMetadata.get(Metadata.Key.of("client-id", Metadata.ASCII_STRING_MARSHALLER))).getOrElse("unknown")
+    ctx.responseMetadata.put(Metadata.Key.of("server-response", Metadata.ASCII_STRING_MARSHALLER), "processed")
+    MetadataResponse(req.message.toUpperCase, clientId, "Server processed with metadata")
+  }
+
+  // =============================================================================
+  // Validation Functions
+  // =============================================================================
 
   def validateComplexResponse(response: ComplexResponse, response2: ComplexResponse, response3: ComplexResponse): Boolean =
     response.processedId == 24690L &&
@@ -110,23 +165,15 @@ object GrpcTestUtils {
     response3.preferredContact == ContactMethod.Slack("my-workspace", "#general") &&
     response3.processingNote == "No count provided"
 
-  case class MetadataRequest(message: String) derives zio.blocks.schema.Schema
-  case class MetadataResponse(echo: String, clientId: String, serverNote: String) derives zio.blocks.schema.Schema
-
-  val metadataRpc = Rpc.unary[MetadataRequest, MetadataResponse]("ProcessWithMetadata")
-  val metadataService = Service("MetadataService").rpc(metadataRpc)
-
-  def processWithMetadata(req: MetadataRequest, ctx: RequestResponseMetadata): MetadataResponse = {
-    val clientId = Option(ctx.requestMetadata.get(Metadata.Key.of("client-id", Metadata.ASCII_STRING_MARSHALLER))).getOrElse("unknown")
-    ctx.responseMetadata.put(Metadata.Key.of("server-response", Metadata.ASCII_STRING_MARSHALLER), "processed")
-    MetadataResponse(req.message.toUpperCase, clientId, "Server processed with metadata")
-  }
-
   def validateMetadataResponse(response: MetadataResponse, responseMetadata: Metadata, expectedClientId: String, expectedMessage: String): Boolean =
     response.echo == expectedMessage.toUpperCase &&
     response.clientId == expectedClientId &&
     response.serverNote == "Server processed with metadata" &&
     responseMetadata.get(Metadata.Key.of("server-response", Metadata.ASCII_STRING_MARSHALLER)) == "processed"
+
+  // =============================================================================
+  // Test Utilities
+  // =============================================================================
 
   def testReflection(port: Int, serverDefinition: io.grpc.ServerServiceDefinition): Boolean = {
     val reflectionService = ProtoReflectionServiceV1.newInstance
