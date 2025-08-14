@@ -54,7 +54,7 @@ lazy val grpc = project
         "io.grpc" % "grpc-services" % grpcVersion % Test
       )
   )
-  .dependsOn(core)
+  .dependsOn(core % "compile->compile;test->test")
 
 lazy val zioGrpc = project
   .in(file("grpc-zio"))

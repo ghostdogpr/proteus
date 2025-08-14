@@ -242,10 +242,9 @@ object ProtobufDeriver extends Deriver[ProtobufCodec] {
     schema match {
       case p: Reflect.Primitive[?, ?] =>
         p.primitiveType match {
-          case _: PrimitiveType.Boolean | _: PrimitiveType.Float | _: PrimitiveType.Double | _: PrimitiveType.Int | _: PrimitiveType.Long |
-              _: PrimitiveType.String =>
+          case _: PrimitiveType.Boolean | _: PrimitiveType.Float | _: PrimitiveType.Double | _: PrimitiveType.Int | _: PrimitiveType.Long =>
             true
-          case _ => false
+          case _                                                                                                                          => false
         }
       case e: Reflect.Variant[?, ?]   => isEnum(e.cases)
       case _                          => false

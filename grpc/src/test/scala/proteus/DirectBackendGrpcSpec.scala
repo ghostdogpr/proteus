@@ -30,6 +30,7 @@ object DirectBackendGrpcSpec extends ZIOSpecDefault {
     isActive: Boolean,
     score: Double,
     numbers: List[Int],
+    tags: List[String],
     metadata: Map[String, Int],
     priority: Priority,
     contact: ContactMethod,
@@ -43,6 +44,7 @@ object DirectBackendGrpcSpec extends ZIOSpecDefault {
     wasActive: Boolean,
     adjustedScore: Double,
     processedNumbers: List[Int],
+    processedTags: List[String],
     responseMetadata: Map[String, Int],
     resultPriority: Priority,
     preferredContact: ContactMethod,
@@ -61,6 +63,7 @@ object DirectBackendGrpcSpec extends ZIOSpecDefault {
       wasActive = req.isActive,
       adjustedScore = req.score + 10.0,
       processedNumbers = req.numbers.map(_ + 1),
+      processedTags = req.tags.map(_.reverse),
       responseMetadata = req.metadata ++ Map("processed" -> 1, "server" -> 2),
       resultPriority = req.priority match {
         case Priority.Low      => Priority.Medium
@@ -91,6 +94,7 @@ object DirectBackendGrpcSpec extends ZIOSpecDefault {
         true,
         95.5,
         List(1, 2, 3, 5, 8, 13),
+        List("important", "test", "grpc"),
         Map("version" -> 1, "env" -> 2),
         Priority.High,
         ContactMethod.Email("test@example.com"),
@@ -117,6 +121,7 @@ object DirectBackendGrpcSpec extends ZIOSpecDefault {
           response.responseMetadata("processed") == 1 &&
           response.responseMetadata("server") == 2 &&
           response.processedNumbers == List(2, 3, 4, 6, 9, 14) &&
+          response.processedTags == List("tnatropmi", "tset", "cprg") &&
           response.resultPriority == Priority.Critical &&
           response.preferredContact == ContactMethod.Email("test@example.com") &&
           response.confirmedAddress.street == "123 Test St" &&
