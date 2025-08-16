@@ -143,6 +143,69 @@ object ProtobufCodecSpec extends ZIOSpecDefault {
 
         assert(decodedSome)(equalTo(withSome)) &&
           assert(decodedNone)(equalTo(withNone))
+      },
+      test("optional field None vs Some empty string encoding") {
+        case class OptionalFieldMessage(id: Int, optionalValue: Option[String]) derives Schema
+        val codec = Schema[OptionalFieldMessage].derive(ProtobufDeriver)
+
+        val messageWithNone           = OptionalFieldMessage(1, None)
+        val messageWithEmptyString    = OptionalFieldMessage(1, Some(""))
+        val messageWithNonEmptyString = OptionalFieldMessage(1, Some("test"))
+
+        val encodedNone        = codec.encode(messageWithNone)
+        val encodedEmptyString = codec.encode(messageWithEmptyString)
+        val encodedNonEmpty    = codec.encode(messageWithNonEmptyString)
+
+        val decodedNone        = codec.decode(encodedNone)
+        val decodedEmptyString = codec.decode(encodedEmptyString)
+        val decodedNonEmpty    = codec.decode(encodedNonEmpty)
+
+        assert(decodedNone)(equalTo(messageWithNone)) &&
+          assert(decodedEmptyString)(equalTo(messageWithEmptyString)) &&
+          assert(decodedNonEmpty)(equalTo(messageWithNonEmptyString)) &&
+          assert(encodedNone.length)(isLessThan(encodedEmptyString.length)) &&
+          assert(encodedEmptyString.length)(isLessThan(encodedNonEmpty.length))
+      },
+      test("optional primitives None vs Some default values") {
+        case class OptionalPrimitivesMessage(
+          optInt: Option[Int],
+          optLong: Option[Long], 
+          optBool: Option[Boolean],
+          optDouble: Option[Double],
+          optFloat: Option[Float]
+        ) derives Schema
+        val codec = Schema[OptionalPrimitivesMessage].derive(ProtobufDeriver)
+
+        val messageWithNone = OptionalPrimitivesMessage(None, None, None, None, None)
+        val messageWithDefaults = OptionalPrimitivesMessage(Some(0), Some(0L), Some(false), Some(0.0), Some(0.0f))
+
+        val encodedNone = codec.encode(messageWithNone)
+        val encodedDefaults = codec.encode(messageWithDefaults)
+
+        val decodedNone = codec.decode(encodedNone)
+        val decodedDefaults = codec.decode(encodedDefaults)
+
+        assert(decodedNone)(equalTo(messageWithNone)) &&
+          assert(decodedDefaults)(equalTo(messageWithDefaults)) &&
+          assert(encodedNone.length)(isLessThan(encodedDefaults.length))
+      },
+      test("optional enum None vs Some default value") {
+        enum Status derives Schema { case Active, Inactive, Pending }
+        case class OptionalEnumMessage(id: Int, status: Option[Status]) derives Schema
+        val codec = Schema[OptionalEnumMessage].derive(ProtobufDeriver)
+
+        val messageWithNone = OptionalEnumMessage(1, None)
+        val messageWithDefault = OptionalEnumMessage(1, Some(Status.Active))
+
+        val encodedNone = codec.encode(messageWithNone)
+        val encodedDefault = codec.encode(messageWithDefault)
+
+        val decodedNone = codec.decode(encodedNone)
+        val decodedDefault = codec.decode(encodedDefault)
+
+        assert(decodedNone)(equalTo(messageWithNone)) &&
+          assert(decodedDefault)(equalTo(messageWithDefault)) &&
+          assert(encodedNone.length)(isLessThan(encodedDefault.length))
       }
     ),
     suite("Nested Messages")(
@@ -156,6 +219,24 @@ object ProtobufCodecSpec extends ZIOSpecDefault {
         val decoded  = outerCodec.decode(encoded)
 
         assert(decoded)(equalTo(original))
+      },
+      test("optional message None vs Some with default values") {
+        case class InnerMessage(value: String, count: Int) derives Schema
+        case class OptionalMessageMessage(id: Int, inner: Option[InnerMessage]) derives Schema
+        val codec = Schema[OptionalMessageMessage].derive(ProtobufDeriver)
+
+        val messageWithNone = OptionalMessageMessage(1, None)
+        val messageWithDefault = OptionalMessageMessage(1, Some(InnerMessage("", 0)))
+
+        val encodedNone = codec.encode(messageWithNone)
+        val encodedDefault = codec.encode(messageWithDefault)
+
+        val decodedNone = codec.decode(encodedNone)
+        val decodedDefault = codec.decode(encodedDefault)
+
+        assert(decodedNone)(equalTo(messageWithNone)) &&
+          assert(decodedDefault)(equalTo(messageWithDefault)) &&
+          assert(encodedNone.length)(isLessThan(encodedDefault.length))
       }
     ),
     suite("Collections")(

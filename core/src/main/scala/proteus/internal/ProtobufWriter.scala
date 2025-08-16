@@ -31,7 +31,7 @@ private[proteus] object ProtobufWriter {
     def write(using output: CodedOutputStream): Unit = if (id == -1) output.writeStringNoTag(a) else output.writeString(id, a)
   }
 
-  final case class Message(id: Int, fields: List[ProtobufWriter], oneOfOrRepeated: Boolean) extends ProtobufWriter {
+  final case class Message(id: Int, fields: List[ProtobufWriter], alwaysEncode: Boolean) extends ProtobufWriter {
     val innerSize: Int                               = {
       var size      = 0
       var remaining = fields
@@ -41,7 +41,7 @@ private[proteus] object ProtobufWriter {
       }
       size
     }
-    val nonEmpty: Boolean                            = oneOfOrRepeated || innerSize != 0
+    val nonEmpty: Boolean                            = alwaysEncode || innerSize != 0
     val fullSize: Int                                =
       if (nonEmpty) 1 + CodedOutputStream.computeUInt32SizeNoTag(innerSize) + innerSize else 0
     def write(using output: CodedOutputStream): Unit = {
