@@ -88,9 +88,9 @@ object Renderer {
       val ty         = renderType(field.ty)
       val deprecated = if (field.deprecated) " [deprecated = true]" else ""
       val optional   = field.ty match {
-        case _: Type.PrimitiveType | _: Type.RefType | _: Type.EnumRefType =>
+        case _: Type.PrimitiveType | _: Type.EnumRefType          =>
           if (field.optional && !isOneof) "optional " else ""
-        case _: Type.ListType | _: Type.MapType                            =>
+        case _: Type.RefType | _: Type.ListType | _: Type.MapType =>
           ""
       }
       statement(s"$optional$ty ${field.name} = ${field.number}$deprecated")

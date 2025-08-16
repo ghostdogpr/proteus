@@ -135,7 +135,7 @@ object ProtobufCodec {
   ) extends ProtobufCodec[A] {
     val fieldMap: FieldMap = FieldMap(HashMap.from(fields.map(f => f.id -> f)))
 
-    def toProtoWriter(a: A, id: Int, registers: Registers, offset: RegisterOffset, alwaysEncode: Boolean): ProtobufWriter = {
+    def toProtoWriter(a: A, id: Int, registers: Registers, offset: RegisterOffset): ProtobufWriter = {
       deconstructor.deconstruct(registers, offset, a)
       val nextOffset = RegisterOffset.add(offset, usedRegisters)
       val builder    = List.newBuilder[ProtobufWriter]
@@ -145,7 +145,7 @@ object ProtobufCodec {
         if (res ne null) builder += res
         remaining = remaining.tail
       }
-      internal.ProtobufWriter.Message(id, builder.result(), alwaysEncode)
+      internal.ProtobufWriter.Message(id, builder.result())
     }
 
     def toProtoIR: ProtoIR.Message = {
@@ -193,7 +193,7 @@ object ProtobufCodec {
     def toElementProtoWriter[A](codec: ProtobufCodec[A]): (Int, Registers, RegisterOffset) => A => ProtobufWriter =
       codec match {
         case p: ProtobufCodec.Primitive[_]    => (id, _, _) => p.toProtoWriter(_, id, alwaysEncode = true)
-        case p: ProtobufCodec.Message[_]      => (id, registers, offset) => p.toProtoWriter(_, id, registers, offset, alwaysEncode = true)
+        case p: ProtobufCodec.Message[_]      => (id, registers, offset) => p.toProtoWriter(_, id, registers, offset)
         case p: ProtobufCodec.Enum[_]         => (id, _, _) => p.toProtoWriter(_, id, alwaysEncode = true)
         case p: ProtobufCodec.Transform[_, _] =>
           (id, registers, offset) => a => toElementProtoWriter(p.codec)(id, registers, offset)(p.to(registers, offset, a))
@@ -235,7 +235,7 @@ object ProtobufCodec {
         val builder = List.newBuilder[ProtobufWriter]
         while (it.hasNext) {
           val kv  = it.next
-          val res = element.toProtoWriter((deconstructor.getKey(kv), deconstructor.getValue(kv)), id, registers, offset, alwaysEncode = true)
+          val res = element.toProtoWriter((deconstructor.getKey(kv), deconstructor.getValue(kv)), id, registers, offset)
           if (res ne null) builder += res
         }
         internal.ProtobufWriter.Repeated(builder.result(), id, packed = false)
@@ -259,7 +259,7 @@ object ProtobufCodec {
   def toProtoWriter[A](codec: ProtobufCodec[A], a: A, id: Int, registers: Registers, offset: RegisterOffset, alwaysEncode: Boolean): ProtobufWriter =
     codec match {
       case p: ProtobufCodec.Primitive[_]         => p.toProtoWriter(a, id, alwaysEncode)
-      case p: ProtobufCodec.Message[_]           => p.toProtoWriter(a, id, registers, offset, alwaysEncode)
+      case p: ProtobufCodec.Message[_]           => p.toProtoWriter(a, id, registers, offset)
       case p: ProtobufCodec.Repeated[c, e]       => p.toProtoWriter(a, id, registers, offset, alwaysEncode)
       case p: ProtobufCodec.RepeatedMap[c, k, v] => p.toProtoWriter(a, id, registers, offset, alwaysEncode)
       case p: ProtobufCodec.Enum[_]              => p.toProtoWriter(a, id, alwaysEncode)
