@@ -136,8 +136,8 @@ class ProtobufDeriver(flags: Set[DerivationFlag] = Set.empty) extends Deriver[Pr
     doc: Doc,
     modifiers: Seq[Modifier.Variant]
   )(implicit F: HasBinding[F], D: HasInstance[F]): Lazy[ProtobufCodec[A]] =
-    if (typeName == TypeName.option)
-      D.instance(cases.find(_.name == TypeName.some.name).get.value.asRecord.get.fields.head.value.metadata)
+    if (typeName.name == unitOption.name && typeName.namespace == unitOption.namespace)
+      D.instance(cases.find(c => c.name == unitSome.name).get.value.asRecord.get.fields.head.value.metadata)
         .map(ProtobufCodec.Optional(_).asInstanceOf[ProtobufCodec[A]])
     else if (isEnum(cases)) {
       val reservedIndexes = List.empty // TODO
@@ -262,7 +262,27 @@ class ProtobufDeriver(flags: Set[DerivationFlag] = Set.empty) extends Deriver[Pr
   def deriveDynamic[F[_, _]](binding: Binding[BindingType.Dynamic, DynamicValue], doc: Doc, modifiers: Seq[Modifier.Dynamic])(
     implicit F: HasBinding[F],
     D: HasInstance[F]
-  ): Lazy[ProtobufCodec[DynamicValue]] = ???
+  ): Lazy[ProtobufCodec[DynamicValue]] = Lazy.fail(new Exception("Dynamic is not supported"))
+
+  def deriveWrapper[F[_, _], A, B](
+    wrapped: Reflect[F, B],
+    typeName: TypeName[A],
+    binding: Binding[BindingType.Wrapper[A, B], A],
+    doc: Doc,
+    modifiers: Seq[Modifier.Wrapper]
+  )(implicit F: HasBinding[F], D: HasInstance[F]): Lazy[ProtobufCodec[A]] = {
+    val wrapperBinding = binding.asInstanceOf[Binding.Wrapper[A, B]]
+    D.instance(wrapped.metadata).map { wrappedCodec =>
+      wrappedCodec.transform(
+        (b: B) =>
+          wrapperBinding.wrap(b) match {
+            case Right(a)    => a
+            case Left(error) => throw new Exception(s"Wrapper conversion failed: $error")
+          },
+        (a: A) => wrapperBinding.unwrap(a)
+      )
+    }
+  }
 
   private def isPacked(schema: Reflect[?, ?]): Boolean =
     schema match {
@@ -339,6 +359,8 @@ class ProtobufDeriver(flags: Set[DerivationFlag] = Set.empty) extends Deriver[Pr
   private def toUpperSnakeCase(s: String): String =
     s.split("(?=[A-Z])").map(_.toUpperCase).mkString("_")
 
+  private val unitOption = TypeName.option(TypeName.unit)
+  private val unitSome   = TypeName.some(TypeName.unit)
 }
 
 object ProtobufDeriver {
