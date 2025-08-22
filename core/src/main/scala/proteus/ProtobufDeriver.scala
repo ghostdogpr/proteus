@@ -57,15 +57,15 @@ class ProtobufDeriver(flags: Set[DerivationFlag] = Set.empty) extends Deriver[Pr
       Lazy
         .collectAll(fields.map(field => D.instance(field.value.metadata).map(TermInstance(field, _))).toVector)
         .map { fieldsWithInstances =>
-          val reservedIndexes = Set.empty[Int] // getReservedIndexes(record)
+          val reservedIndexes = getReservedIndexes(modifiers)
           val nested          = modifiers.collectFirst { case `nestedModifier` => true }.getOrElse(false)
           val builder         = List.newBuilder[ProtobufCodec.MessageField[?]]
           var id              = 0
 
-          def getField[A](index: Int, field: TermInstance[F, A] /*, annotations: List[Any]*/ ): Unit =
+          def getField[A](index: Int, field: TermInstance[F, A]): Unit =
             field.instance match {
               case ProtobufCodec.Message(_, fields, _, _, _, _, true, _)                                 =>
-                val idIterator = Iterator.empty // annotations.collectFirst { case reserved(numbers*) => numbers.iterator }.getOrElse(Iterator.empty)
+                val idIterator = getReservedIndexes(field.term.modifiers).iterator
                 fields.foreach { f =>
                   val caseId =
                     if (idIterator.hasNext) idIterator.next
@@ -74,7 +74,7 @@ class ProtobufDeriver(flags: Set[DerivationFlag] = Set.empty) extends Deriver[Pr
                       while (reservedIndexes.contains(id)) id += 1
                       id
                     }
-                  builder += f.copy(id = id, register = registers(index), oneOfName = Some(toSnakeCase(field.term.name)))
+                  builder += f.copy(id = caseId, register = registers(index), oneOfName = Some(toSnakeCase(field.term.name)))
                 }
               case optional: ProtobufCodec.Optional[a] if flags.contains(DerivationFlag.OptionalAsOneOf) =>
                 // add empty case
@@ -118,7 +118,7 @@ class ProtobufDeriver(flags: Set[DerivationFlag] = Set.empty) extends Deriver[Pr
           var idx = 0
           val len = fields.length
           while (idx < len) {
-            getField(idx, fieldsWithInstances(idx) /*, field.annotations*/ )
+            getField(idx, fieldsWithInstances(idx))
             idx += 1
           }
           ProtobufCodec.Message(
@@ -146,7 +146,7 @@ class ProtobufDeriver(flags: Set[DerivationFlag] = Set.empty) extends Deriver[Pr
       D.instance(cases.find(c => c.name == unitSome.name).get.value.asRecord.get.fields.head.value.metadata)
         .map(ProtobufCodec.Optional(_).asInstanceOf[ProtobufCodec[A]])
     else if (isEnum(cases, modifiers)) {
-      val reservedIndexes = List.empty // TODO
+      val reservedIndexes = getReservedIndexes(modifiers).toList
       val builder         = List.newBuilder[ProtobufCodec.EnumValue[A]]
       var index           = 0
       cases.foreach { c =>
@@ -161,7 +161,7 @@ class ProtobufDeriver(flags: Set[DerivationFlag] = Set.empty) extends Deriver[Pr
       val nested        = modifiers.collectFirst { case `nestedModifier` => true }.getOrElse(false)
       val discriminator = binding.asInstanceOf[Binding.Variant[A]].discriminator
       Lazy.collectAll(cases.map(c => D.instance(c.value.metadata).map(TermInstance(c, _))).toVector).map { casesWithInstances =>
-        val reservedIndexes = Set.empty[Int] // TODO
+        val reservedIndexes = getReservedIndexes(modifiers)
         val builder         = List.newBuilder[ProtobufCodec.MessageField[?]]
         var id              = 1
         val register        = Register.Object(0)
@@ -302,6 +302,11 @@ class ProtobufDeriver(flags: Set[DerivationFlag] = Set.empty) extends Deriver[Pr
       case e: Reflect.Variant[?, ?]   => isEnum(e.cases, e.modifiers)
       case _                          => false
     }
+
+  private def getReservedIndexes(modifiers: Seq[Modifier]): Set[Int] =
+    modifiers
+      .collectFirst { case Modifier.config("proteus.reserved", value) => value.split(",").map(_.trim.toInt).toSet }
+      .getOrElse(Set.empty)
 
   private def isEnum(cases: IndexedSeq[Term[?, ?, ?]], modifiers: Seq[Modifier]): Boolean =
     cases.forall(c =>

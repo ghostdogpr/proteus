@@ -240,6 +240,64 @@ message Phone {
 """
 
         assertTrue(rendered == expected)
+      },
+      test("proteus.reserved modifier skips reserved field numbers") {
+        @config("proteus.reserved", "2,4,6")
+        case class ReservedMessage(id: Int, name: String, value: String, active: Boolean) derives Schema
+
+        val codec    = Schema[ReservedMessage].derive(deriver)
+        val rendered = renderCodec(codec)
+        val expected = """syntax = "proto3";
+
+package test;
+
+message ReservedMessage {
+    reserved 2, 4, 6;
+    
+    int32 id = 1;
+    string name = 3;
+    string value = 5;
+    bool active = 7;
+}
+"""
+
+        assertTrue(rendered == expected)
+      },
+      test("proteus.reserved modifier on inline oneOf field controls case indexes") {
+        @config("proteus.inline", "true")
+        enum ContactType derives Schema {
+          case Email(address: String)
+          case Phone(number: String)
+        }
+        case class ContactMessage(
+          id: Int,
+          @config("proteus.reserved", "3,5") contact: ContactType
+        ) derives Schema
+
+        val codec    = Schema[ContactMessage].derive(deriver)
+        val rendered = renderCodec(codec)
+        val expected = """syntax = "proto3";
+
+package test;
+
+message ContactMessage {
+    int32 id = 1;
+    oneof contact {
+        Email email = 3;
+        Phone phone = 5;
+    }
+}
+
+message Email {
+    string address = 1;
+}
+
+message Phone {
+    string number = 1;
+}
+"""
+
+        assertTrue(rendered == expected)
       }
     ),
     suite("Derivation Flags")(
