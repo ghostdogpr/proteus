@@ -151,8 +151,10 @@ class ProtobufDeriver(flags: Set[DerivationFlag] = Set.empty) extends Deriver[Pr
       var index           = 0
       cases.foreach { c =>
         while (reservedIndexes.contains(index)) index += 1
-        val a = constructEnumCase(c).asInstanceOf[A]
-        builder += ProtobufCodec.EnumValue(toUpperSnakeCase(c.name), index, a) // TODO: rename, prefix, etc.
+        val a        = constructEnumCase(c).asInstanceOf[A]
+        val prefix   = getEnumPrefix(modifiers)
+        val enumName = if (prefix.nonEmpty) s"${prefix.toUpperCase}_${toUpperSnakeCase(c.name)}" else toUpperSnakeCase(c.name)
+        builder += ProtobufCodec.EnumValue(enumName, index, a)
         index += 1
       }
       Lazy(ProtobufCodec.Enum(getTypeName(typeName.name, modifiers), builder.result(), reservedIndexes))
@@ -312,6 +314,11 @@ class ProtobufDeriver(flags: Set[DerivationFlag] = Set.empty) extends Deriver[Pr
     modifiers
       .collectFirst { case Modifier.config("proteus.reserved", value) => value.split(",").map(_.trim.toInt).toSet }
       .getOrElse(Set.empty)
+
+  private def getEnumPrefix(modifiers: Seq[Modifier]): String =
+    modifiers
+      .collectFirst { case Modifier.config("proteus.enum.prefix", prefix) => prefix }
+      .getOrElse("")
 
   private def isEnum(cases: IndexedSeq[Term[?, ?, ?]], modifiers: Seq[Modifier]): Boolean =
     cases.forall(c =>

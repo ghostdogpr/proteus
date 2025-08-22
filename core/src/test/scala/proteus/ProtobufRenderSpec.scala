@@ -321,6 +321,30 @@ message RenamedUser {
 """
 
         assertTrue(rendered == expected)
+      },
+      test("proteus.enum.prefix modifier adds prefix to enum members") {
+        @config("proteus.enum.prefix", "STATUS")
+        enum Priority derives Schema { case Low, Medium, High }
+        case class PriorityMessage(priority: Priority) derives Schema
+
+        val codec    = Schema[PriorityMessage].derive(deriver)
+        val rendered = renderCodec(codec)
+        val expected = """syntax = "proto3";
+
+package test;
+
+message PriorityMessage {
+    Priority priority = 1;
+}
+
+enum Priority {
+    STATUS_LOW = 0;
+    STATUS_MEDIUM = 1;
+    STATUS_HIGH = 2;
+}
+"""
+
+        assertTrue(rendered == expected)
       }
     ),
     suite("Derivation Flags")(
