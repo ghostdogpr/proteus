@@ -23,7 +23,7 @@ case class Service[Rpcs] private (name: String, rpcs: List[Rpc[?, ?]]) {
     toProtoIR.filterNot(d => dependencyTypes.contains(d.name)).foreach {
       case ProtoIR.TopLevelDef.MessageDef(msg)     => fileBuilder.addMessageType(msg.toDescriptor): Unit
       case ProtoIR.TopLevelDef.EnumDef(enumDef)    => fileBuilder.addEnumType(enumDef.toDescriptor): Unit
-      case ProtoIR.TopLevelDef.ServiceDef(service) => fileBuilder.addService(service.toDescriptor)
+      case ProtoIR.TopLevelDef.ServiceDef(service) => fileBuilder.addService(service.toDescriptor): Unit
     }
     FileDescriptor.buildFrom(fileBuilder.build(), dependencyFileDescriptors.toArray)
   }

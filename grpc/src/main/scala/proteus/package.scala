@@ -35,6 +35,11 @@ extension (field: ProtoIR.Field) {
       case listType: ProtoIR.Type.ListType    =>
         fieldBuilder.setLabel(FieldDescriptorProto.Label.LABEL_REPEATED)
         fieldBuilder.setType(listType.valueType.toDescriptorType)
+        listType.valueType match {
+          case enumType: ProtoIR.Type.EnumRefType => fieldBuilder.setTypeName(enumType.fqn.render)
+          case messageType: ProtoIR.Type.RefType  => fieldBuilder.setTypeName(messageType.fqn.render)
+          case _                                  =>
+        }
       case mapType: ProtoIR.Type.MapType      =>
         fieldBuilder.setLabel(FieldDescriptorProto.Label.LABEL_REPEATED)
         fieldBuilder.setType(FieldDescriptorProto.Type.TYPE_MESSAGE)

@@ -132,9 +132,9 @@ object Fs2BackendSpec extends ZIOSpecDefault {
           val clientBackend = new Fs2ClientBackend[IO](channel, dispatcher)
 
           val program = for {
-            client <- clientBackend.client(clientStreamingService, clientStreamingRpc)
-            requestStream  = Stream(StreamRequest(1), StreamRequest(2), StreamRequest(3), StreamRequest(4))
-            response      <- client(requestStream)
+            client       <- clientBackend.client(clientStreamingService, clientStreamingRpc)
+            requestStream = Stream(StreamRequest(1), StreamRequest(2), StreamRequest(3), StreamRequest(4))
+            response     <- client(requestStream)
           } yield response
 
           program.guarantee {
@@ -164,7 +164,7 @@ object Fs2BackendSpec extends ZIOSpecDefault {
           val clientBackend = new Fs2ClientBackend[IO](channel, dispatcher)
 
           val program = for {
-            client <- clientBackend.client(serverStreamingService, serverStreamingRpc)
+            client        <- clientBackend.client(serverStreamingService, serverStreamingRpc)
             responseStream = client(StreamRequest(5))
             responses     <- responseStream.compile.toList
           } yield responses
@@ -196,7 +196,7 @@ object Fs2BackendSpec extends ZIOSpecDefault {
           val clientBackend = new Fs2ClientBackend[IO](channel, dispatcher)
 
           val program = for {
-            client <- clientBackend.client(bidiStreamingService, bidiStreamingRpc)
+            client        <- clientBackend.client(bidiStreamingService, bidiStreamingRpc)
             requestStream  = Stream(StreamRequest(10), StreamRequest(20), StreamRequest(30))
             responseStream = client(requestStream)
             responses     <- responseStream.compile.toList
