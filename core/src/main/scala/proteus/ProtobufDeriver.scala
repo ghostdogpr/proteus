@@ -13,6 +13,11 @@ import proteus.internal.*
 
 class ProtobufDeriver(flags: Set[DerivationFlag] = Set.empty) extends Deriver[ProtobufCodec] {
 
+  val unwrapModifier = Modifier.config("proteus.unwrap", "true")
+  val inlineModifier = Modifier.config("proteus.inline", "true")
+  val nestedModifier = Modifier.config("proteus.nested", "true")
+  val oneofModifier  = Modifier.config("proteus.oneof", "true")
+
   def derivePrimitive[F[_, _], A](
     primitiveType: PrimitiveType[A],
     typeName: TypeName[A],
@@ -29,7 +34,7 @@ class ProtobufDeriver(flags: Set[DerivationFlag] = Set.empty) extends Deriver[Pr
     doc: Doc,
     modifiers: Seq[Modifier.Record]
   )(implicit F: HasBinding[F], D: HasInstance[F]): Lazy[ProtobufCodec[A]] = {
-    val shouldUnwrap  = modifiers.collectFirst { case Modifier.config("proteus.unwrap", "true") => true }.getOrElse(false) && fields.length == 1
+    val shouldUnwrap  = modifiers.collectFirst { case `unwrapModifier` => true }.getOrElse(false) && fields.length == 1
     val recordBinding = binding.asInstanceOf[Binding.Record[A]]
     val registers     = Reflect.Record.registers(fields.map(_.value).toArray)
     val offset        = Reflect.Record.usedRegisters(registers)
@@ -53,7 +58,7 @@ class ProtobufDeriver(flags: Set[DerivationFlag] = Set.empty) extends Deriver[Pr
         .collectAll(fields.map(field => D.instance(field.value.metadata).map(TermInstance(field, _))).toVector)
         .map { fieldsWithInstances =>
           val reservedIndexes = Set.empty[Int] // getReservedIndexes(record)
-          val nested          = modifiers.collectFirst { case Modifier.config("proteus.nested", "true") => true }.getOrElse(false)
+          val nested          = modifiers.collectFirst { case `nestedModifier` => true }.getOrElse(false)
           val builder         = List.newBuilder[ProtobufCodec.MessageField[?]]
           var id              = 0
 
@@ -152,8 +157,8 @@ class ProtobufDeriver(flags: Set[DerivationFlag] = Set.empty) extends Deriver[Pr
       }
       Lazy(ProtobufCodec.Enum(typeName.name, builder.result(), reservedIndexes))
     } else {
-      val inline        = modifiers.collectFirst { case Modifier.config("proteus.inline", "true") => true }.getOrElse(false)
-      val nested        = modifiers.collectFirst { case Modifier.config("proteus.nested", "true") => true }.getOrElse(false)
+      val inline        = modifiers.collectFirst { case `inlineModifier` => true }.getOrElse(false)
+      val nested        = modifiers.collectFirst { case `nestedModifier` => true }.getOrElse(false)
       val discriminator = binding.asInstanceOf[Binding.Variant[A]].discriminator
       Lazy.collectAll(cases.map(c => D.instance(c.value.metadata).map(TermInstance(c, _))).toVector).map { casesWithInstances =>
         val reservedIndexes = Set.empty[Int] // TODO
@@ -304,7 +309,7 @@ class ProtobufDeriver(flags: Set[DerivationFlag] = Set.empty) extends Deriver[Pr
         case record: Reflect.Record[?, ?] => record.fields.length == 0
         case _                            => false
       }
-    ) && !modifiers.exists { case Modifier.config("proteus.oneof", "true") => true; case _ => false }
+    ) && !modifiers.exists { case `oneofModifier` => true; case _ => false }
 
   private def innerSchema[F[_, _], A](schema: Reflect[F, A]): Reflect[F, A] =
     schema match {

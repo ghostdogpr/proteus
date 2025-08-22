@@ -8,7 +8,7 @@ import proteus.ProtoIR.{CompilationUnit, Statement}
 
 object ProtobufRenderSpec extends ZIOSpecDefault {
 
-  val deriver = ProtobufDeriver()
+  val deriver                    = ProtobufDeriver()
   val deriverWithOptionalAsOneOf = ProtobufDeriver(Set(ProtobufDeriver.DerivationFlag.OptionalAsOneOf))
 
   def renderCodec[A](codec: ProtobufCodec[A], packageName: String = "test"): String = {
@@ -246,13 +246,13 @@ message Phone {
       test("OptionalAsOneOf flag renders optional fields as oneOf") {
         case class StandardOptional(id: Int, value: Option[String]) derives Schema
         case class OneOfOptional(id: Int, value: Option[String]) derives Schema
-        
+
         val standardCodec = Schema[StandardOptional].derive(deriver)
-        val oneOfCodec = Schema[OneOfOptional].derive(deriverWithOptionalAsOneOf)
-        
+        val oneOfCodec    = Schema[OneOfOptional].derive(deriverWithOptionalAsOneOf)
+
         val standardRendered = renderCodec(standardCodec)
-        val oneOfRendered = renderCodec(oneOfCodec)
-        
+        val oneOfRendered    = renderCodec(oneOfCodec)
+
         val expectedStandard = """syntax = "proto3";
 
 package test;
