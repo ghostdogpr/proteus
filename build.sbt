@@ -26,7 +26,7 @@ addCommandAlias("check", "all scalafmtSbtCheck scalafmtCheck test:scalafmtCheck"
 lazy val root = project
   .in(file("."))
   .settings(publish / skip := true)
-  .aggregate(core, grpc, zioGrpc, fs2Grpc, benchmarks)
+  .aggregate(core, grpc, zioGrpc, fs2Grpc, benchmarks, examples)
 
 lazy val core = project
   .in(file("core"))
@@ -86,6 +86,20 @@ lazy val benchmarks = project
   .settings(publish / skip := true)
   .dependsOn(core)
   .enablePlugins(JmhPlugin)
+
+lazy val examples = project
+  .in(file("examples"))
+  .settings(name := "proteus-examples")
+  .settings(commonSettings)
+  .settings(publish / skip := true)
+  .settings(
+    libraryDependencies ++=
+      Seq(
+        "io.grpc" % "grpc-netty"    % grpcVersion,
+        "io.grpc" % "grpc-services" % grpcVersion
+      )
+  )
+  .dependsOn(grpc)
 
 lazy val commonSettings = Def.settings(
   scalacOptions ++= Seq(
