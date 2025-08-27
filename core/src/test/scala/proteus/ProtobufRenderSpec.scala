@@ -404,6 +404,24 @@ message Empty {
         assertTrue(standardRendered == expectedStandard) &&
           assertTrue(oneOfRendered == expectedOneOf)
       }
+    ),
+    suite("Recursive Types")(
+      test("recursive type renders correctly") {
+        case class Recursive(a: Int, b: Option[Recursive]) derives Schema
+        val codec    = Schema[Recursive].derive(deriver)
+        val rendered = renderCodec(codec)
+        val expected = """syntax = "proto3";
+
+package test;
+
+message Recursive {
+    int32 a = 1;
+    optional Recursive b = 2;
+}
+"""
+
+        assertTrue(rendered == expected)
+      }
     )
   )
 }
