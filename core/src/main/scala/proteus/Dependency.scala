@@ -3,24 +3,11 @@ package proteus
 import java.nio.charset.StandardCharsets
 import java.nio.file.*
 
-import com.google.protobuf.DescriptorProtos.*
-import com.google.protobuf.Descriptors.FileDescriptor
 import zio.blocks.schema.Schema
 
 case class Dependency(packageName: Option[String], dependencyName: String, types: Set[ProtoIR.TopLevelDef], dependencies: List[Dependency]) {
   val typeReferences       = types.flatMap(_.collectTypeReferences).toSet
   val filteredDependencies = dependencies.filter(_.hasAnyOf(typeReferences))
-
-  val fileDescriptor: Option[FileDescriptor] =
-    if (types.nonEmpty) {
-      val sharedFileBuilder = FileDescriptorProto.newBuilder().setName(s"$dependencyName").setPackage(packageName.getOrElse(""))
-      types.foreach {
-        case ProtoIR.TopLevelDef.MessageDef(msg)  => sharedFileBuilder.addMessageType(msg.toDescriptor)
-        case ProtoIR.TopLevelDef.EnumDef(enumDef) => sharedFileBuilder.addEnumType(enumDef.toDescriptor)
-        case ProtoIR.TopLevelDef.ServiceDef(_)    =>
-      }
-      Some(FileDescriptor.buildFrom(sharedFileBuilder.build(), filteredDependencies.flatMap(_.fileDescriptor).toArray))
-    } else None
 
   def add[A: Schema](using deriver: ProtobufDeriver): Dependency =
     add(Schema[A].derive(deriver))

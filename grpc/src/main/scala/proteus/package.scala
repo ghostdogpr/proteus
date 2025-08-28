@@ -1,6 +1,7 @@
 package proteus
 
 import com.google.protobuf.DescriptorProtos.*
+import com.google.protobuf.Descriptors.FileDescriptor
 
 extension (protoType: ProtoIR.Type) {
   def toDescriptorType: FieldDescriptorProto.Type =
@@ -115,4 +116,18 @@ extension (service: ProtoIR.Service) {
     }
     serviceBuilder.build()
   }
+}
+
+extension (dependency: Dependency) {
+  def fileDescriptor: Option[FileDescriptor] =
+    if (dependency.types.nonEmpty) {
+      val sharedFileBuilder =
+        FileDescriptorProto.newBuilder().setName(s"${dependency.dependencyName}").setPackage(dependency.packageName.getOrElse(""))
+      dependency.types.foreach {
+        case ProtoIR.TopLevelDef.MessageDef(msg)  => sharedFileBuilder.addMessageType(msg.toDescriptor)
+        case ProtoIR.TopLevelDef.EnumDef(enumDef) => sharedFileBuilder.addEnumType(enumDef.toDescriptor)
+        case ProtoIR.TopLevelDef.ServiceDef(_)    =>
+      }
+      Some(FileDescriptor.buildFrom(sharedFileBuilder.build(), dependency.filteredDependencies.flatMap(_.fileDescriptor).toArray))
+    } else None
 }
