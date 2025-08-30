@@ -1,5 +1,6 @@
 package proteus
 
+import zio.blocks.schema.*
 import zio.blocks.schema.Modifier.config
 import zio.blocks.schema.Schema
 import zio.test.*
@@ -244,6 +245,51 @@ message MessageWithInline {
     oneof contact {
         Email email = 1;
         Phone phone = 2;
+    }
+}
+
+message Email {
+    string address = 1;
+}
+
+message Phone {
+    string number = 1;
+}
+"""
+
+        assertTrue(rendered == expected)
+      },
+      test("proteus.inline modifier with transform") {
+        @config("proteus.inline", "true")
+        enum ContactType derives Schema {
+          case Email(address: String)
+          case Phone(number: String)
+        }
+
+        case class ContactWrapper(contact: ContactType) derives Schema
+        case class MessageWithContact(id: Int, contact: ContactWrapper) derives Schema
+
+        val transformedCodec: ProtobufCodec[ContactWrapper] =
+          Schema[ContactType]
+            .derive(deriver)
+            .transform[ContactWrapper](contact => ContactWrapper(contact), wrapper => wrapper.contact)
+
+        val parentCodec = Schema[MessageWithContact]
+          .deriving(deriver)
+          .instance(Schema[ContactWrapper].reflect.asRecord.get.typeName, transformedCodec)
+          .derive
+
+        val rendered = renderCodec(parentCodec)
+
+        val expected = """syntax = "proto3";
+
+package test;
+
+message MessageWithContact {
+    int32 id = 1;
+    oneof contact {
+        Email email = 2;
+        Phone phone = 3;
     }
 }
 

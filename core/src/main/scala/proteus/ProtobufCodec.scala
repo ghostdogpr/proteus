@@ -37,10 +37,12 @@ sealed trait ProtobufCodec[A] {
     }
 
   def transform[B](from: A => B, to: B => A): ProtobufCodec[B] =
-    ProtobufCodec.Transform((_, _, a: A) => from(a), (_, _, b: B) => to(b), this)
-
-  def transformWith[B](from: (Registers, RegisterOffset, A) => B, to: (Registers, RegisterOffset, B) => A): ProtobufCodec[B] =
-    ProtobufCodec.Transform(from, to, this)
+    this match {
+      case t: ProtobufCodec.Transform[a0, A] =>
+        ProtobufCodec.Transform[a0, B](a => from(t.from(a)), b => t.to(to(b)), t.codec)
+      case _                                 =>
+        ProtobufCodec.Transform(from, to, this)
+    }
 }
 
 object ProtobufCodec {
@@ -196,8 +198,7 @@ object ProtobufCodec {
         case p: ProtobufCodec.Primitive[_]    => (id, _, _) => p.toProtoWriter(_, id, alwaysEncode = true)
         case p: ProtobufCodec.Message[_]      => (id, registers, offset) => p.toProtoWriter(_, id, registers, offset)
         case p: ProtobufCodec.Enum[_]         => (id, _, _) => p.toProtoWriter(_, id, alwaysEncode = true)
-        case p: ProtobufCodec.Transform[_, _] =>
-          (id, registers, offset) => a => toElementProtoWriter(p.codec)(id, registers, offset)(p.to(registers, offset, a))
+        case p: ProtobufCodec.Transform[_, _] => (id, registers, offset) => a => toElementProtoWriter(p.codec)(id, registers, offset)(p.to(a))
         case p: ProtobufCodec.Optional[_]     =>
           (id, registers, offset) => {
             case None        => null
@@ -250,10 +251,11 @@ object ProtobufCodec {
       if (a.isEmpty && !alwaysEncode) null else internal.ProtobufWriter.Bytes(a, id)
   }
 
-  final case class Transform[A, B](from: (Registers, RegisterOffset, A) => B, to: (Registers, RegisterOffset, B) => A, codec: ProtobufCodec[A])
-    extends ProtobufCodec[B] {
+  final case class Transform[A, B](from: A => B, to: B => A, codec: ProtobufCodec[A]) extends ProtobufCodec[B] {
+    type Origin = A
+
     def toProtoWriter(b: B, id: Int, registers: Registers, offset: RegisterOffset, alwaysEncode: Boolean): ProtobufWriter =
-      ProtobufCodec.toProtoWriter(codec, to(registers, offset, b), id, registers, offset, alwaysEncode)
+      ProtobufCodec.toProtoWriter(codec, to(b), id, registers, offset, alwaysEncode)
   }
 
   final case class Deferred[A](thunk: () => ProtobufCodec[A]) extends ProtobufCodec[A] {
@@ -350,7 +352,7 @@ object ProtobufCodec {
           case m: Message[_]           => withLimit(handleMessage(m, nextOffset))
           case p: Primitive[_]         => handlePrimitive(p)
           case e: Enum[_]              => e.valuesByIndex(input.readEnum())
-          case m: Transform[_, _]      => m.from(registers, nextOffset, loop(m.codec, field))
+          case m: Transform[_, _]      => m.from(loop(m.codec, field))
           case o: Optional[_]          => Some(loop(o.codec, field))
           case r: Repeated[c, e]       =>
             if (r.packed && (input.getLastTag() & 0x7) == 2) handlePackedRepeated(r, nextOffset)
@@ -392,7 +394,7 @@ object ProtobufCodec {
           case e: Enum[_]         => () => e.valuesByIndex(input.readEnum())
           case m: Transform[_, _] =>
             val getElement = loop(m.codec, offset)
-            () => m.from(registers, offset, getElement())
+            () => m.from(getElement())
           case d: Deferred[_]     =>
             val getElement = loop(d.codec, offset)
             () => getElement()
@@ -411,7 +413,7 @@ object ProtobufCodec {
     def loop[A](codec: ProtobufCodec[A], offset: RegisterOffset): A =
       codec match {
         case m: Message[_]      => handleMessage(m, offset)
-        case m: Transform[_, _] => m.from(registers, offset, loop(m.codec, offset))
+        case m: Transform[_, _] => m.from(loop(m.codec, offset))
         case d: Deferred[_]     => loop(d.codec, offset)
         case _                  => throw new Exception(s"Invalid root codec: $codec")
       }

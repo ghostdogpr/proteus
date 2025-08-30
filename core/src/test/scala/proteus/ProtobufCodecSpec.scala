@@ -6,6 +6,7 @@ import scala.util.Try
 
 import zio.blocks.schema.{Schema, TypeName}
 import zio.blocks.schema.Modifier.config
+import zio.blocks.schema.Namespace
 import zio.test.*
 import zio.test.Assertion.*
 
@@ -645,6 +646,40 @@ object ProtobufCodecSpec extends ZIOSpecDefault {
         val decoded  = codec.decode(encoded)
 
         assert(decoded)(equalTo(original))
+      }
+    ),
+    suite("Transform")(
+      test("proteus.inline modifier with transform") {
+        @config("proteus.inline", "true")
+        enum ContactType derives Schema {
+          case Email(address: String)
+          case Phone(number: String)
+        }
+
+        case class ContactWrapper(contact: ContactType) derives Schema
+        case class MessageWithContact(id: Int, contact: ContactWrapper) derives Schema
+
+        val transformedCodec: ProtobufCodec[ContactWrapper] =
+          Schema[ContactType]
+            .derive(deriver)
+            .transform[ContactWrapper](contact => ContactWrapper(contact), wrapper => wrapper.contact)
+
+        val codec = Schema[MessageWithContact]
+          .deriving(deriver)
+          .instance(Schema[ContactWrapper].reflect.asRecord.get.typeName, transformedCodec)
+          .derive
+
+        val originalEmail = MessageWithContact(1, ContactWrapper(ContactType.Email("test@example.com")))
+        val originalPhone = MessageWithContact(2, ContactWrapper(ContactType.Phone("555-1234")))
+
+        val encodedEmail = codec.encode(originalEmail)
+        val decodedEmail = codec.decode(encodedEmail)
+
+        val encodedPhone = codec.encode(originalPhone)
+        val decodedPhone = codec.decode(encodedPhone)
+
+        assert(decodedEmail)(equalTo(originalEmail)) &&
+          assert(decodedPhone)(equalTo(originalPhone))
       }
     )
   )
