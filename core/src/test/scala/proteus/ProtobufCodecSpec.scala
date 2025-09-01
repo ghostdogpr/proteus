@@ -4,9 +4,9 @@ import java.time.*
 
 import scala.util.Try
 
-import zio.blocks.schema.{Schema, TypeName}
+import zio.blocks.schema.*
 import zio.blocks.schema.Modifier.config
-import zio.blocks.schema.Namespace
+import zio.blocks.schema.binding.Binding
 import zio.test.*
 import zio.test.Assertion.*
 
@@ -382,6 +382,26 @@ object ProtobufCodecSpec extends ZIOSpecDefault {
         val containerCodec = Schema[Container].derive(deriver)
 
         val original = Container(List(Item("a", 1), Item("b", 2), Item("c", 3)))
+        val encoded  = containerCodec.encode(original)
+        val decoded  = containerCodec.decode(encoded)
+
+        assert(decoded)(equalTo(original))
+      },
+      test("message with transformed List of messages") {
+        case class MyList[A](items: List[A]) derives Schema
+        given [A: Schema]: Schema[MyList[A]] =
+          Schema(
+            Reflect.Wrapper(
+              Schema.list[A].reflect,
+              TypeName(Namespace("com" :: "devsisters" :: "ck" :: "entities" :: Nil, Nil), "MyList"),
+              Binding.Wrapper[MyList[A], List[A]](list => Right(MyList(list)), _.items)
+            )
+          )
+        case class Item(name: String, value: Int) derives Schema
+        case class Container(items: MyList[Item]) derives Schema
+        val containerCodec                   = Schema[Container].derive(deriver)
+
+        val original = Container(MyList(List(Item("a", 1), Item("b", 2), Item("c", 3))))
         val encoded  = containerCodec.encode(original)
         val decoded  = containerCodec.decode(encoded)
 
