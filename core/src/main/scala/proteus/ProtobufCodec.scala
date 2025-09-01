@@ -11,9 +11,12 @@ import zio.blocks.schema.*
 import zio.blocks.schema.binding.*
 import zio.blocks.schema.binding.RegisterOffset.RegisterOffset
 
+import proteus.ProtobufCodec.MessageField.*
 import proteus.internal.*
 
 sealed trait ProtobufCodec[A] {
+  type Focus = A
+
   import ProtobufCodec.*
 
   def encode(value: A): Array[Byte] =
@@ -58,28 +61,43 @@ object ProtobufCodec {
     else f(Registers(RegisterOffset.Zero))
   }
 
-  final case class MessageField[A](
-    name: String,
-    id: Int,
-    codec: ProtobufCodec[A],
-    register: Register[Any],
-    shouldWrite: A => Boolean,
-    defaultValue: Any,
-    oneOfName: Option[String]
-  ) {
-    type Focus = A
-    def toProtoWriter(registers: Registers, offset: RegisterOffset, nextOffset: RegisterOffset): ProtobufWriter = {
-      val res = getFromRegister(registers, offset, register).asInstanceOf[A]
-      if (shouldWrite == null || shouldWrite(res))
-        ProtobufCodec.toProtoWriter(codec, res, id, registers, nextOffset, alwaysEncode = oneOfName.isDefined)
-      else null
+  sealed trait MessageField[A] {
+    def toProtoWriter(registers: Registers, offset: RegisterOffset, nextOffset: RegisterOffset): ProtobufWriter
+    def toProtoIR: ProtoIR.MessageElement.FieldElement | ProtoIR.MessageElement.OneofElement
+  }
+
+  object MessageField {
+    final case class SimpleField[A](name: String, id: Int, codec: ProtobufCodec[A], register: Register[Any], defaultValue: Any)
+      extends MessageField[A] {
+      def toProtoWriter(registers: Registers, offset: RegisterOffset, nextOffset: RegisterOffset): ProtobufWriter = {
+        val res = getFromRegister(registers, offset, register).asInstanceOf[A]
+        ProtobufCodec.toProtoWriter(codec, res, id, registers, nextOffset, alwaysEncode = false)
+      }
+
+      def toProtoIR: ProtoIR.MessageElement.FieldElement = {
+        val field = ProtoIR.Field(toProtoType(codec), name, id, deprecated = false, optional = isOptional(using codec))
+        ProtoIR.MessageElement.FieldElement(field)
+      }
     }
 
-    def toProtoIR: ProtoIR.MessageElement.OneofElement | ProtoIR.MessageElement.FieldElement = {
-      val field = ProtoIR.Field(toProtoType(codec), name, id, deprecated = false, optional = isOptional(using codec))
-      oneOfName match {
-        case Some(oneOfName) => ProtoIR.MessageElement.OneofElement(ProtoIR.Oneof(oneOfName, List(field)))
-        case None            => ProtoIR.MessageElement.FieldElement(field)
+    final case class OneofField[A](
+      name: String,
+      cases: Array[SimpleField[?]],
+      register: Register[Any],
+      discriminator: Discriminator[A]
+    ) extends MessageField[A] {
+      def toProtoWriter(registers: Registers, offset: RegisterOffset, nextOffset: RegisterOffset): ProtobufWriter = {
+        val res   = getFromRegister(registers, offset, register).asInstanceOf[A]
+        val field = cases(discriminator.discriminate(res))
+        ProtobufCodec.toProtoWriter(field.codec, res.asInstanceOf[field.codec.Focus], field.id, registers, nextOffset, alwaysEncode = true)
+      }
+
+      def toProtoIR: ProtoIR.MessageElement.OneofElement = {
+        val fields = cases
+          .map(field => ProtoIR.Field(toProtoType(field.codec), field.name, field.id, deprecated = false, optional = isOptional(using field.codec)))
+          .toList
+          .sortBy(_.number)
+        ProtoIR.MessageElement.OneofElement(ProtoIR.Oneof(name, fields))
       }
     }
   }
@@ -138,7 +156,11 @@ object ProtobufCodec {
     inline: Boolean,
     nested: Boolean
   ) extends ProtobufCodec[A] {
-    val fieldMap: FieldMap = FieldMap(HashMap.from(fields.map(f => f.id -> f)))
+    val simpleFields: List[SimpleField[?]] = fields.flatMap {
+      case f: SimpleField[?] => List(f)
+      case f: OneofField[?]  => f.cases.toList
+    }
+    val fieldMap: FieldMap                 = FieldMap(HashMap.from(simpleFields.map(f => f.id -> f)))
 
     def toProtoWriter(a: A, id: Int, registers: Registers, offset: RegisterOffset): ProtobufWriter = {
       deconstructor.deconstruct(registers, offset, a)
@@ -156,18 +178,6 @@ object ProtobufCodec {
     def toProtoIR: ProtoIR.Message = {
       val elements = fields.map(_.toProtoIR)
 
-      val (fieldElements, oneofs) = elements.partitionMap {
-        case e: ProtoIR.MessageElement.FieldElement     => Left(e)
-        case ProtoIR.MessageElement.OneofElement(oneof) => Right(oneof)
-      }
-      val oneofElements           =
-        oneofs
-          .groupMap(_.name)(_.fields)
-          .map { case (name, fields) =>
-            ProtoIR.MessageElement.OneofElement(ProtoIR.Oneof(name, fields.flatten.sortBy(_.number)))
-          }
-          .toList
-
       def findNested[A](codec: ProtobufCodec[A]): List[ProtoIR.MessageElement.NestedMessageElement] =
         codec match {
           case m: ProtobufCodec.Message[_]           => if (m.nested) List(ProtoIR.MessageElement.NestedMessageElement(m.toProtoIR)) else Nil
@@ -179,10 +189,9 @@ object ProtobufCodec {
           case _                                     => Nil
         }
 
-      val nestedMessageElements = fields.collect(field => findNested(field.codec)).flatten.distinct
+      val nestedMessageElements = simpleFields.collect(field => findNested(field.codec)).flatten.distinct
 
-      val allElements: List[ProtoIR.MessageElement.OneofElement | ProtoIR.MessageElement.FieldElement] = fieldElements ++ oneofElements
-      val sortedAllElements                                                                            = allElements.sortBy {
+      val sortedAllElements = elements.sortBy {
         case o: ProtoIR.MessageElement.OneofElement => o.oneof.fields.head.number
         case f: ProtoIR.MessageElement.FieldElement => f.field.number
       }
@@ -305,8 +314,10 @@ object ProtobufCodec {
     def setDefaults[A](m: Message[A], offset: RegisterOffset): Unit = {
       var fields = m.fields
       while (fields ne Nil) {
-        val field = fields.head
-        setToRegister(registers, offset, field.register, field.defaultValue)
+        fields.head match {
+          case field: SimpleField[?] => setToRegister(registers, offset, field.register, field.defaultValue)
+          case _: OneofField[?]      => // no default value for oneofs
+        }
         fields = fields.tail
       }
     }
@@ -317,7 +328,7 @@ object ProtobufCodec {
       val nextOffset       = RegisterOffset.add(offset, m.constructor.usedRegisters)
       var completeBuilders = defaultCompleteBuilders
 
-      def handleRepeated[C[_], E](r: Repeated[C, E], field: MessageField[?], transformResult: C[E] => Any): C[E] = {
+      def handleRepeated[C[_], E](r: Repeated[C, E], field: SimpleField[?], transformResult: C[E] => Any): C[E] = {
         val register     = field.register.asInstanceOf[Register[Any]]
         val currentValue = getFromRegister(registers, offset, register)
         val builder =
@@ -333,7 +344,7 @@ object ProtobufCodec {
         null.asInstanceOf[C[E]]
       }
 
-      def handleRepeatedMap[M[_, _], K, V](r: RepeatedMap[M, K, V], field: MessageField[?], transformResult: M[K, V] => Any): M[K, V] = {
+      def handleRepeatedMap[M[_, _], K, V](r: RepeatedMap[M, K, V], field: SimpleField[?], transformResult: M[K, V] => Any): M[K, V] = {
         val register     = field.register.asInstanceOf[Register[Any]]
         val currentValue = getFromRegister(registers, offset, register)
         val builder =
@@ -350,7 +361,7 @@ object ProtobufCodec {
         null.asInstanceOf[M[K, V]]
       }
 
-      def loop[A](codec: ProtobufCodec[A], field: MessageField[?], transformResult: Any => Any): A =
+      def loop[A](codec: ProtobufCodec[A], field: SimpleField[?], transformResult: Any => Any): A =
         codec match {
           case m: Message[_]           => withLimit(handleMessage(m, nextOffset))
           case p: Primitive[_]         => handlePrimitive(p)
@@ -452,8 +463,8 @@ object ProtobufCodec {
           else {
             if (!m.name.isEmpty) {
               visited.add(m.name): Unit
-              ProtoIR.TopLevelDef.MessageDef(m.toProtoIR) :: m.fields.map(_.codec).flatMap(findTopLevelDefs)
-            } else m.fields.map(_.codec).flatMap(findTopLevelDefs)
+              ProtoIR.TopLevelDef.MessageDef(m.toProtoIR) :: m.simpleFields.map(_.codec).flatMap(findTopLevelDefs)
+            } else m.simpleFields.map(_.codec).flatMap(findTopLevelDefs)
           }
         case t: ProtobufCodec.Transform[_, _]      => findTopLevelDefs(t.codec)
         case o: ProtobufCodec.Optional[_]          => findTopLevelDefs(o.codec)
@@ -491,7 +502,7 @@ object ProtobufCodec {
       case e: ProtobufCodec.Enum[_]              => ProtoIR.Type.EnumRefType(ProtoIR.Fqn(None, e.name))
       case r: ProtobufCodec.Repeated[_, _]       => ProtoIR.Type.ListType(toProtoType(r.element))
       case m: ProtobufCodec.RepeatedMap[_, _, _] =>
-        ProtoIR.Type.MapType(toProtoType(m.element.fields(0).codec), toProtoType(m.element.fields(1).codec))
+        ProtoIR.Type.MapType(toProtoType(m.element.simpleFields(0).codec), toProtoType(m.element.simpleFields(1).codec))
       case p: ProtobufCodec.Bytes.type           => ProtoIR.Type.Bytes
     }
 }
