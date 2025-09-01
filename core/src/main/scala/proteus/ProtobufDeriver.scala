@@ -151,7 +151,7 @@ class ProtobufDeriver(flags: Set[DerivationFlag] = Set.empty) extends Deriver[Pr
                      id,
                      instance,
                      registers(index),
-                     _ => true,
+                     null,
                      getDefaultValue(using field.instance),
                      None
                    )
@@ -302,8 +302,8 @@ class ProtobufDeriver(flags: Set[DerivationFlag] = Set.empty) extends Deriver[Pr
           ProtobufCodec.Message(
             "",
             List(
-              ProtobufCodec.MessageField("key", 1, keyInstance, keyRegister, _ => true, getDefaultValue(using keyInstance), None),
-              ProtobufCodec.MessageField("value", 2, valueInstance, valueRegister, _ => true, getDefaultValue(using valueInstance), None)
+              ProtobufCodec.MessageField("key", 1, keyInstance, keyRegister, null, getDefaultValue(using keyInstance), None),
+              ProtobufCodec.MessageField("value", 2, valueInstance, valueRegister, null, getDefaultValue(using valueInstance), None)
             ),
             constructor,
             deconstructor,

@@ -70,7 +70,9 @@ object ProtobufCodec {
     type Focus = A
     def toProtoWriter(registers: Registers, offset: RegisterOffset, nextOffset: RegisterOffset): ProtobufWriter = {
       val res = getFromRegister(registers, offset, register).asInstanceOf[A]
-      if (shouldWrite(res)) ProtobufCodec.toProtoWriter(codec, res, id, registers, nextOffset, alwaysEncode = oneOfName.isDefined) else null
+      if (shouldWrite == null || shouldWrite(res))
+        ProtobufCodec.toProtoWriter(codec, res, id, registers, nextOffset, alwaysEncode = oneOfName.isDefined)
+      else null
     }
 
     def toProtoIR: ProtoIR.MessageElement.OneofElement | ProtoIR.MessageElement.FieldElement = {
