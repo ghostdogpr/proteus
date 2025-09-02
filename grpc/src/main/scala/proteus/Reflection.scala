@@ -13,22 +13,22 @@ sealed trait MessageRequest derives Schema
 object MessageRequest {
   case class FileByFileName(value: String) extends MessageRequest
   object FileByFileName       {
-    given Schema[FileByFileName] = Schema.derived[FileByFileName].wrap[String](v => Right(FileByFileName(v)), _.value)
+    given Schema[FileByFileName] = Schema.derived[FileByFileName].wrapTotal(FileByFileName(_), _.value)
   }
   case class FileContainingSymbol(value: String) extends MessageRequest
   object FileContainingSymbol {
-    given Schema[FileContainingSymbol] = Schema.derived[FileContainingSymbol].wrap[String](v => Right(FileContainingSymbol(v)), _.value)
+    given Schema[FileContainingSymbol] = Schema.derived[FileContainingSymbol].wrapTotal(FileContainingSymbol(_), _.value)
   }
   @config("proteus.rename", "ExtensionRequest")
   case class FileContainingExtension(containingType: String, extensionNumber: Int) extends MessageRequest
   case class AllExtensionNumbersOfType(value: String) extends MessageRequest
   object AllExtensionNumbersOfType {
     given Schema[AllExtensionNumbersOfType] =
-      Schema.derived[AllExtensionNumbersOfType].wrap[String](v => Right(AllExtensionNumbersOfType(v)), _.value)
+      Schema.derived[AllExtensionNumbersOfType].wrapTotal[String](AllExtensionNumbersOfType(_), _.value)
   }
   case class ListServices(value: String) extends MessageRequest
   object ListServices              {
-    given Schema[ListServices] = Schema.derived[ListServices].wrap[String](v => Right(ListServices(v)), _.value)
+    given Schema[ListServices] = Schema.derived[ListServices].wrapTotal[String](ListServices(_), _.value)
   }
 }
 
