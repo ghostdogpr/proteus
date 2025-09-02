@@ -503,29 +503,6 @@ object ProtobufCodecSpec extends ZIOSpecDefault {
       }
     ),
     suite("Proteus Modifiers")(
-      test("proteus.unwrap modifier produces same encoding as inlined field") {
-        @config("proteus.unwrap", "true")
-        case class Wrapper(value: String) derives Schema
-        case class MessageWithWrapper(id: Int, wrapped: Wrapper) derives Schema
-
-        case class MessageWithInlined(id: Int, wrapped: String) derives Schema
-
-        val wrapperCodec = Schema[MessageWithWrapper].derive(deriver)
-        val inlinedCodec = Schema[MessageWithInlined].derive(deriver)
-
-        val wrapperMessage = MessageWithWrapper(1, Wrapper("test"))
-        val inlinedMessage = MessageWithInlined(1, "test")
-
-        val wrapperEncoded = wrapperCodec.encode(wrapperMessage)
-        val inlinedEncoded = inlinedCodec.encode(inlinedMessage)
-
-        val wrapperDecoded = wrapperCodec.decode(wrapperEncoded)
-        val inlinedDecoded = inlinedCodec.decode(inlinedEncoded)
-
-        assert(wrapperDecoded)(equalTo(wrapperMessage)) &&
-          assert(inlinedDecoded)(equalTo(inlinedMessage)) &&
-          assert(wrapperEncoded)(equalTo(inlinedEncoded))
-      },
       test("proteus.oneof modifier forces enum to oneOf encoding") {
         enum RegularEnum derives Schema {
           case First

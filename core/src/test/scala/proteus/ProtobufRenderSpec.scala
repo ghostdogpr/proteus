@@ -151,25 +151,6 @@ message BytesMessage {
       }
     ),
     suite("Modifier Rendering")(
-      test("proteus.unwrap modifier removes wrapper message") {
-        @config("proteus.unwrap", "true")
-        case class UnwrapWrapper(value: String) derives Schema
-        case class MessageWithUnwrap(id: Int, wrapped: UnwrapWrapper) derives Schema
-
-        val codec    = Schema[MessageWithUnwrap].derive(deriver)
-        val rendered = renderCodec(codec)
-        val expected = """syntax = "proto3";
-
-package test;
-
-message MessageWithUnwrap {
-    int32 id = 1;
-    string wrapped = 2;
-}
-"""
-
-        assertTrue(rendered == expected)
-      },
       test("proteus.nested modifier creates nested message") {
         @config("proteus.nested", "true")
         case class NestedData(value: String) derives Schema

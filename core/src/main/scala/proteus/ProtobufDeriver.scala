@@ -15,7 +15,6 @@ import proteus.internal.*
 
 class ProtobufDeriver(flags: Set[DerivationFlag] = Set.empty) extends Deriver[ProtobufCodec] {
 
-  val unwrapModifier = Modifier.config("proteus.unwrap", "true")
   val inlineModifier = Modifier.config("proteus.inline", "true")
   val nestedModifier = Modifier.config("proteus.nested", "true")
   val oneofModifier  = Modifier.config("proteus.oneof", "true")
@@ -51,134 +50,112 @@ class ProtobufDeriver(flags: Set[DerivationFlag] = Set.empty) extends Deriver[Pr
       Lazy(ProtobufCodec.Deferred(() => instanceCache.get(typeName)).asInstanceOf[ProtobufCodec[A]])
     } else {
       visited.put(typeName, ())
-      val shouldUnwrap  = modifiers.collectFirst { case `unwrapModifier` => true }.getOrElse(false) && fields.length == 1
       val recordBinding = binding.asInstanceOf[Binding.Record[A]]
       val registers     = Reflect.Record.registers(fields.map(_.value).toArray)
       val offset        = Reflect.Record.usedRegisters(registers)
-      (if (shouldUnwrap) {
-         val field = fields.head
-         D.instance(field.value.metadata)
-           .map(
-             _.transform(
-               a => {
-                 val offset = RegisterOffset.Zero
-                 val reg    = Registers(offset)
-                 setToRegister(reg, offset, registers(0), a)
-                 recordBinding.constructor.construct(reg, offset)
-               },
-               b => {
-                 val offset = RegisterOffset.Zero
-                 val reg    = Registers(offset)
-                 recordBinding.deconstructor.deconstruct(reg, offset, b)
-                 getFromRegister(reg, offset, registers(0).asInstanceOf[Register[field.Focus]])
-               }
-             )
-           )
-       } else {
-         Lazy
-           .collectAll(fields.map(field => D.instance(field.value.metadata).map(TermInstance(field, _))).toVector)
-           .map { fieldsWithInstances =>
-             val reservedIndexes      = getReservedIndexes(modifiers)
-             val fieldReservedIndexes = getReservedIndexes(fieldsWithInstances.flatMap(_.term.modifiers))
-             val allReservedIndexes   = reservedIndexes ++ fieldReservedIndexes
-             val nested               = modifiers.collectFirst { case `nestedModifier` => true }.getOrElse(false)
-             val builder              = List.newBuilder[ProtobufCodec.MessageField[?]]
-             var id                   = 0
+      Lazy
+        .collectAll(fields.map(field => D.instance(field.value.metadata).map(TermInstance(field, _))).toVector)
+        .map { fieldsWithInstances =>
+          val reservedIndexes      = getReservedIndexes(modifiers)
+          val fieldReservedIndexes = getReservedIndexes(fieldsWithInstances.flatMap(_.term.modifiers))
+          val allReservedIndexes   = reservedIndexes ++ fieldReservedIndexes
+          val nested               = modifiers.collectFirst { case `nestedModifier` => true }.getOrElse(false)
+          val builder              = List.newBuilder[ProtobufCodec.MessageField[?]]
+          var id                   = 0
 
-             def getField[A](index: Int, field: TermInstance[F, A]): Unit = {
-               val name     = toSnakeCase(field.term.name)
-               val register = registers(index)
-               field.instance match {
-                 case t @ ProtobufCodec.Transform(from, to, ProtobufCodec.Message(_, (o: OneofField[inner]) :: Nil, _, _, _, _, true, _)) =>
-                   val idIterator = getReservedIndexes(field.term.modifiers).iterator
-                   builder += OneofField(
-                     name,
-                     o.cases.map { field =>
-                       val caseId =
-                         if (idIterator.hasNext) idIterator.next
-                         else {
-                           id += 1
-                           while (allReservedIndexes.contains(id)) id += 1
-                           id
-                         }
-                       field.copy(
-                         id = caseId,
-                         codec = ProtobufCodec.Transform(t.from, t.to, field.codec.asInstanceOf[ProtobufCodec[t.Origin]]),
-                         register = register
-                       )
-                     },
-                     register,
-                     new Discriminator[A] {
-                       def discriminate(a: A): Int = o.discriminator.discriminate(to(a).asInstanceOf[inner])
-                     }
-                   )
-                 case ProtobufCodec.Message(_, (o: OneofField[?]) :: Nil, _, _, _, _, true, _)                                            =>
-                   val idIterator = getReservedIndexes(field.term.modifiers).iterator
-                   builder += OneofField(
-                     name,
-                     o.cases.map { field =>
-                       val caseId =
-                         if (idIterator.hasNext) idIterator.next
-                         else {
-                           id += 1
-                           while (allReservedIndexes.contains(id)) id += 1
-                           id
-                         }
-                       field.copy(id = caseId, register = register)
-                     },
-                     register,
-                     o.discriminator
-                   )
-                 case ProtobufCodec.Optional(codec) if flags.contains(DerivationFlag.OptionalAsOneOf)                                     =>
-                   id += 1
-                   while (allReservedIndexes.contains(id)) id += 1
-                   val emptyId = id
-                   id += 1
-                   while (allReservedIndexes.contains(id)) id += 1
-                   val valueId = id
-                   builder += OneofField(
-                     toSnakeCase(field.term.name),
-                     Array(
-                       SimpleField(s"no_$name", emptyId, Empty.emptyCodec.transform(_ => None, _ => Empty()), register, null),
-                       SimpleField(s"${name}_value", valueId, codec.transform(Some(_), _.get), register, null)
-                     ),
-                     register,
-                     new Discriminator[A] {
-                       def discriminate(a: A): Int = a match {
-                         case None    => 0
-                         case Some(_) => 1
-                       }
-                     }
-                   )
-                 case instance                                                                                                            =>
-                   id += 1
-                   while (allReservedIndexes.contains(id)) id += 1
-                   builder += SimpleField(name, id, instance, register, getDefaultValue(using field.instance))
-               }
-             }
+          def getField[A](index: Int, field: TermInstance[F, A]): Unit = {
+            val name     = toSnakeCase(field.term.name)
+            val register = registers(index)
+            field.instance match {
+              case t @ ProtobufCodec.Transform(from, to, ProtobufCodec.Message(_, (o: OneofField[inner]) :: Nil, _, _, _, _, true, _)) =>
+                val idIterator = getReservedIndexes(field.term.modifiers).iterator
+                builder += OneofField(
+                  name,
+                  o.cases.map { field =>
+                    val caseId =
+                      if (idIterator.hasNext) idIterator.next
+                      else {
+                        id += 1
+                        while (allReservedIndexes.contains(id)) id += 1
+                        id
+                      }
+                    field.copy(
+                      id = caseId,
+                      codec = ProtobufCodec.Transform(t.from, t.to, field.codec.asInstanceOf[ProtobufCodec[t.Origin]]),
+                      register = register
+                    )
+                  },
+                  register,
+                  new Discriminator[A] {
+                    def discriminate(a: A): Int = o.discriminator.discriminate(to(a).asInstanceOf[inner])
+                  }
+                )
+              case ProtobufCodec.Message(_, (o: OneofField[?]) :: Nil, _, _, _, _, true, _)                                            =>
+                val idIterator = getReservedIndexes(field.term.modifiers).iterator
+                builder += OneofField(
+                  name,
+                  o.cases.map { field =>
+                    val caseId =
+                      if (idIterator.hasNext) idIterator.next
+                      else {
+                        id += 1
+                        while (allReservedIndexes.contains(id)) id += 1
+                        id
+                      }
+                    field.copy(id = caseId, register = register)
+                  },
+                  register,
+                  o.discriminator
+                )
+              case ProtobufCodec.Optional(codec) if flags.contains(DerivationFlag.OptionalAsOneOf)                                     =>
+                id += 1
+                while (allReservedIndexes.contains(id)) id += 1
+                val emptyId = id
+                id += 1
+                while (allReservedIndexes.contains(id)) id += 1
+                val valueId = id
+                builder += OneofField(
+                  toSnakeCase(field.term.name),
+                  Array(
+                    SimpleField(s"no_$name", emptyId, Empty.emptyCodec.transform(_ => None, _ => Empty()), register, null),
+                    SimpleField(s"${name}_value", valueId, codec.transform(Some(_), _.get), register, null)
+                  ),
+                  register,
+                  new Discriminator[A] {
+                    def discriminate(a: A): Int = a match {
+                      case None    => 0
+                      case Some(_) => 1
+                    }
+                  }
+                )
+              case instance                                                                                                            =>
+                id += 1
+                while (allReservedIndexes.contains(id)) id += 1
+                builder += SimpleField(name, id, instance, register, getDefaultValue(using field.instance))
+            }
+          }
 
-             var idx = 0
-             val len = fields.length
-             while (idx < len) {
-               getField(idx, fieldsWithInstances(idx))
-               idx += 1
-             }
-             ProtobufCodec.Message(
-               getTypeName(typeName.name, modifiers),
-               builder.result(),
-               recordBinding.constructor,
-               recordBinding.deconstructor,
-               offset,
-               reservedIndexes,
-               inline = false,
-               nested = nested
-             )
-           }
-       }).map { codec =>
-        visited.remove(typeName)
-        if (recursive.containsKey(typeName)) instanceCache.put(typeName, codec.asInstanceOf[ProtobufCodec[Any]]): Unit
-        codec
-      }
+          var idx   = 0
+          val len   = fields.length
+          while (idx < len) {
+            getField(idx, fieldsWithInstances(idx))
+            idx += 1
+          }
+          val codec = ProtobufCodec.Message(
+            getTypeName(typeName.name, modifiers),
+            builder.result(),
+            recordBinding.constructor,
+            recordBinding.deconstructor,
+            offset,
+            reservedIndexes,
+            inline = false,
+            nested = nested
+          )
+
+          visited.remove(typeName)
+          if (recursive.containsKey(typeName)) instanceCache.put(typeName, codec.asInstanceOf[ProtobufCodec[Any]]): Unit
+          codec
+        }
     }
   }
 

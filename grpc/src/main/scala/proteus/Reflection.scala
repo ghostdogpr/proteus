@@ -9,12 +9,27 @@ case class ServerReflectionRequest(host: String, messageRequest: MessageRequest)
 case class ServerReflectionResponse(validHost: String, originalRequest: ServerReflectionRequest, messageResponse: MessageResponse) derives Schema
 
 @config("proteus.inline", "true")
-enum MessageRequest derives Schema {
-  @config("proteus.unwrap", "true") case FileByFileName(value: String)
-  @config("proteus.unwrap", "true") case FileContainingSymbol(value: String)
-  @config("proteus.rename", "ExtensionRequest") case FileContainingExtension(containingType: String, extensionNumber: Int)
-  @config("proteus.unwrap", "true") case AllExtensionNumbersOfType(value: String)
-  @config("proteus.unwrap", "true") case ListServices(value: String)
+sealed trait MessageRequest derives Schema
+object MessageRequest {
+  case class FileByFileName(value: String) extends MessageRequest
+  object FileByFileName       {
+    given Schema[FileByFileName] = Schema.derived[FileByFileName].wrap[String](v => Right(FileByFileName(v)), _.value)
+  }
+  case class FileContainingSymbol(value: String) extends MessageRequest
+  object FileContainingSymbol {
+    given Schema[FileContainingSymbol] = Schema.derived[FileContainingSymbol].wrap[String](v => Right(FileContainingSymbol(v)), _.value)
+  }
+  @config("proteus.rename", "ExtensionRequest")
+  case class FileContainingExtension(containingType: String, extensionNumber: Int) extends MessageRequest
+  case class AllExtensionNumbersOfType(value: String) extends MessageRequest
+  object AllExtensionNumbersOfType {
+    given Schema[AllExtensionNumbersOfType] =
+      Schema.derived[AllExtensionNumbersOfType].wrap[String](v => Right(AllExtensionNumbersOfType(v)), _.value)
+  }
+  case class ListServices(value: String) extends MessageRequest
+  object ListServices              {
+    given Schema[ListServices] = Schema.derived[ListServices].wrap[String](v => Right(ListServices(v)), _.value)
+  }
 }
 
 @config("proteus.inline", "true")
