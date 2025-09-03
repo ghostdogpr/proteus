@@ -315,14 +315,23 @@ class ProtobufDeriver(flags: Set[DerivationFlag] = Set.empty) extends Deriver[Pr
               list => {
                 val constructor = mapBinding.constructor
                 val builder     = constructor.newObjectBuilder[K, V]()
-                list.foreach { case (k, v) =>
+                var remaining   = list
+                while (remaining ne Nil) {
+                  val (k, v) = remaining.head
                   constructor.addObject(builder, k, v)
+                  remaining = remaining.tail
                 }
                 constructor.resultObject(builder)
               },
               map => {
                 val deconstructor = mapBinding.deconstructor
-                deconstructor.deconstruct(map).toList.map(kv => (deconstructor.getKey(kv), deconstructor.getValue(kv)))
+                val it            = deconstructor.deconstruct(map)
+                val listBuilder   = List.newBuilder[(K, V)]
+                while (it.hasNext) {
+                  val kv = it.next()
+                  listBuilder += ((deconstructor.getKey(kv), deconstructor.getValue(kv)))
+                }
+                listBuilder.result()
               }
             )
       }
