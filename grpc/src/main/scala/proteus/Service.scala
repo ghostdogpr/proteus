@@ -7,16 +7,16 @@ import com.google.protobuf.DescriptorProtos.*
 import com.google.protobuf.Descriptors.FileDescriptor
 
 case class Service[Rpcs] private (packageName: Option[String], name: String, rpcs: List[Rpc[?, ?]]) {
+  val fullyQualifiedName: String = packageName.fold(name)(s => s"$s.$name")
+
   val toProtoIR: List[ProtoIR.TopLevelDef] =
     (ProtoIR.TopLevelDef.ServiceDef(ProtoIR.Service(name, rpcs.map(_.toProtoIR))) ::
       rpcs.flatMap(_.messagesToProtoIR)).distinct
 
-  val fullyQualifiedName: String = packageName.fold(name)(s => s"$s.$name")
-
   private val typeReferences = toProtoIR.flatMap(_.collectTypeReferences).toSet
 
   def fileDescriptor(dependencies: List[Dependency]): FileDescriptor = {
-    val fileBuilder = FileDescriptorProto.newBuilder().setName(s"${name.toLowerCase}.proto").setPackage("")
+    val fileBuilder = FileDescriptorProto.newBuilder().setName(s"${name.toLowerCase}.proto").setPackage(packageName.getOrElse(""))
 
     val usedDependencies          = dependencies.filter(_.hasAnyOf(typeReferences))
     val dependencyFileDescriptors = usedDependencies.flatMap(_.fileDescriptor)
