@@ -142,7 +142,7 @@ class ProtobufDeriver(flags: Set[DerivationFlag] = Set.empty) extends Deriver[Pr
             idx += 1
           }
           val codec = ProtobufCodec.Message(
-            getTypeName(typeName.name, modifiers),
+            getTypeName(typeName, modifiers),
             builder.result(),
             recordBinding.constructor,
             recordBinding.deconstructor,
@@ -181,7 +181,7 @@ class ProtobufDeriver(flags: Set[DerivationFlag] = Set.empty) extends Deriver[Pr
         builder += ProtobufCodec.EnumValue(enumName, index, a)
         index += 1
       }
-      Lazy(ProtobufCodec.Enum(getTypeName(typeName.name, modifiers), builder.result(), reservedIndexes))
+      Lazy(ProtobufCodec.Enum(getTypeName(typeName, modifiers), builder.result(), reservedIndexes))
     } else {
       val inline        = modifiers.collectFirst { case `inlineModifier` => true }.getOrElse(false)
       val nested        = modifiers.collectFirst { case `nestedModifier` => true }.getOrElse(false)
@@ -203,7 +203,7 @@ class ProtobufDeriver(flags: Set[DerivationFlag] = Set.empty) extends Deriver[Pr
           discriminator
         )
         ProtobufCodec.Message(
-          getTypeName(typeName.name, modifiers),
+          getTypeName(typeName, modifiers),
           builder.result(),
           new Constructor[A]   {
             def usedRegisters: RegisterOffset                           = register.usedRegisters
@@ -376,10 +376,10 @@ class ProtobufDeriver(flags: Set[DerivationFlag] = Set.empty) extends Deriver[Pr
       case _                                => false
     }
 
-  private def getTypeName(originalName: String, modifiers: Seq[Modifier]): String =
+  private def getTypeName(typeName: TypeName[?], modifiers: Seq[Modifier]): String =
     modifiers
       .collectFirst { case Modifier.config("proteus.rename", newName) => newName }
-      .getOrElse(originalName)
+      .getOrElse(s"${typeName.name}${typeName.params.map(getTypeName(_, Nil)).mkString}")
 
   private def getReservedIndexes(modifiers: Seq[Modifier]): Set[Int] =
     modifiers
