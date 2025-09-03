@@ -19,7 +19,7 @@ class ProtobufDeriver(flags: Set[DerivationFlag] = Set.empty) extends Deriver[Pr
   val nestedModifier = Modifier.config("proteus.nested", "true")
   val oneofModifier  = Modifier.config("proteus.oneof", "true")
 
-  private val instanceCache  = java.util.concurrent.ConcurrentHashMap[TypeName[?], ProtobufCodec[Any]]()
+  private val instanceCache  = java.util.concurrent.ConcurrentHashMap[TypeName[?], ProtobufCodec.Message[Any]]()
   private val visitedCache   = new ThreadLocal[java.util.IdentityHashMap[TypeName[?], Unit]] {
     override def initialValue: java.util.IdentityHashMap[TypeName[?], Unit] = new java.util.IdentityHashMap[TypeName[?], Unit]
   }
@@ -47,7 +47,7 @@ class ProtobufDeriver(flags: Set[DerivationFlag] = Set.empty) extends Deriver[Pr
     val recursive = recursiveCache.get
     if (visited.containsKey(typeName)) {
       recursive.put(typeName, ())
-      Lazy(ProtobufCodec.Deferred(() => instanceCache.get(typeName)).asInstanceOf[ProtobufCodec[A]])
+      Lazy(ProtobufCodec.RecursiveMessage(() => instanceCache.get(typeName).asInstanceOf[ProtobufCodec.Message[A]]))
     } else {
       visited.put(typeName, ())
       val recordBinding = binding.asInstanceOf[Binding.Record[A]]
@@ -153,7 +153,7 @@ class ProtobufDeriver(flags: Set[DerivationFlag] = Set.empty) extends Deriver[Pr
           )
 
           visited.remove(typeName)
-          if (recursive.containsKey(typeName)) instanceCache.put(typeName, codec.asInstanceOf[ProtobufCodec[Any]]): Unit
+          if (recursive.containsKey(typeName)) instanceCache.put(typeName, codec.asInstanceOf[ProtobufCodec.Message[Any]]): Unit
           codec
         }
     }
@@ -387,16 +387,16 @@ class ProtobufDeriver(flags: Set[DerivationFlag] = Set.empty) extends Deriver[Pr
         }
       case ProtobufCodec.Optional(_)                                    =>
         None.asInstanceOf[A]
-      case e: ProtobufCodec.Enum[A]                                     =>
-        e.valuesByIndex.getOrElse(0, null.asInstanceOf[A])
+      case c: ProtobufCodec.Enum[A]                                     =>
+        c.valuesByIndex.getOrElse(0, null.asInstanceOf[A])
       case ProtobufCodec.RepeatedMap(_, constructor, _)                 =>
         constructor.resultObject(constructor.newObjectBuilder()).asInstanceOf[A]
       case ProtobufCodec.Repeated(_, constructor, _, _)                 =>
         constructor.resultObject(constructor.newObjectBuilder()).asInstanceOf[A]
       case ProtobufCodec.Transform(from, _, codec)                      =>
         from(getDefaultValue(using codec))
-      case d: ProtobufCodec.Deferred[A]                                 =>
-        getDefaultValue(using d.codec)
+      case c: ProtobufCodec.RecursiveMessage[A]                         =>
+        getDefaultValue(using c.codec)
       case ProtobufCodec.Bytes                                          =>
         Array.empty[Byte]
     }

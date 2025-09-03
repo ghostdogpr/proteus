@@ -22,7 +22,7 @@ sealed trait ProtobufCodec[A] {
 
   def encode(value: A): Array[Byte] =
     withRegisters { registers =>
-      val writer = ProtobufCodec.toProtoWriter(this, value, -1, registers, RegisterOffset.Zero, alwaysEncode = true)
+      val writer = toProtoWriter(this, value, -1, registers, RegisterOffset.Zero, alwaysEncode = true)
       val bytes  = new Array[Byte](internal.ProtobufWriter.innerSize(writer))
       val output = CodedOutputStream.newInstance(bytes)
       internal.ProtobufWriter.write(writer)(using output)
@@ -37,15 +37,15 @@ sealed trait ProtobufCodec[A] {
 
   def decode(input: CodedInputStream): A =
     withRegisters { registers =>
-      ProtobufCodec.read(registers, RegisterOffset.Zero, this)(using input)
+      read(registers, RegisterOffset.Zero, this)(using input)
     }
 
   def transform[B](from: A => B, to: B => A): ProtobufCodec[B] =
     this match {
-      case t: ProtobufCodec.Transform[a0, A] =>
-        ProtobufCodec.Transform[a0, B](a => from(t.from(a)), b => t.to(to(b)), t.codec)
-      case _                                 =>
-        ProtobufCodec.Transform(from, to, this)
+      case c: Transform[a0, A] =>
+        Transform[a0, B](a => from(c.from(a)), b => c.to(to(b)), c.codec)
+      case _                   =>
+        Transform(from, to, this)
     }
 }
 
@@ -83,8 +83,8 @@ object ProtobufCodec {
       val mayUseBuilder: Boolean = {
         def loop[A](codec: ProtobufCodec[A]): Boolean =
           codec match {
-            case r: Repeated[_, _]       => true
-            case r: RepeatedMap[_, _, _] => true
+            case _: Repeated[_, _]       => true
+            case _: RepeatedMap[_, _, _] => true
             case Transform(_, _, codec)  => loop(codec)
             case _                       => false
           }
@@ -192,20 +192,20 @@ object ProtobufCodec {
 
       def findNested[A](codec: ProtobufCodec[A]): List[ProtoIR.MessageElement.NestedMessageElement] =
         codec match {
-          case m: ProtobufCodec.Message[_]           => if (m.nested) List(ProtoIR.MessageElement.NestedMessageElement(m.toProtoIR)) else Nil
-          case t: ProtobufCodec.Transform[_, _]      => findNested(t.codec)
-          case o: ProtobufCodec.Optional[_]          => findNested(o.codec)
-          case r: ProtobufCodec.Repeated[_, _]       => findNested(r.element)
-          case r: ProtobufCodec.RepeatedMap[_, _, _] => findNested(r.element)
-          case d: ProtobufCodec.Deferred[_]          => findNested(d.codec)
-          case _                                     => Nil
+          case c: Message[_]           => if (c.nested) List(ProtoIR.MessageElement.NestedMessageElement(c.toProtoIR)) else Nil
+          case c: Transform[_, _]      => findNested(c.codec)
+          case c: Optional[_]          => findNested(c.codec)
+          case c: Repeated[_, _]       => findNested(c.element)
+          case c: RepeatedMap[_, _, _] => findNested(c.element)
+          case c: RecursiveMessage[_]  => findNested(c.codec)
+          case _                       => Nil
         }
 
       val nestedMessageElements = simpleFields.collect(field => findNested(field.codec)).flatten.distinct
 
       val sortedAllElements = elements.sortBy {
-        case o: ProtoIR.MessageElement.OneofElement => o.oneof.fields.head.number
-        case f: ProtoIR.MessageElement.FieldElement => f.field.number
+        case c: ProtoIR.MessageElement.OneofElement => c.oneof.fields.head.number
+        case e: ProtoIR.MessageElement.FieldElement => e.field.number
       }
       ProtoIR.Message(name, nestedMessageElements ++ sortedAllElements, reserved = reserved.toList.sorted.map(ProtoIR.Reserved.Number(_)))
     }
@@ -219,17 +219,17 @@ object ProtobufCodec {
   ) extends ProtobufCodec[C[E]] {
     def toElementProtoWriter[A](codec: ProtobufCodec[A]): (Int, Registers, RegisterOffset) => A => ProtobufWriter =
       codec match {
-        case p: ProtobufCodec.Primitive[_]    => (id, _, _) => p.toProtoWriter(_, id, alwaysEncode = true)
-        case p: ProtobufCodec.Message[_]      => (id, registers, offset) => p.toProtoWriter(_, id, registers, offset)
-        case p: ProtobufCodec.Enum[_]         => (id, _, _) => p.toProtoWriter(_, id, alwaysEncode = true)
-        case p: ProtobufCodec.Transform[_, _] => (id, registers, offset) => a => toElementProtoWriter(p.codec)(id, registers, offset)(p.to(a))
-        case p: ProtobufCodec.Optional[_]     =>
+        case c: Primitive[_]        => (id, _, _) => c.toProtoWriter(_, id, alwaysEncode = true)
+        case c: Message[_]          => (id, registers, offset) => c.toProtoWriter(_, id, registers, offset)
+        case c: Enum[_]             => (id, _, _) => c.toProtoWriter(_, id, alwaysEncode = true)
+        case c: Transform[_, _]     => (id, registers, offset) => a => toElementProtoWriter(c.codec)(id, registers, offset)(c.to(a))
+        case c: Optional[_]         =>
           (id, registers, offset) => {
             case None        => null
-            case Some(value) => toElementProtoWriter(p.codec)(id, registers, offset)(value)
+            case Some(value) => toElementProtoWriter(c.codec)(id, registers, offset)(value)
           }
-        case d: ProtobufCodec.Deferred[_]     => toElementProtoWriter(d.codec)
-        case _                                => throw new Exception(s"Invalid codec inside repeated: $codec")
+        case c: RecursiveMessage[_] => (id, registers, offset) => c.codec.toProtoWriter(_, id, registers, offset)
+        case _                      => throw new Exception(s"Invalid codec inside repeated: $codec")
       }
 
     val elementProtoWriter: (Int, Registers, RegisterOffset) => E => ProtobufWriter =
@@ -251,7 +251,7 @@ object ProtobufCodec {
   }
 
   final case class RepeatedMap[C[_, _], K, V](
-    element: ProtobufCodec.Message[(K, V)],
+    element: Message[(K, V)],
     constructor: MapConstructor[C],
     deconstructor: MapDeconstructor[C]
   ) extends ProtobufCodec[C[K, V]] {
@@ -282,11 +282,11 @@ object ProtobufCodec {
       ProtobufCodec.toProtoWriter(codec, to(b), id, registers, offset, alwaysEncode)
   }
 
-  final case class Deferred[A](thunk: () => ProtobufCodec[A]) extends ProtobufCodec[A] {
+  final case class RecursiveMessage[A](thunk: () => Message[A]) extends ProtobufCodec[A] {
     lazy val codec = thunk()
 
-    def toProtoWriter(a: A, id: Int, registers: Registers, offset: RegisterOffset, alwaysEncode: Boolean): ProtobufWriter =
-      ProtobufCodec.toProtoWriter(codec, a, id, registers, offset, alwaysEncode)
+    def toProtoWriter(a: A, id: Int, registers: Registers, offset: RegisterOffset): ProtobufWriter =
+      codec.toProtoWriter(a, id, registers, offset)
   }
 
   final case class Optional[A](codec: ProtobufCodec[A]) extends ProtobufCodec[Option[A]] {
@@ -298,15 +298,15 @@ object ProtobufCodec {
 
   def toProtoWriter[A](codec: ProtobufCodec[A], a: A, id: Int, registers: Registers, offset: RegisterOffset, alwaysEncode: Boolean): ProtobufWriter =
     codec match {
-      case p: ProtobufCodec.Primitive[_]         => p.toProtoWriter(a, id, alwaysEncode)
-      case p: ProtobufCodec.Message[_]           => p.toProtoWriter(a, id, registers, offset)
-      case p: ProtobufCodec.Repeated[c, e]       => p.toProtoWriter(a, id, registers, offset, alwaysEncode)
-      case p: ProtobufCodec.RepeatedMap[c, k, v] => p.toProtoWriter(a, id, registers, offset, alwaysEncode)
-      case p: ProtobufCodec.Enum[_]              => p.toProtoWriter(a, id, alwaysEncode)
-      case p: ProtobufCodec.Transform[_, _]      => p.toProtoWriter(a, id, registers, offset, alwaysEncode)
-      case p: ProtobufCodec.Optional[_]          => p.toProtoWriter(a, id, registers, offset)
-      case p: ProtobufCodec.Bytes.type           => p.toProtoWriter(a, id, alwaysEncode)
-      case d: ProtobufCodec.Deferred[_]          => d.toProtoWriter(a, id, registers, offset, alwaysEncode)
+      case c: Primitive[_]         => c.toProtoWriter(a, id, alwaysEncode)
+      case c: Message[_]           => c.toProtoWriter(a, id, registers, offset)
+      case c: Repeated[c, e]       => c.toProtoWriter(a, id, registers, offset, alwaysEncode)
+      case c: RepeatedMap[c, k, v] => c.toProtoWriter(a, id, registers, offset, alwaysEncode)
+      case c: Enum[_]              => c.toProtoWriter(a, id, alwaysEncode)
+      case c: Transform[_, _]      => c.toProtoWriter(a, id, registers, offset, alwaysEncode)
+      case c: Optional[_]          => c.toProtoWriter(a, id, registers, offset)
+      case c: Bytes.type           => c.toProtoWriter(a, id, alwaysEncode)
+      case c: RecursiveMessage[_]  => c.toProtoWriter(a, id, registers, offset)
     }
 
   private def setDefaults[A](m: Message[A], registers: Registers, offset: RegisterOffset, visited: Array[Boolean]): Unit = {
@@ -323,15 +323,15 @@ object ProtobufCodec {
           case field: SimpleField[_] if field.mayUseBuilder =>
             def loop[A](codec: ProtobufCodec[A]): A =
               codec match {
-                case r: Repeated[_, _]         =>
+                case c: Repeated[_, _]         =>
                   val v = getFromRegister(registers, offset, field.register)
                   // we need this check to do nothing in case it was packed
                   if (v.isInstanceOf[scala.collection.mutable.Builder[?, ?]])
-                    r.constructor.resultObject(v.asInstanceOf[r.constructor.ObjectBuilder[Any]]).asInstanceOf[A]
+                    c.constructor.resultObject(v.asInstanceOf[c.constructor.ObjectBuilder[Any]]).asInstanceOf[A]
                   else null.asInstanceOf[A]
-                case r: RepeatedMap[_, _, _]   =>
+                case c: RepeatedMap[_, _, _]   =>
                   val v = getFromRegister(registers, offset, field.register)
-                  r.constructor.resultObject(v.asInstanceOf[r.constructor.ObjectBuilder[Any, Any]]).asInstanceOf[A]
+                  c.constructor.resultObject(v.asInstanceOf[c.constructor.ObjectBuilder[Any, Any]]).asInstanceOf[A]
                 case Transform(from, _, codec) =>
                   val res = loop(codec)
                   // need to transform the result to the final type
@@ -379,19 +379,19 @@ object ProtobufCodec {
 
     def loop[A](codec: ProtobufCodec[A], field: FieldMapEntry): A =
       codec match {
-        case m: Message[_]           => withLimit(handleMessage(m, registers, nextOffset))
-        case p: Primitive[_]         => handlePrimitive(p)
-        case e: Enum[_]              => e.valuesByIndex(input.readEnum())
-        case t: Transform[_, _]      =>
-          val res = loop(t.codec, field)
-          if (res == null) null.asInstanceOf[A] else t.from(res)
-        case o: Optional[_]          => Some(loop(o.codec, field))
-        case r: Repeated[c, e]       =>
-          if (r.packed && (input.getLastTag() & 0x7) == 2) handlePackedRepeated(r, nextOffset)
-          else handleRepeated(r, field)
-        case r: RepeatedMap[m, k, v] => handleRepeatedMap(r, field)
-        case b: Bytes.type           => input.readByteArray()
-        case d: Deferred[_]          => loop(d.codec, field)
+        case c: Message[_]           => withLimit(handleMessage(c, registers, nextOffset))
+        case c: Primitive[_]         => handlePrimitive(c)
+        case c: Enum[_]              => c.valuesByIndex(input.readEnum())
+        case c: Transform[_, _]      =>
+          val res = loop(c.codec, field)
+          if (res == null) null.asInstanceOf[A] else c.from(res)
+        case c: Optional[_]          => Some(loop(c.codec, field))
+        case c: Repeated[c, e]       =>
+          if (c.packed && (input.getLastTag() & 0x7) == 2) handlePackedRepeated(c, nextOffset)
+          else handleRepeated(c, field)
+        case c: RepeatedMap[m, k, v] => handleRepeatedMap(c, field)
+        case Bytes                   => input.readByteArray()
+        case c: RecursiveMessage[_]  => withLimit(handleMessage(c.codec, registers, nextOffset))
       }
 
     var done = false
@@ -426,22 +426,17 @@ object ProtobufCodec {
   private def handlePackedRepeated[C[_], E](r: Repeated[C, E], offset: RegisterOffset)(using input: CodedInputStream): C[E] = {
     def loop[A](codec: ProtobufCodec[A], offset: RegisterOffset): () => A =
       codec match {
-        case p: Primitive[_]    =>
-          p.primitiveType match {
+        case c: Primitive[_]    =>
+          c.primitiveType match {
             case _: PrimitiveType.Int     => () => input.readInt32()
             case _: PrimitiveType.Long    => () => input.readInt64()
             case _: PrimitiveType.Boolean => () => input.readBool()
             case _: PrimitiveType.Double  => () => input.readDouble()
             case _: PrimitiveType.Float   => () => input.readFloat()
-            case _                        => throw new Exception(s"Unsupported packed primitive type: $p")
+            case _                        => throw new Exception(s"Unsupported packed primitive type: $c")
           }
-        case e: Enum[_]         => () => e.valuesByIndex(input.readEnum())
-        case m: Transform[_, _] =>
-          val getElement = loop(m.codec, offset)
-          () => m.from(getElement())
-        case d: Deferred[_]     =>
-          val getElement = loop(d.codec, offset)
-          () => getElement()
+        case c: Enum[_]         => () => c.valuesByIndex(input.readEnum())
+        case c: Transform[_, _] => () => c.from(loop(c.codec, offset)())
         case _                  => throw new Exception(s"Invalid packed type: $codec")
       }
 
@@ -457,10 +452,10 @@ object ProtobufCodec {
   def read[A](registers: Registers, offset: RegisterOffset, codec: ProtobufCodec[A])(using input: CodedInputStream): A = {
     def loop[A](codec: ProtobufCodec[A], offset: RegisterOffset): A =
       codec match {
-        case m: Message[_]      => handleMessage(m, registers, offset)
-        case m: Transform[_, _] => m.from(loop(m.codec, offset))
-        case d: Deferred[_]     => loop(d.codec, offset)
-        case _                  => throw new Exception(s"Invalid root codec: $codec")
+        case c: Message[_]          => handleMessage(c, registers, offset)
+        case c: RecursiveMessage[_] => handleMessage(c.codec, registers, offset)
+        case c: Transform[_, _]     => c.from(loop(c.codec, offset))
+        case _                      => throw new Exception(s"Invalid root codec: $codec")
       }
 
     loop(codec, offset)
@@ -476,10 +471,9 @@ object ProtobufCodec {
 
   private def isOptional[A](using codec: ProtobufCodec[A]): Boolean =
     codec match {
-      case t: ProtobufCodec.Transform[_, _] => isOptional(using t.codec)
-      case _: ProtobufCodec.Optional[_]     => true
-      case d: ProtobufCodec.Deferred[_]     => isOptional(using d.codec)
-      case _                                => false
+      case c: Transform[_, _] => isOptional(using c.codec)
+      case _: Optional[_]     => true
+      case _                  => false
     }
 
   def toProtoIR(codec: ProtobufCodec[?]): List[ProtoIR.TopLevelDef] = {
@@ -487,26 +481,26 @@ object ProtobufCodec {
 
     def findTopLevelDefs[A](codec: ProtobufCodec[A]): List[ProtoIR.TopLevelDef] =
       codec match {
-        case m: ProtobufCodec.Message[_]           =>
-          if (m.nested || visited.contains(m.name)) Nil
+        case c: Message[_]           =>
+          if (c.nested || visited.contains(c.name)) Nil
           else {
-            if (!m.name.isEmpty) {
-              visited.add(m.name): Unit
-              ProtoIR.TopLevelDef.MessageDef(m.toProtoIR) :: m.simpleFields.map(_.codec).flatMap(findTopLevelDefs)
-            } else m.simpleFields.map(_.codec).flatMap(findTopLevelDefs)
+            if (!c.name.isEmpty) {
+              visited.add(c.name): Unit
+              ProtoIR.TopLevelDef.MessageDef(c.toProtoIR) :: c.simpleFields.map(_.codec).flatMap(findTopLevelDefs)
+            } else c.simpleFields.map(_.codec).flatMap(findTopLevelDefs)
           }
-        case t: ProtobufCodec.Transform[_, _]      => findTopLevelDefs(t.codec)
-        case o: ProtobufCodec.Optional[_]          => findTopLevelDefs(o.codec)
-        case r: ProtobufCodec.Repeated[_, _]       => findTopLevelDefs(r.element)
-        case r: ProtobufCodec.RepeatedMap[_, _, _] => findTopLevelDefs(r.element)
-        case d: ProtobufCodec.Deferred[_]          => findTopLevelDefs(d.codec)
-        case e: ProtobufCodec.Enum[_]              =>
-          if (visited.contains(e.name)) Nil
+        case c: Transform[_, _]      => findTopLevelDefs(c.codec)
+        case c: Optional[_]          => findTopLevelDefs(c.codec)
+        case c: Repeated[_, _]       => findTopLevelDefs(c.element)
+        case c: RepeatedMap[_, _, _] => findTopLevelDefs(c.element)
+        case c: RecursiveMessage[_]  => findTopLevelDefs(c.codec)
+        case c: Enum[_]              =>
+          if (visited.contains(c.name)) Nil
           else {
-            visited.add(e.name)
-            List(ProtoIR.TopLevelDef.EnumDef(e.toProtoIR))
+            visited.add(c.name)
+            List(ProtoIR.TopLevelDef.EnumDef(c.toProtoIR))
           }
-        case _                                     => Nil
+        case _                       => Nil
       }
 
     findTopLevelDefs(codec)
@@ -514,24 +508,24 @@ object ProtobufCodec {
 
   private def toProtoType(codec: ProtobufCodec[?]): ProtoIR.Type =
     codec match {
-      case t: ProtobufCodec.Transform[_, _]      => toProtoType(t.codec)
-      case o: ProtobufCodec.Optional[_]          => toProtoType(o.codec)
-      case d: ProtobufCodec.Deferred[_]          => toProtoType(d.codec)
-      case p: ProtobufCodec.Primitive[_]         =>
-        p.primitiveType match {
+      case c: Transform[_, _]      => toProtoType(c.codec)
+      case c: Optional[_]          => toProtoType(c.codec)
+      case c: RecursiveMessage[_]  => toProtoType(c.codec)
+      case c: Primitive[_]         =>
+        c.primitiveType match {
           case _: PrimitiveType.Int     => ProtoIR.Type.Int32
           case _: PrimitiveType.Long    => ProtoIR.Type.Int64
           case _: PrimitiveType.Boolean => ProtoIR.Type.Bool
           case _: PrimitiveType.String  => ProtoIR.Type.String
           case _: PrimitiveType.Double  => ProtoIR.Type.Double
           case _: PrimitiveType.Float   => ProtoIR.Type.Float
-          case _                        => throw new Exception(s"Unsupported primitive type: $p")
+          case _                        => throw new Exception(s"Unsupported primitive type: $c")
         }
-      case m: ProtobufCodec.Message[_]           => ProtoIR.Type.RefType(ProtoIR.Fqn(None, m.name))
-      case e: ProtobufCodec.Enum[_]              => ProtoIR.Type.EnumRefType(ProtoIR.Fqn(None, e.name))
-      case r: ProtobufCodec.Repeated[_, _]       => ProtoIR.Type.ListType(toProtoType(r.element))
-      case m: ProtobufCodec.RepeatedMap[_, _, _] =>
-        ProtoIR.Type.MapType(toProtoType(m.element.simpleFields(0).codec), toProtoType(m.element.simpleFields(1).codec))
-      case p: ProtobufCodec.Bytes.type           => ProtoIR.Type.Bytes
+      case c: Message[_]           => ProtoIR.Type.RefType(ProtoIR.Fqn(None, c.name))
+      case c: Enum[_]              => ProtoIR.Type.EnumRefType(ProtoIR.Fqn(None, c.name))
+      case c: Repeated[_, _]       => ProtoIR.Type.ListType(toProtoType(c.element))
+      case c: RepeatedMap[_, _, _] =>
+        ProtoIR.Type.MapType(toProtoType(c.element.simpleFields(0).codec), toProtoType(c.element.simpleFields(1).codec))
+      case Bytes                   => ProtoIR.Type.Bytes
     }
 }
