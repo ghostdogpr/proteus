@@ -431,6 +431,86 @@ enum Priority {
 """
 
         assertTrue(rendered == expected)
+      },
+      test("proteus.exclude modifier excludes field from rendered proto") {
+        case class MessageWithExcluded(
+          id: Int,
+          name: String,
+          @config("proteus.exclude", "true") excluded: String
+        ) derives Schema
+        val codec    = Schema[MessageWithExcluded].derive(deriver)
+        val rendered = renderCodec(codec)
+        val expected = """syntax = "proto3";
+
+package test;
+
+message MessageWithExcluded {
+    int32 id = 1;
+    string name = 2;
+}
+"""
+
+        assertTrue(rendered == expected)
+      },
+      test("proteus.exclude modifier excludes enum cases from rendered proto") {
+        enum StatusWithExcluded derives Schema {
+          case Active
+          @config("proteus.exclude", "true") case Inactive
+          case Pending
+        }
+        case class StatusMessage(status: StatusWithExcluded) derives Schema
+        val codec    = Schema[StatusMessage].derive(deriver)
+        val rendered = renderCodec(codec)
+        val expected = """syntax = "proto3";
+
+package test;
+
+message StatusMessage {
+    StatusWithExcluded status = 1;
+}
+
+enum StatusWithExcluded {
+    ACTIVE = 0;
+    PENDING = 1;
+}
+"""
+
+        assertTrue(rendered == expected)
+      },
+      test("proteus.exclude modifier excludes variant cases from rendered proto") {
+        enum ContactWithExcluded derives Schema {
+          case Email(address: String)
+          @config("proteus.exclude", "true") case Phone(number: String)
+          case Slack(workspace: String)
+        }
+        case class ContactMessage(contact: ContactWithExcluded) derives Schema
+        val codec    = Schema[ContactMessage].derive(deriver)
+        val rendered = renderCodec(codec)
+        val expected = """syntax = "proto3";
+
+package test;
+
+message ContactMessage {
+    ContactWithExcluded contact = 1;
+}
+
+message ContactWithExcluded {
+    oneof value {
+        Email email = 1;
+        Slack slack = 2;
+    }
+}
+
+message Email {
+    string address = 1;
+}
+
+message Slack {
+    string workspace = 1;
+}
+"""
+
+        assertTrue(rendered == expected)
       }
     ),
     suite("Derivation Flags")(

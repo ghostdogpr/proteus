@@ -573,6 +573,83 @@ object ProtobufCodecSpec extends ZIOSpecDefault {
         val decoded  = codec.decode(encoded)
 
         assert(decoded)(equalTo(original))
+      },
+      test("proteus.exclude modifier skips field from codec") {
+        case class MessageWithExcluded(
+          id: Int,
+          name: String,
+          @config("proteus.exclude", "true") excluded: String
+        ) derives Schema
+        case class MessageWithoutExcluded(
+          id: Int,
+          name: String
+        ) derives Schema
+
+        val codecWithExcluded    = Schema[MessageWithExcluded].derive(deriver)
+        val codecWithoutExcluded = Schema[MessageWithoutExcluded].derive(deriver)
+
+        val messageWithExcluded    = MessageWithExcluded(1, "test", "should be ignored")
+        val messageWithoutExcluded = MessageWithoutExcluded(1, "test")
+
+        val encodedWithExcluded    = codecWithExcluded.encode(messageWithExcluded)
+        val encodedWithoutExcluded = codecWithoutExcluded.encode(messageWithoutExcluded)
+
+        // The encoded messages should be the same size since excluded field is not serialized
+        assert(encodedWithExcluded.length)(equalTo(encodedWithoutExcluded.length)) &&
+          // And the encoded bytes should be identical
+          assert(encodedWithExcluded)(equalTo(encodedWithoutExcluded))
+      },
+      test("proteus.exclude modifier excludes enum cases from codec") {
+        enum StatusWithExcluded derives Schema {
+          case Active
+          @config("proteus.exclude", "true") case Inactive
+          case Pending
+        }
+        enum StatusWithoutExcluded derives Schema {
+          case Active
+          case Pending
+        }
+        
+        case class MessageWithExcludedEnum(status: StatusWithExcluded) derives Schema
+        case class MessageWithoutExcludedEnum(status: StatusWithoutExcluded) derives Schema
+        
+        val codecWithExcluded = Schema[MessageWithExcludedEnum].derive(deriver)
+        val codecWithoutExcluded = Schema[MessageWithoutExcludedEnum].derive(deriver)
+        
+        val messageWithExcluded = MessageWithExcludedEnum(StatusWithExcluded.Active)
+        val messageWithoutExcluded = MessageWithoutExcludedEnum(StatusWithoutExcluded.Active)
+        
+        val encodedWithExcluded = codecWithExcluded.encode(messageWithExcluded)
+        val encodedWithoutExcluded = codecWithoutExcluded.encode(messageWithoutExcluded)
+        
+        // The encoded messages should be identical since excluded enum case is not present
+        assert(encodedWithExcluded)(equalTo(encodedWithoutExcluded))
+      },
+      test("proteus.exclude modifier excludes variant cases from codec") {
+        enum ContactWithExcluded derives Schema {
+          case Email(address: String)
+          @config("proteus.exclude", "true") case Phone(number: String)
+          case Slack(workspace: String)
+        }
+        enum ContactWithoutExcluded derives Schema {
+          case Email(address: String)
+          case Slack(workspace: String)
+        }
+        
+        case class MessageWithExcludedVariant(contact: ContactWithExcluded) derives Schema
+        case class MessageWithoutExcludedVariant(contact: ContactWithoutExcluded) derives Schema
+        
+        val codecWithExcluded = Schema[MessageWithExcludedVariant].derive(deriver)
+        val codecWithoutExcluded = Schema[MessageWithoutExcludedVariant].derive(deriver)
+        
+        val messageWithExcluded = MessageWithExcludedVariant(ContactWithExcluded.Email("test@example.com"))
+        val messageWithoutExcluded = MessageWithoutExcludedVariant(ContactWithoutExcluded.Email("test@example.com"))
+        
+        val encodedWithExcluded = codecWithExcluded.encode(messageWithExcluded)
+        val encodedWithoutExcluded = codecWithoutExcluded.encode(messageWithoutExcluded)
+        
+        // The encoded messages should be identical since excluded variant case is not present
+        assert(encodedWithExcluded)(equalTo(encodedWithoutExcluded))
       }
     ),
     suite("Bytes Primitive")(
