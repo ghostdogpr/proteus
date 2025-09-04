@@ -8,16 +8,29 @@ import zio.blocks.schema.binding.*
 import zio.blocks.schema.binding.RegisterOffset.*
 import zio.blocks.schema.binding.SeqConstructor.*
 import zio.blocks.schema.derive.*
+import zio.blocks.schema.derive.InstanceOverride.By
 
 import proteus.ProtobufCodec.MessageField.*
 import proteus.ProtobufDeriver.*
 import proteus.internal.*
 
-class ProtobufDeriver(flags: Set[DerivationFlag] = Set.empty) extends Deriver[ProtobufCodec] {
+case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vector[InstanceOverride[ProtobufCodec, ?]])
+  extends Deriver[ProtobufCodec] {
 
   val inlineModifier = Modifier.config("proteus.inline", "true")
   val nestedModifier = Modifier.config("proteus.nested", "true")
   val oneofModifier  = Modifier.config("proteus.oneof", "true")
+
+  def instance[B](typeName: TypeName[B], instance: => ProtobufCodec[B]): ProtobufDeriver =
+    copy(instances = instances :+ InstanceOverride(By.Type(typeName), Lazy(instance)))
+
+  def enable(flag: DerivationFlag): ProtobufDeriver =
+    copy(flags = flags + flag)
+
+  def disable(flag: DerivationFlag): ProtobufDeriver =
+    copy(flags = flags - flag)
+
+  override def instanceOverrides: IndexedSeq[InstanceOverride[ProtobufCodec, ?]] = instances
 
   private val instanceCache  = java.util.concurrent.ConcurrentHashMap[TypeName[?], ProtobufCodec.Message[Any]]()
   private val visitedCache   = new ThreadLocal[java.util.IdentityHashMap[TypeName[?], Unit]] {
@@ -468,6 +481,8 @@ class ProtobufDeriver(flags: Set[DerivationFlag] = Set.empty) extends Deriver[Pr
 }
 
 object ProtobufDeriver {
+  def apply(): ProtobufDeriver = new ProtobufDeriver(Set.empty, Vector.empty)
+
   enum DerivationFlag {
     case OptionalAsOneOf
   }

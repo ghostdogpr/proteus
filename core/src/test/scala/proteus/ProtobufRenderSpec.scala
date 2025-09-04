@@ -10,7 +10,7 @@ import proteus.ProtoIR.{CompilationUnit, Statement}
 object ProtobufRenderSpec extends ZIOSpecDefault {
 
   val deriver                    = ProtobufDeriver()
-  val deriverWithOptionalAsOneOf = ProtobufDeriver(Set(ProtobufDeriver.DerivationFlag.OptionalAsOneOf))
+  val deriverWithOptionalAsOneOf = deriver.enable(ProtobufDeriver.DerivationFlag.OptionalAsOneOf)
 
   def renderCodec[A](codec: ProtobufCodec[A], packageName: String = "test"): String = {
     val topLevelDefs    = ProtobufCodec.toProtoIR(codec)
