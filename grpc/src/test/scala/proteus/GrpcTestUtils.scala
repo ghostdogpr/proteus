@@ -77,7 +77,7 @@ object GrpcTestUtils {
   // RPC Definitions
   // =============================================================================
 
-  given deriver: ProtobufDeriver = ProtobufDeriver
+  given ProtobufDeriver = ProtobufDeriver
 
   // Unary RPC with complex messages
   val complexRpc  = Rpc.unary[ComplexRequest, ComplexResponse]("ProcessComplex")

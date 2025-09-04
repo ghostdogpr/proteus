@@ -12,7 +12,7 @@ object RenderSpec extends ZIOSpecDefault {
   case class RequestWithShared(id: Int, shared: SharedMessage) derives Schema
   case class ResponseWithShared(result: String, shared: SharedMessage) derives Schema
 
-  given deriver: ProtobufDeriver = ProtobufDeriver
+  given ProtobufDeriver = ProtobufDeriver
 
   val sharedRpc         = Rpc.unary[RequestWithShared, ResponseWithShared]("ProcessShared")
   val serviceWithShared = Service("test.package", "ServiceWithShared").rpc(sharedRpc)

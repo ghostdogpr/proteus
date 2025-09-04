@@ -42,7 +42,7 @@ enum MessageResponse derives Schema {
 
 case class ServiceResponse(name: String) derives Schema
 
-given deriver: ProtobufDeriver = ProtobufDeriver
+given ProtobufDeriver = ProtobufDeriver
 
 val serverReflectionInfoRpc = Rpc.bidiStreaming[ServerReflectionRequest, ServerReflectionResponse]("ServerReflectionInfo")
 val serverReflectionService = Service("grpc.reflection.v1", "ServerReflection").rpc(serverReflectionInfoRpc)
