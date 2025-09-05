@@ -445,19 +445,17 @@ enum Priority {
 option java_package = "com.test.proto";
 option csharp_namespace = "Test.Proto";
 
-message Address {
-    string street = 1;
-    string city = 2;
-    string country = 3;
-    int32 zip_code = 4;
-}
-
 message ContactMethod {
     oneof value {
         Email email = 1;
         Phone phone = 2;
         Slack slack = 3;
     }
+}
+
+message Slack {
+    string workspace = 1;
+    string channel = 2;
 }
 
 message Email {
@@ -469,9 +467,11 @@ message Phone {
     string country = 2;
 }
 
-message Slack {
-    string workspace = 1;
-    string channel = 2;
+message Address {
+    string street = 1;
+    string city = 2;
+    string country = 3;
+    int32 zip_code = 4;
 }
 """
 
@@ -589,13 +589,6 @@ message ResponseWithShared {
 option java_package = "com.test.proto";
 option csharp_namespace = "Test.Proto";
 
-message Address {
-    string street = 1;
-    string city = 2;
-    string country = 3;
-    int32 zip_code = 4;
-}
-
 message ContactMethod {
     oneof value {
         Email email = 1;
@@ -604,13 +597,13 @@ message ContactMethod {
     }
 }
 
-message Email {
-    string address = 1;
+message Slack {
+    string workspace = 1;
+    string channel = 2;
 }
 
-message Phone {
-    string number = 1;
-    string country = 2;
+message Email {
+    string address = 1;
 }
 
 enum Priority {
@@ -620,9 +613,16 @@ enum Priority {
     CRITICAL = 3;
 }
 
-message Slack {
-    string workspace = 1;
-    string channel = 2;
+message Phone {
+    string number = 1;
+    string country = 2;
+}
+
+message Address {
+    string street = 1;
+    string city = 2;
+    string country = 3;
+    int32 zip_code = 4;
 }
 """
 
@@ -639,13 +639,6 @@ message Slack {
 option java_package = "com.test.proto";
 option csharp_namespace = "Test.Proto";
 
-message Address {
-    string street = 1;
-    string city = 2;
-    string country = 3;
-    int32 zip_code = 4;
-}
-
 message ContactMethod {
     oneof value {
         Email email = 1;
@@ -654,13 +647,13 @@ message ContactMethod {
     }
 }
 
-message Email {
-    string address = 1;
+message Slack {
+    string workspace = 1;
+    string channel = 2;
 }
 
-message Phone {
-    string number = 1;
-    string country = 2;
+message Email {
+    string address = 1;
 }
 
 enum Priority {
@@ -670,9 +663,16 @@ enum Priority {
     CRITICAL = 3;
 }
 
-message Slack {
-    string workspace = 1;
-    string channel = 2;
+message Phone {
+    string number = 1;
+    string country = 2;
+}
+
+message Address {
+    string street = 1;
+    string city = 2;
+    string country = 3;
+    int32 zip_code = 4;
 }
 """
 
@@ -709,13 +709,6 @@ option csharp_namespace = "Test.Proto";
 option java_package = "com.test.proto";
 option csharp_namespace = "Test.Proto";
 
-message Address {
-    string street = 1;
-    string city = 2;
-    string country = 3;
-    int32 zip_code = 4;
-}
-
 message ContactMethod {
     oneof value {
         Email email = 1;
@@ -724,13 +717,13 @@ message ContactMethod {
     }
 }
 
-message Email {
-    string address = 1;
+message Slack {
+    string workspace = 1;
+    string channel = 2;
 }
 
-message Phone {
-    string number = 1;
-    string country = 2;
+message Email {
+    string address = 1;
 }
 
 enum Priority {
@@ -740,9 +733,16 @@ enum Priority {
     CRITICAL = 3;
 }
 
-message Slack {
-    string workspace = 1;
-    string channel = 2;
+message Phone {
+    string number = 1;
+    string country = 2;
+}
+
+message Address {
+    string street = 1;
+    string city = 2;
+    string country = 3;
+    int32 zip_code = 4;
 }
 """
 

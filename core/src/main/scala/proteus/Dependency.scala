@@ -33,7 +33,7 @@ case class Dependency(packageName: Option[String], dependencyName: String, types
         packageName = packageName,
         options = options,
         statements = filteredDependencies.toList.map(d => ProtoIR.Statement.ImportStatement(d.dependencyName)) ++
-          filteredTypes.map(ProtoIR.Statement.TopLevelStatement(_)).toList.sortBy(_.s.name)
+          filteredTypes.map(ProtoIR.Statement.TopLevelStatement(_)).toList
       )
     )
   }
