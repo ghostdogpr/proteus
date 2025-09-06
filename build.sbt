@@ -1,11 +1,10 @@
 val scala3Version = "3.7.2"
 
-val grpcVersion                 = "1.74.0"
-val scalaProtobufRuntimeVersion = "0.8.16"
-val zioBlocksSchemaVersion      = "0.0.0+620-fad4b9a5-SNAPSHOT"
-val zioTestVersion              = "2.1.20"
-val zioGrpcVersion              = "0.6.3"
-val fs2GrpcVersion              = "2.8.2"
+val grpcVersion            = "1.74.0"
+val zioBlocksSchemaVersion = "0.0.0+620-fad4b9a5-SNAPSHOT"
+val zioTestVersion         = "2.1.20"
+val zioGrpcVersion         = "0.6.3"
+val fs2GrpcVersion         = "2.8.2"
 
 inThisBuild(
   List(
@@ -27,28 +26,20 @@ addCommandAlias("check", "all scalafmtSbtCheck scalafmtCheck test:scalafmtCheck"
 lazy val root = project
   .in(file("."))
   .settings(publish / skip := true)
-  .aggregate(core.jvm, core.js, grpc, zioGrpc, fs2Grpc, benchmarks, examples)
+  .aggregate(core, grpc, zioGrpc, fs2Grpc, benchmarks, examples)
 
-lazy val core = crossProject(JSPlatform, JVMPlatform)
-  .crossType(CrossType.Pure)
+lazy val core = project
   .in(file("core"))
   .settings(name := "proteus-core")
   .settings(commonSettings)
   .settings(
     libraryDependencies ++=
       Seq(
-        "dev.zio" %%% "zio-blocks-schema" % zioBlocksSchemaVersion,
-        "dev.zio" %%% "zio-test"          % zioTestVersion % Test,
-        "dev.zio" %%% "zio-test-sbt"      % zioTestVersion % Test
+        "dev.zio" %% "zio-blocks-schema" % zioBlocksSchemaVersion,
+        "io.grpc"  % "grpc-protobuf"     % grpcVersion,
+        "dev.zio" %% "zio-test"          % zioTestVersion % Test,
+        "dev.zio" %% "zio-test-sbt"      % zioTestVersion % Test
       )
-  )
-  .jvmSettings(
-    libraryDependencies ++= Seq("io.grpc" % "grpc-protobuf" % grpcVersion)
-  )
-  .jsSettings(
-    dependencyOverrides += "org.scala-lang" %%% "scala3-library" % scalaVersion.value,
-    libraryDependencies ++= Seq("com.thesamet.scalapb" %%% "protobuf-runtime-scala" % scalaProtobufRuntimeVersion),
-    Test / fork                              := false
   )
 
 lazy val grpc = project
@@ -63,7 +54,7 @@ lazy val grpc = project
         "io.grpc" % "grpc-services" % grpcVersion % Test
       )
   )
-  .dependsOn(core.jvm % "compile->compile;test->test")
+  .dependsOn(core % "compile->compile;test->test")
 
 lazy val zioGrpc = project
   .in(file("grpc-zio"))
@@ -93,7 +84,7 @@ lazy val benchmarks = project
   .in(file("benchmarks"))
   .settings(commonSettings)
   .settings(publish / skip := true)
-  .dependsOn(core.jvm)
+  .dependsOn(core)
   .enablePlugins(JmhPlugin)
 
 lazy val generateProtos = taskKey[Unit]("Generate proto files")
