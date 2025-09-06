@@ -352,7 +352,7 @@ object ProtobufCodec {
     val visited    = new Array[Boolean](m.fields.length)
     val nextOffset = RegisterOffset.add(offset, m.constructor.usedRegisters)
 
-    def handleRepeated[C[_], E](r: Repeated[C, E], field: FieldMapEntry): C[E] = {
+    def handleRepeated[C[_], E](r: Repeated[C, E], field: FieldMapEntry, tag: Int): C[E] = {
       val register = field.field.register
       val builder  =
         if (!visited(field.index)) {
@@ -360,7 +360,7 @@ object ProtobufCodec {
           setToRegister(registers, offset, register, builder)
           builder
         } else getFromRegister(registers, offset, register).asInstanceOf[r.constructor.ObjectBuilder[E]]
-      r.constructor.addObject(builder, loop(r.element, field))
+      r.constructor.addObject(builder, loop(r.element, field, tag))
       null.asInstanceOf[C[E]]
     }
 
@@ -377,18 +377,18 @@ object ProtobufCodec {
       null.asInstanceOf[M[K, V]]
     }
 
-    def loop[A](codec: ProtobufCodec[A], field: FieldMapEntry): A =
+    def loop[A](codec: ProtobufCodec[A], field: FieldMapEntry, tag: Int): A =
       codec match {
         case c: Message[_]           => withLimit(handleMessage(c, registers, nextOffset))
         case c: Primitive[_]         => handlePrimitive(c)
         case c: Enum[_]              => c.valuesByIndex(input.readEnum())
         case c: Transform[_, _]      =>
-          val res = loop(c.codec, field)
+          val res = loop(c.codec, field, tag)
           if (res == null) null.asInstanceOf[A] else c.from(res)
-        case c: Optional[_]          => Some(loop(c.codec, field))
+        case c: Optional[_]          => Some(loop(c.codec, field, tag))
         case c: Repeated[c, e]       =>
-          if (c.packed && (input.getLastTag() & 0x7) == 2) handlePackedRepeated(c, nextOffset)
-          else handleRepeated(c, field)
+          if (c.packed && (tag & 0x7) == 2) handlePackedRepeated(c, nextOffset)
+          else handleRepeated(c, field, tag)
         case c: RepeatedMap[m, k, v] => handleRepeatedMap(c, field)
         case Bytes                   => input.readByteArray()
         case c: RecursiveMessage[_]  => withLimit(handleMessage(c.codec, registers, nextOffset))
@@ -402,7 +402,7 @@ object ProtobufCodec {
         val fieldId = tag >>> 3
         val field   = m.fieldMap.get(fieldId)
         if (field ne null) {
-          val value = loop(field.field.codec, field)
+          val value = loop(field.field.codec, field, tag)
           visited(field.index) = true
           if (value != null) setToRegister(registers, offset, field.field.register.asInstanceOf[Register[Any]], value)
         } else input.skipField(tag): Unit
