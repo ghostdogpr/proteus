@@ -52,13 +52,15 @@ case class Service[Rpcs] private (packageName: Option[String], name: String, rpc
     )
   }
 
-  def renderToFile(options: List[ProtoIR.TopLevelOption], folder: String, dependencies: Dependency*): Unit = {
+  def renderToFile(options: List[ProtoIR.TopLevelOption], folder: String, fileName: String, dependencies: Dependency*): Unit = {
     val rendered = render(options, dependencies*)
-    val fileName = internal.toSnakeCase(name)
-    val path     = Path.of(folder, s"$fileName.proto")
+    val path     = Path.of(folder, fileName)
     Files.createDirectories(path.getParent)
     Files.write(path, rendered.getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING): Unit
   }
+
+  def renderToFile(options: List[ProtoIR.TopLevelOption], folder: String, dependencies: Dependency*): Unit =
+    renderToFile(options, folder, internal.toSnakeCase(name), dependencies*)
 }
 
 object Service {
