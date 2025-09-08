@@ -46,7 +46,7 @@ case class Service[Rpcs] private (packageName: Option[String], name: String, rpc
       ProtoIR.CompilationUnit(
         packageName = packageName,
         options = options,
-        statements = filteredDependencies.toList.map(d => ProtoIR.Statement.ImportStatement(d.dependencyName)) ++
+        statements = filteredDependencies.toList.map(_.toImportStatement) ++
           filteredDefinitions.map(ProtoIR.Statement.TopLevelStatement(_))
       )
     )
@@ -70,11 +70,16 @@ object Service {
 }
 
 extension (dep: Dependency.type) {
-
   def fromServices(dependencyName: String, services: Service[?]*): Dependency =
-    fromServices(None, dependencyName, services*)
+    fromServices(dependencyName, None, None, services*)
 
-  def fromServices(packageName: Option[String], dependencyName: String, services: Service[?]*): Dependency = {
+  def fromServices(dependencyName: String, packageName: String, services: Service[?]*): Dependency =
+    fromServices(dependencyName, Some(packageName), None, services*)
+
+  def fromServices(dependencyName: String, packageName: String, path: String, services: Service[?]*): Dependency =
+    fromServices(dependencyName, Some(packageName), Some(path), services*)
+
+  private def fromServices(dependencyName: String, packageName: Option[String], path: Option[String], services: Service[?]*): Dependency = {
     val allTypes = ListSet.from(services.flatMap(_.toProtoIR))
 
     val requestResponseTypeNames =
@@ -86,6 +91,6 @@ extension (dep: Dependency.type) {
       case ProtoIR.TopLevelDef.ServiceDef(_)    => true
     }
 
-    Dependency(packageName, dependencyName, commonTypes, Nil)
+    Dependency(dependencyName, packageName, path, commonTypes, Nil)
   }
 }

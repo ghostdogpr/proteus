@@ -17,12 +17,12 @@ object RenderSpec extends ZIOSpecDefault {
   val sharedRpc         = Rpc.unary[RequestWithShared, ResponseWithShared]("ProcessShared")
   val serviceWithShared = Service("test.package", "ServiceWithShared").rpc(sharedRpc)
 
-  val sharedDep = Dependency("shared.proto").add[SharedMessage]
-  val unusedDep = Dependency("unused.proto").add[UnusedMessage]
+  val sharedDep = Dependency("shared").add[SharedMessage]
+  val unusedDep = Dependency("unused").add[UnusedMessage]
 
   val options = List(
-    ProtoIR.TopLevelOption("java_package", "com.test.proto"),
-    ProtoIR.TopLevelOption("csharp_namespace", "Test.Proto")
+    ProtoIR.TopLevelOption("java_package", "com.test"),
+    ProtoIR.TopLevelOption("csharp_namespace", "Test")
   )
 
   def spec = suite("RenderSpec")(
@@ -33,8 +33,8 @@ object RenderSpec extends ZIOSpecDefault {
 
 package test.package;
 
-option java_package = "com.test.proto";
-option csharp_namespace = "Test.Proto";
+option java_package = "com.test";
+option csharp_namespace = "Test";
 
 import "shared.proto";
 
@@ -56,17 +56,17 @@ message ResponseWithShared {
         assertTrue(renderedProto == expected)
       },
       test("should include all dependencies when all are used") {
-        val priorityDep = Dependency("priority.proto").add[Priority]
-        val contactDep  = Dependency("contact.proto").add[ContactMethod]
-        val addressDep  = Dependency("address.proto").add[Address]
+        val priorityDep = Dependency("priority").add[Priority]
+        val contactDep  = Dependency("contact").add[ContactMethod]
+        val addressDep  = Dependency("address").add[Address]
 
         val renderedProto = testService.render(options, priorityDep, contactDep, addressDep)
         val expected      = """syntax = "proto3";
 
 package test.package;
 
-option java_package = "com.test.proto";
-option csharp_namespace = "Test.Proto";
+option java_package = "com.test";
+option csharp_namespace = "Test";
 
 import "priority.proto";
 
@@ -111,16 +111,16 @@ message ComplexResponse {
         assertTrue(renderedProto == expected)
       },
       test("should not include any imports when no dependencies are used") {
-        val unusedDep1 = Dependency("unused1.proto").add[UnusedMessage]
-        val unusedDep2 = Dependency("unused2.proto").add[SharedMessage]
+        val unusedDep1 = Dependency("unused1").add[UnusedMessage]
+        val unusedDep2 = Dependency("unused2").add[SharedMessage]
 
         val renderedProto = metadataService.render(options, unusedDep1, unusedDep2)
         val expected      = """syntax = "proto3";
 
 package test.package;
 
-option java_package = "com.test.proto";
-option csharp_namespace = "Test.Proto";
+option java_package = "com.test";
+option csharp_namespace = "Test";
 
 service MetadataService {
     rpc ProcessWithMetadata (MetadataRequest) returns (MetadataResponse) {}
@@ -145,8 +145,8 @@ message MetadataResponse {
 
 package test.package;
 
-option java_package = "com.test.proto";
-option csharp_namespace = "Test.Proto";
+option java_package = "com.test";
+option csharp_namespace = "Test";
 
 service TestService {
     rpc ProcessComplex (ComplexRequest) returns (ComplexResponse) {}
@@ -221,7 +221,7 @@ message ComplexResponse {
         assertTrue(renderedProto == expected)
       },
       test("should handle complex nested type references") {
-        val complexDep = Dependency("complex_types.proto")
+        val complexDep = Dependency("complex_types")
           .add[Priority]
           .add[ContactMethod]
           .add[Address]
@@ -231,8 +231,8 @@ message ComplexResponse {
 
 package test.package;
 
-option java_package = "com.test.proto";
-option csharp_namespace = "Test.Proto";
+option java_package = "com.test";
+option csharp_namespace = "Test";
 
 import "complex_types.proto";
 
@@ -273,15 +273,15 @@ message ComplexResponse {
         assertTrue(renderedProto == expected)
       },
       test("should handle streaming services with type dependencies") {
-        val streamDep = Dependency("stream_types.proto").add[StreamRequest].add[StreamResponse]
+        val streamDep = Dependency("stream_types").add[StreamRequest].add[StreamResponse]
 
         val renderedProto = streamingService.render(options, streamDep)
         val expected      = """syntax = "proto3";
 
 package test.package;
 
-option java_package = "com.test.proto";
-option csharp_namespace = "Test.Proto";
+option java_package = "com.test";
+option csharp_namespace = "Test";
 
 import "stream_types.proto";
 
@@ -295,16 +295,16 @@ service StreamingService {
         assertTrue(renderedProto == expected)
       },
       test("should work with service dependency filtering") {
-        val priorityDep = Dependency("priority.proto").add[Priority]
-        val addressDep  = Dependency("address.proto").add[Address]
-        val unusedDep   = Dependency("unused.proto").add[UnusedMessage]
+        val priorityDep = Dependency("priority").add[Priority]
+        val addressDep  = Dependency("address").add[Address]
+        val unusedDep   = Dependency("unused").add[UnusedMessage]
 
         val service         = Service("TestService").rpc(Rpc.unary[ComplexRequest, ComplexResponse]("Test"))
         val serviceRendered = service.render(options, priorityDep, addressDep, unusedDep)
         val expected        = """syntax = "proto3";
 
-option java_package = "com.test.proto";
-option csharp_namespace = "Test.Proto";
+option java_package = "com.test";
+option csharp_namespace = "Test";
 
 import "priority.proto";
 
@@ -369,15 +369,15 @@ message ComplexResponse {
         assertTrue(serviceRendered == expected)
       },
       test("should handle simple service with minimal dependencies") {
-        val sharedDep = Dependency("shared.proto").add[SharedMessage]
-        val unusedDep = Dependency("unused.proto").add[UnusedMessage]
+        val sharedDep = Dependency("shared").add[SharedMessage]
+        val unusedDep = Dependency("unused").add[UnusedMessage]
 
         val service         = Service("SimpleService").rpc(Rpc.unary[RequestWithShared, ResponseWithShared]("Process"))
         val serviceRendered = service.render(options, sharedDep, unusedDep)
         val expected        = """syntax = "proto3";
 
-option java_package = "com.test.proto";
-option csharp_namespace = "Test.Proto";
+option java_package = "com.test";
+option csharp_namespace = "Test";
 
 import "shared.proto";
 
@@ -401,14 +401,14 @@ message ResponseWithShared {
     ),
     suite("Dependency Rendering")(
       test("should render dependency with simple types") {
-        val simpleDep = Dependency("test.package", "simple.proto").add[SharedMessage]
+        val simpleDep = Dependency("simple", "test.package").add[SharedMessage]
         val rendered  = simpleDep.render(options)
         val expected  = """syntax = "proto3";
 
 package test.package;
 
-option java_package = "com.test.proto";
-option csharp_namespace = "Test.Proto";
+option java_package = "com.test";
+option csharp_namespace = "Test";
 
 message SharedMessage {
     string value = 1;
@@ -418,12 +418,12 @@ message SharedMessage {
         assertTrue(rendered == expected)
       },
       test("should render dependency with enum types") {
-        val enumDep  = Dependency("enums.proto").add[Priority]
+        val enumDep  = Dependency("enums").add[Priority]
         val rendered = enumDep.render(options)
         val expected = """syntax = "proto3";
 
-option java_package = "com.test.proto";
-option csharp_namespace = "Test.Proto";
+option java_package = "com.test";
+option csharp_namespace = "Test";
 
 enum Priority {
     LOW = 0;
@@ -436,14 +436,14 @@ enum Priority {
         assertTrue(rendered == expected)
       },
       test("should render dependency with complex nested types") {
-        val complexDep = Dependency("complex.proto")
+        val complexDep = Dependency("complex")
           .add[Address]
           .add[ContactMethod]
         val rendered   = complexDep.render(options)
         val expected   = """syntax = "proto3";
 
-option java_package = "com.test.proto";
-option csharp_namespace = "Test.Proto";
+option java_package = "com.test";
+option csharp_namespace = "Test";
 
 message Address {
     string street = 1;
@@ -478,10 +478,10 @@ message Slack {
         assertTrue(rendered == expected)
       },
       test("should filter out unused sub-dependencies when rendering") {
-        val baseDep   = Dependency("base.proto").add[SharedMessage]
-        val unusedDep = Dependency("unused.proto").add[UnusedMessage]
+        val baseDep   = Dependency("base").add[SharedMessage]
+        val unusedDep = Dependency("unused").add[UnusedMessage]
 
-        val mainDep = Dependency("main.proto")
+        val mainDep = Dependency("main")
           .add[RequestWithShared]
           .dependsOn(baseDep)
           .dependsOn(unusedDep)
@@ -489,8 +489,8 @@ message Slack {
         val rendered = mainDep.render(options)
         val expected = """syntax = "proto3";
 
-option java_package = "com.test.proto";
-option csharp_namespace = "Test.Proto";
+option java_package = "com.test";
+option csharp_namespace = "Test";
 
 import "base.proto";
 
@@ -503,11 +503,11 @@ message RequestWithShared {
         assertTrue(rendered == expected)
       },
       test("should include all used sub-dependencies when rendering") {
-        val priorityDep = Dependency("priority.proto").add[Priority]
-        val addressDep  = Dependency("address.proto").add[Address]
-        val contactDep  = Dependency("contact.proto").add[ContactMethod]
+        val priorityDep = Dependency("priority").add[Priority]
+        val addressDep  = Dependency("address").add[Address]
+        val contactDep  = Dependency("contact").add[ContactMethod]
 
-        val mainDep = Dependency("main.proto")
+        val mainDep = Dependency("main")
           .add[ComplexRequest]
           .dependsOn(priorityDep)
           .dependsOn(addressDep)
@@ -516,8 +516,8 @@ message RequestWithShared {
         val rendered = mainDep.render(options)
         val expected = """syntax = "proto3";
 
-option java_package = "com.test.proto";
-option csharp_namespace = "Test.Proto";
+option java_package = "com.test";
+option csharp_namespace = "Test";
 
 import "priority.proto";
 
@@ -543,29 +543,29 @@ message ComplexRequest {
         assertTrue(rendered == expected)
       },
       test("should render empty dependency without types") {
-        val emptyDep = Dependency("test.package", "empty.proto")
+        val emptyDep = Dependency("empty", "test.package")
         val rendered = emptyDep.render(options)
         val expected = """syntax = "proto3";
 
 package test.package;
 
-option java_package = "com.test.proto";
-option csharp_namespace = "Test.Proto";
+option java_package = "com.test";
+option csharp_namespace = "Test";
 
 """
 
         assertTrue(rendered == expected)
       },
       test("should handle dependency chains correctly") {
-        val level1 = Dependency("level1.proto").add[SharedMessage]
-        val level2 = Dependency("level2.proto").add[RequestWithShared].dependsOn(level1)
-        val level3 = Dependency("level3.proto").add[ResponseWithShared].dependsOn(level1)
+        val level1 = Dependency("level1").add[SharedMessage]
+        val level2 = Dependency("level2").add[RequestWithShared].dependsOn(level1)
+        val level3 = Dependency("level3").add[ResponseWithShared].dependsOn(level1)
 
         val rendered = level3.render(options)
         val expected = """syntax = "proto3";
 
-option java_package = "com.test.proto";
-option csharp_namespace = "Test.Proto";
+option java_package = "com.test";
+option csharp_namespace = "Test";
 
 import "level1.proto";
 
@@ -578,7 +578,7 @@ message ResponseWithShared {
         assertTrue(rendered == expected)
       },
       test("should sort types by order of declaration, then top-down in rendered output") {
-        val multiTypeDep = Dependency("multi.proto")
+        val multiTypeDep = Dependency("multi")
           .add[Priority]
           .add[ContactMethod]
           .add[Address]
@@ -586,8 +586,8 @@ message ResponseWithShared {
         val rendered = multiTypeDep.render(options)
         val expected = """syntax = "proto3";
 
-option java_package = "com.test.proto";
-option csharp_namespace = "Test.Proto";
+option java_package = "com.test";
+option csharp_namespace = "Test";
 
 enum Priority {
     LOW = 0;
@@ -636,8 +636,8 @@ message Address {
         val rendered   = dependency.render(options)
         val expected   = """syntax = "proto3";
 
-option java_package = "com.test.proto";
-option csharp_namespace = "Test.Proto";
+option java_package = "com.test";
+option csharp_namespace = "Test";
 
 enum Priority {
     LOW = 0;
@@ -686,8 +686,8 @@ message Address {
         val rendered   = dependency.render(options)
         val expected   = """syntax = "proto3";
 
-option java_package = "com.test.proto";
-option csharp_namespace = "Test.Proto";
+option java_package = "com.test";
+option csharp_namespace = "Test";
 
 """
 
@@ -706,8 +706,8 @@ option csharp_namespace = "Test.Proto";
         val rendered   = dependency.render(options)
         val expected   = """syntax = "proto3";
 
-option java_package = "com.test.proto";
-option csharp_namespace = "Test.Proto";
+option java_package = "com.test";
+option csharp_namespace = "Test";
 
 enum Priority {
     LOW = 0;
