@@ -248,8 +248,8 @@ message Third {}
 
         assertTrue(rendered == expected)
       },
-      test("proteus.oneof.inline modifier inlines variant into parent message") {
-        @config("proteus.oneof.inline", "true")
+      test("proteus.oneof inline modifier inlines variant into parent message") {
+        @config("proteus.oneof", "inline")
         enum InlineContact derives Schema {
           case Email(address: String)
           case Phone(number: String)
@@ -280,8 +280,8 @@ message Phone {
 
         assertTrue(rendered == expected)
       },
-      test("proteus.oneof.inline modifier with transform") {
-        @config("proteus.oneof.inline", "true")
+      test("proteus.oneof inline modifier with transform") {
+        @config("proteus.oneof", "inline")
         enum ContactType derives Schema {
           case Email(address: String)
           case Phone(number: String)
@@ -325,8 +325,8 @@ message Phone {
 
         assertTrue(rendered == expected)
       },
-      test("proteus.oneof.nested modifier creates nested messages in oneOf") {
-        @config("proteus.oneof.nested", "true")
+      test("proteus.oneof nested modifier creates nested messages in oneOf") {
+        @config("proteus.oneof", "nested")
         enum NestedContact derives Schema {
           case Email(address: String)
           case Phone(number: String, country: String)
@@ -362,13 +362,13 @@ message NestedContact {
 
         assertTrue(rendered == expected)
       },
-      test("proteus.oneof.nested vs regular oneof behavior") {
+      test("proteus.oneof nested vs regular oneof behavior") {
         enum RegularContact derives Schema {
           case Email(address: String)
           case Phone(number: String)
         }
 
-        @config("proteus.oneof.nested", "true")
+        @config("proteus.oneof", "nested")
         enum NestedContact derives Schema {
           case Email(address: String)
           case Phone(number: String)
@@ -456,7 +456,7 @@ message ReservedMessage {
         assertTrue(rendered == expected)
       },
       test("proteus.reserved modifier on inline oneOf field controls case indexes") {
-        @config("proteus.oneof.inline", "true")
+        @config("proteus.oneof", "inline")
         enum ContactType derives Schema {
           case Email(address: String)
           case Phone(number: String)

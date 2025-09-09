@@ -17,11 +17,13 @@ import proteus.internal.*
 case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vector[InstanceOverride[ProtobufCodec, ?]])
   extends Deriver[ProtobufCodec] {
 
-  val excludeModifier     = Modifier.config("proteus.exclude", "true")
-  val nestedModifier      = Modifier.config("proteus.nested", "true")
-  val oneofModifier       = Modifier.config("proteus.oneof", "true")
-  val oneofNestedModifier = Modifier.config("proteus.oneof.nested", "true")
-  val inlineModifier      = Modifier.config("proteus.oneof.inline", "true")
+  private val oneOfModifier      = "proteus.oneof"
+  private val nestedModifier     = "proteus.nested"
+  private val excludeModifier    = "proteus.exclude"
+  private val reservedModifier   = "proteus.reserved"
+  private val renameModifier     = "proteus.rename"
+  private val enumPrefixModifier = "proteus.enum.prefix"
+  private val commentModifier    = "proteus.comment"
 
   def instance[B: Schema](instance: => ProtobufCodec[B]): ProtobufDeriver =
     copy(instances = instances :+ InstanceOverride(By.Type(Schema[B].reflect.typeName), Lazy(instance)))
@@ -77,12 +79,12 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
           val reservedIndexes      = getReservedIndexes(modifiers)
           val fieldReservedIndexes = getReservedIndexes(fieldsWithInstances.flatMap(_.term.modifiers))
           val allReservedIndexes   = reservedIndexes ++ fieldReservedIndexes
-          val nested               = modifiers.collectFirst { case `nestedModifier` => true }.getOrElse(false)
+          val nested               = modifiers.collectFirst { case Modifier.config(`nestedModifier`, _) => true }.getOrElse(false)
           val builder              = Array.newBuilder[ProtobufCodec.MessageField[?]]
           var id                   = 0
 
           def getField[A](index: Int, field: TermInstance[F, A]): Unit =
-            if (!field.term.modifiers.contains(excludeModifier)) {
+            if (!field.term.modifiers.exists { case Modifier.config(`excludeModifier`, _) => true; case _ => false }) {
               val name     = toSnakeCase(field.term.name)
               val register = registers(index)
               field.instance match {
@@ -186,7 +188,10 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
     doc: Doc,
     modifiers: Seq[Modifier.Variant]
   )(implicit F: HasBinding[F], D: HasInstance[F]): Lazy[ProtobufCodec[A]] = {
-    val filteredCases = cases.filterNot(c => c.modifiers.contains(excludeModifier) || c.value.modifiers.contains(excludeModifier))
+    val filteredCases = cases.filterNot(c =>
+      c.modifiers.exists { case Modifier.config(`excludeModifier`, _) => true; case _ => false } ||
+        c.value.modifiers.exists { case Modifier.config(`excludeModifier`, _) => true; case _ => false }
+    )
     if (typeName.name == unitOption.name && typeName.namespace == unitOption.namespace)
       D.instance(filteredCases.find(c => c.name == unitSome.name).get.value.asRecord.get.fields.head.value.metadata)
         .map(ProtobufCodec.Optional(_).asInstanceOf[ProtobufCodec[A]])
@@ -204,9 +209,9 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
       }
       Lazy(ProtobufCodec.Enum(getTypeName(typeName, modifiers), builder.result(), reservedIndexes, getComment(modifiers)))
     } else {
-      val inline        = modifiers.collectFirst { case `inlineModifier` => true }.getOrElse(false)
-      val nested        = modifiers.collectFirst { case `nestedModifier` => true }.getOrElse(false)
-      val oneofNested   = modifiers.collectFirst { case `oneofNestedModifier` => true }.getOrElse(false)
+      val nested        = modifiers.collectFirst { case Modifier.config(`nestedModifier`, _) => true }.getOrElse(false)
+      val inlineOneOf   = modifiers.collectFirst { case Modifier.config(`oneOfModifier`, value) => value.contains("inline") }.getOrElse(false)
+      val nestedOneOf   = modifiers.collectFirst { case Modifier.config(`oneOfModifier`, value) => value.contains("nested") }.getOrElse(false)
       val discriminator = binding.asInstanceOf[Binding.Variant[A]].discriminator
       Lazy.collectAll(filteredCases.map(c => D.instance(c.value.metadata).map(TermInstance(c, _))).toVector).map { casesWithInstances =>
         val reservedIndexes = getReservedIndexes(modifiers)
@@ -220,7 +225,7 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
             val item = SimpleField(
               toSnakeCase(c.term.name),
               id,
-              if (oneofNested) c.instance.makeNested else c.instance,
+              if (nestedOneOf) c.instance.makeNested else c.instance,
               register.asInstanceOf[Register[Any]],
               null,
               getComment(c.term.modifiers)
@@ -244,7 +249,7 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
           },
           register.usedRegisters,
           reservedIndexes,
-          inline = inline,
+          inline = inlineOneOf,
           nested = nested,
           comment = getComment(modifiers)
         )
@@ -411,21 +416,21 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
 
   private def getTypeName(typeName: TypeName[?], modifiers: Seq[Modifier]): String =
     modifiers
-      .collectFirst { case Modifier.config("proteus.rename", newName) => newName }
+      .collectFirst { case Modifier.config(`renameModifier`, newName) => newName }
       .getOrElse(s"${typeName.name}${typeName.params.map(getTypeName(_, Nil)).mkString}")
 
   private def getReservedIndexes(modifiers: Seq[Modifier]): Set[Int] =
     modifiers
-      .collectFirst { case Modifier.config("proteus.reserved", value) => value.split(",").map(_.trim.toInt).toSet }
+      .collectFirst { case Modifier.config(`reservedModifier`, value) => value.split(",").map(_.trim.toInt).toSet }
       .getOrElse(Set.empty)
 
   private def getEnumPrefix(modifiers: Seq[Modifier]): String =
     modifiers
-      .collectFirst { case Modifier.config("proteus.enum.prefix", prefix) => prefix }
+      .collectFirst { case Modifier.config(`enumPrefixModifier`, prefix) => prefix }
       .getOrElse("")
 
   private def getComment(modifiers: Seq[Modifier]): Option[String] =
-    modifiers.collectFirst { case Modifier.config("proteus.comment", value) => value }
+    modifiers.collectFirst { case Modifier.config(`commentModifier`, value) => value }
 
   private def isEnum(cases: IndexedSeq[Term[?, ?, ?]], modifiers: Seq[Modifier]): Boolean =
     cases.forall(c =>
@@ -433,7 +438,7 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
         case record: Reflect.Record[?, ?] => record.fields.length == 0
         case _                            => false
       }
-    ) && !modifiers.exists { case `oneofModifier` => true; case _ => false }
+    ) && !modifiers.exists { case Modifier.config(`oneOfModifier`, _) => true; case _ => false }
 
   private def innerSchema[F[_, _], A](schema: Reflect[F, A]): Reflect[F, A] =
     schema match {
