@@ -17,10 +17,11 @@ import proteus.internal.*
 case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vector[InstanceOverride[ProtobufCodec, ?]])
   extends Deriver[ProtobufCodec] {
 
-  val inlineModifier  = Modifier.config("proteus.inline", "true")
-  val nestedModifier  = Modifier.config("proteus.nested", "true")
-  val oneofModifier   = Modifier.config("proteus.oneof", "true")
-  val excludeModifier = Modifier.config("proteus.exclude", "true")
+  val excludeModifier     = Modifier.config("proteus.exclude", "true")
+  val nestedModifier      = Modifier.config("proteus.nested", "true")
+  val oneofModifier       = Modifier.config("proteus.oneof", "true")
+  val oneofNestedModifier = Modifier.config("proteus.oneof.nested", "true")
+  val inlineModifier      = Modifier.config("proteus.oneof.inline", "true")
 
   def instance[B: Schema](instance: => ProtobufCodec[B]): ProtobufDeriver =
     copy(instances = instances :+ InstanceOverride(By.Type(Schema[B].reflect.typeName), Lazy(instance)))
@@ -205,6 +206,7 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
     } else {
       val inline        = modifiers.collectFirst { case `inlineModifier` => true }.getOrElse(false)
       val nested        = modifiers.collectFirst { case `nestedModifier` => true }.getOrElse(false)
+      val oneofNested   = modifiers.collectFirst { case `oneofNestedModifier` => true }.getOrElse(false)
       val discriminator = binding.asInstanceOf[Binding.Variant[A]].discriminator
       Lazy.collectAll(filteredCases.map(c => D.instance(c.value.metadata).map(TermInstance(c, _))).toVector).map { casesWithInstances =>
         val reservedIndexes = getReservedIndexes(modifiers)
@@ -215,7 +217,14 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
           "value",
           casesWithInstances.zipWithIndex.map { case (c, index) =>
             while (reservedIndexes.contains(id)) id += 1
-            val item = SimpleField(toSnakeCase(c.term.name), id, c.instance, register.asInstanceOf[Register[Any]], null, getComment(c.term.modifiers))
+            val item = SimpleField(
+              toSnakeCase(c.term.name),
+              id,
+              if (oneofNested) c.instance.makeNested else c.instance,
+              register.asInstanceOf[Register[Any]],
+              null,
+              getComment(c.term.modifiers)
+            )
             id += 1
             item
           }.toArray,

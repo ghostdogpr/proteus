@@ -8,7 +8,7 @@ case class ServerReflectionRequest(host: String, messageRequest: MessageRequest)
 @config("proteus.reserved", "3")
 case class ServerReflectionResponse(validHost: String, originalRequest: ServerReflectionRequest, messageResponse: MessageResponse) derives Schema
 
-@config("proteus.inline", "true")
+@config("proteus.oneof.inline", "true")
 sealed trait MessageRequest derives Schema
 object MessageRequest {
   case class FileByFileName(value: String) extends MessageRequest
@@ -32,7 +32,7 @@ object MessageRequest {
   }
 }
 
-@config("proteus.inline", "true")
+@config("proteus.oneof.inline", "true")
 enum MessageResponse derives Schema {
   case FileDescriptorResponse(fileDescriptorProto: Array[Byte])
   @config("proteus.rename", "ExtensionNumberResponse") case AllExtensionNumbersResponse(baseTypeName: String, extensionNumber: List[Int])

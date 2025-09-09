@@ -248,8 +248,8 @@ message Third {}
 
         assertTrue(rendered == expected)
       },
-      test("proteus.inline modifier inlines variant into parent message") {
-        @config("proteus.inline", "true")
+      test("proteus.oneof.inline modifier inlines variant into parent message") {
+        @config("proteus.oneof.inline", "true")
         enum InlineContact derives Schema {
           case Email(address: String)
           case Phone(number: String)
@@ -280,8 +280,8 @@ message Phone {
 
         assertTrue(rendered == expected)
       },
-      test("proteus.inline modifier with transform") {
-        @config("proteus.inline", "true")
+      test("proteus.oneof.inline modifier with transform") {
+        @config("proteus.oneof.inline", "true")
         enum ContactType derives Schema {
           case Email(address: String)
           case Phone(number: String)
@@ -325,6 +325,114 @@ message Phone {
 
         assertTrue(rendered == expected)
       },
+      test("proteus.oneof.nested modifier creates nested messages in oneOf") {
+        @config("proteus.oneof.nested", "true")
+        enum NestedContact derives Schema {
+          case Email(address: String)
+          case Phone(number: String, country: String)
+        }
+        case class ContactMessage(contact: NestedContact) derives Schema
+
+        val codec    = Schema[ContactMessage].derive(deriver)
+        val rendered = renderCodec(codec)
+        val expected = """syntax = "proto3";
+
+package test;
+
+message ContactMessage {
+    NestedContact contact = 1;
+}
+
+message NestedContact {
+    message Email {
+        string address = 1;
+    }
+    
+    message Phone {
+        string number = 1;
+        string country = 2;
+    }
+    
+    oneof value {
+        Email email = 1;
+        Phone phone = 2;
+    }
+}
+"""
+
+        assertTrue(rendered == expected)
+      },
+      test("proteus.oneof.nested vs regular oneof behavior") {
+        enum RegularContact derives Schema {
+          case Email(address: String)
+          case Phone(number: String)
+        }
+
+        @config("proteus.oneof.nested", "true")
+        enum NestedContact derives Schema {
+          case Email(address: String)
+          case Phone(number: String)
+        }
+
+        case class RegularMessage(contact: RegularContact) derives Schema
+        case class NestedMessage(contact: NestedContact) derives Schema
+
+        val regularCodec    = Schema[RegularMessage].derive(deriver)
+        val nestedCodec     = Schema[NestedMessage].derive(deriver)
+        val regularRendered = renderCodec(regularCodec)
+        val nestedRendered  = renderCodec(nestedCodec)
+
+        val expectedRegular = """syntax = "proto3";
+
+package test;
+
+message RegularMessage {
+    RegularContact contact = 1;
+}
+
+message RegularContact {
+    oneof value {
+        Email email = 1;
+        Phone phone = 2;
+    }
+}
+
+message Email {
+    string address = 1;
+}
+
+message Phone {
+    string number = 1;
+}
+"""
+
+        val expectedNested = """syntax = "proto3";
+
+package test;
+
+message NestedMessage {
+    NestedContact contact = 1;
+}
+
+message NestedContact {
+    message Email {
+        string address = 1;
+    }
+    
+    message Phone {
+        string number = 1;
+    }
+    
+    oneof value {
+        Email email = 1;
+        Phone phone = 2;
+    }
+}
+"""
+
+        assertTrue(regularRendered == expectedRegular) &&
+          assertTrue(nestedRendered == expectedNested)
+      },
       test("proteus.reserved modifier skips reserved field numbers") {
         @config("proteus.reserved", "2,4,6")
         case class ReservedMessage(id: Int, name: String, value: String, active: Boolean) derives Schema
@@ -348,7 +456,7 @@ message ReservedMessage {
         assertTrue(rendered == expected)
       },
       test("proteus.reserved modifier on inline oneOf field controls case indexes") {
-        @config("proteus.inline", "true")
+        @config("proteus.oneof.inline", "true")
         enum ContactType derives Schema {
           case Email(address: String)
           case Phone(number: String)

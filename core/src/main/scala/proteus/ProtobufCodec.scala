@@ -47,6 +47,15 @@ sealed trait ProtobufCodec[A] {
       case _                   =>
         Transform(from, to, this)
     }
+
+  private[proteus] def makeNested: ProtobufCodec[A] =
+    this match {
+      case message: Message[_]        => message.copy(nested = true)
+      case Transform(from, to, codec) => Transform(from, to, codec.makeNested)
+      case RecursiveMessage(thunk)    => RecursiveMessage(() => thunk().copy(nested = true))
+      case Optional(codec)            => Optional(codec.makeNested)
+      case _                          => this
+    }
 }
 
 object ProtobufCodec {

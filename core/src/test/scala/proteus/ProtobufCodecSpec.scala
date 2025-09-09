@@ -553,8 +553,8 @@ object ProtobufCodecSpec extends ZIOSpecDefault {
 
         assert(decoded)(equalTo(original))
       },
-      test("proteus.inline modifier") {
-        @config("proteus.inline", "true")
+      test("proteus.oneof.inline modifier") {
+        @config("proteus.oneof.inline", "true")
         enum InlineContact derives Schema {
           case Email(address: String)
           case Phone(number: String)
@@ -757,8 +757,8 @@ object ProtobufCodecSpec extends ZIOSpecDefault {
       }
     ),
     suite("Transform")(
-      test("proteus.inline modifier with transform") {
-        @config("proteus.inline", "true")
+      test("proteus.oneof.inline modifier with transform") {
+        @config("proteus.oneof.inline", "true")
         enum ContactType derives Schema {
           case Email(address: String)
           case Phone(number: String)
