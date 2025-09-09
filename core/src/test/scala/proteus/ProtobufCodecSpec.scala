@@ -401,7 +401,7 @@ object ProtobufCodecSpec extends ZIOSpecDefault {
 
         assert(decoded)(equalTo(original))
       },
-      test("message with List of oneofs") {
+      test("message with List of transformed oneofs") {
         enum Item derives Schema  {
           case A, B
         }
@@ -422,7 +422,7 @@ object ProtobufCodecSpec extends ZIOSpecDefault {
             }
           )
         case class Container(items: List[Item]) derives Schema
-        val containerCodec                 = Schema[Container].deriving(deriver).instance(Schema[Item].reflect.typeName, itemCodec).derive
+        val containerCodec                 = Schema[Container].derive(deriver.instance(itemCodec))
 
         val original = Container(List(Item.A))
         val encoded  = containerCodec.encode(original)
