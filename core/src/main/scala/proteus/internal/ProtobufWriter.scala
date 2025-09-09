@@ -42,7 +42,7 @@ private[proteus] object ProtobufWriter {
       size
     }
     val fullSize: Int                                =
-      1 + CodedOutputStream.computeUInt32SizeNoTag(innerSize) + innerSize
+      CodedOutputStream.computeUInt32Size(id, innerSize) + innerSize
     def write(using output: CodedOutputStream): Unit = {
       if (id != -1) {
         output.writeTag(id, 2)
@@ -67,7 +67,7 @@ private[proteus] object ProtobufWriter {
       size
     }
     val fullSize: Int                                =
-      if (packed && (elements ne Nil)) 1 + CodedOutputStream.computeUInt32SizeNoTag(innerSize) + innerSize
+      if (packed && (elements ne Nil)) CodedOutputStream.computeUInt32Size(id, innerSize) + innerSize
       else innerSize
     def write(using output: CodedOutputStream): Unit = {
       if (packed && (elements ne Nil)) {
