@@ -3,8 +3,13 @@ package proteus
 import java.time.*
 import java.util.concurrent.TimeUnit
 
+import io.scalaland.chimney.{PartialTransformer, Transformer}
+import io.scalaland.chimney.dsl.*
+import io.scalaland.chimney.partial
+import io.scalaland.chimney.protobufs.*
 import org.openjdk.jmh.annotations.*
 import org.openjdk.jmh.infra.Blackhole
+import test.test as scalapb
 import zio.blocks.schema.*
 
 import proteus.ProtobufCodecBenchmark.*
@@ -81,22 +86,69 @@ class ProtobufCodecBenchmark {
   val encodedComplex = codec.encode(complexData)
   val encodedLarge   = codec.encode(largeData)
 
+  implicit val dateTimeToTime: Transformer[DateTime, scalapb.Time] =
+    dt => scalapb.Time(currentTimeMillis = dt.toEpochMilli)
+
+  implicit val timeToDateTime: Transformer[scalapb.Time, DateTime] =
+    time => if (time.currentTimeMillis == 0) DateTime.min else DateTime.ofEpochMilli(time.currentTimeMillis)
+
+  implicit val oneOfTransformer: Transformer[OneOfExample, scalapb.OneOfExample] = {
+    case OneOfExample.O1(a) => scalapb.OneOfExample(scalapb.OneOfExample.Value.O1(scalapb.O1(a)))
+    case OneOfExample.O2(b) => scalapb.OneOfExample(scalapb.OneOfExample.Value.O2(scalapb.O2(b)))
+  }
+
+  implicit val oneOfReverseTransformer: PartialTransformer[scalapb.OneOfExample, OneOfExample] =
+    PartialTransformer(oneof =>
+      oneof.value match {
+        case scalapb.OneOfExample.Value.O1(o1) => partial.Result.fromValue(OneOfExample.O1(o1.a))
+        case scalapb.OneOfExample.Value.O2(o2) => partial.Result.fromValue(OneOfExample.O2(o2.b))
+        case scalapb.OneOfExample.Value.Empty  => partial.Result.fromEmpty
+      }
+    )
+
+  def domainToScalaPB(domain: A): scalapb.A =
+    domain.into[scalapb.A].enableDefaultValues.transform
+
+  def scalaPBToDomain(scalapbObj: scalapb.A): A =
+    scalapbObj.intoPartial[A].enableDefaultValues.transform match {
+      case partial.Result.Value(value)   => value
+      case partial.Result.Errors(errors) => throw new RuntimeException(s"Transformation failed: $errors")
+    }
+
   @Benchmark
-  def roundTripSimpleMessage(bh: Blackhole): Unit = {
+  def roundTripSimpleMessage_Proteus(bh: Blackhole): Unit = {
     val encoded = codec.encode(simpleData)
     bh.consume(codec.decode(encoded))
   }
 
   @Benchmark
-  def roundTripComplexMessage(bh: Blackhole): Unit = {
+  def roundTripComplexMessage_Proteus(bh: Blackhole): Unit = {
     val encoded = codec.encode(complexData)
     bh.consume(codec.decode(encoded))
   }
 
   @Benchmark
-  def roundTripLargeMessage(bh: Blackhole): Unit = {
+  def roundTripLargeMessage_Proteus(bh: Blackhole): Unit = {
     val encoded = codec.encode(largeData)
     bh.consume(codec.decode(encoded))
+  }
+
+  @Benchmark
+  def roundTripSimpleMessage_ScalaPB_Chimney(bh: Blackhole): Unit = {
+    val encoded = domainToScalaPB(simpleData).toByteArray
+    bh.consume(scalaPBToDomain(scalapb.A.parseFrom(encoded)))
+  }
+
+  @Benchmark
+  def roundTripComplexMessage_ScalaPB_Chimney(bh: Blackhole): Unit = {
+    val encoded = domainToScalaPB(complexData).toByteArray
+    bh.consume(scalaPBToDomain(scalapb.A.parseFrom(encoded)))
+  }
+
+  @Benchmark
+  def roundTripLargeMessage_ScalaPB_Chimney(bh: Blackhole): Unit = {
+    val encoded = domainToScalaPB(largeData).toByteArray
+    bh.consume(scalaPBToDomain(scalapb.A.parseFrom(encoded)))
   }
 }
 

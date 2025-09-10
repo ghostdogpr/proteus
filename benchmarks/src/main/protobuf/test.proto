@@ -1,0 +1,52 @@
+syntax = "proto3";
+
+package test;
+
+import "scalapb/scalapb.proto";
+
+option (scalapb.options) = {
+  scala3_sources: true,
+  preserve_unknown_fields: false
+};
+
+message A {
+     int32 a = 1;
+     string b = 2;
+     A2 c = 3;
+     repeated A2 d = 4;
+     optional A2 e = 5;
+     map<int32, A2> f = 6;
+     Time g = 7;
+     Enum h = 8;
+     OneOfExample i = 9;
+ }
+
+ message A2 {
+     bool a = 1;
+     repeated int32 b = 2;
+ }
+ 
+ message Time {
+     int64 current_time_millis = 1;
+ }
+ 
+ enum Enum {
+     E1 = 0;
+     E2 = 1;
+     E3 = 2;
+ }
+ 
+ message OneOfExample {
+     oneof value {
+         O1 o1 = 1;
+         O2 o2 = 2;
+     }
+ }
+
+ message O1 {
+     int32 a = 1;
+ }
+
+ message O2 {
+     string b = 1;
+ }

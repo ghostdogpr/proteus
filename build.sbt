@@ -6,6 +6,7 @@ val zioBlocksSchemaVersion      = "0.0.0+625-438e0f3b-SNAPSHOT"
 val zioTestVersion              = "2.1.20"
 val zioGrpcVersion              = "0.6.3"
 val fs2GrpcVersion              = "2.8.2"
+val chimneyVersion              = "1.8.2"
 
 inThisBuild(
   List(
@@ -93,6 +94,16 @@ lazy val benchmarks = project
   .in(file("benchmarks"))
   .settings(commonSettings)
   .settings(publish / skip := true)
+  .settings(
+    libraryDependencies ++= Seq(
+      "com.thesamet.scalapb" %% "scalapb-runtime"   % scalapb.compiler.Version.scalapbVersion % "protobuf",
+      "io.scalaland"         %% "chimney-protobufs" % chimneyVersion
+    ),
+    Compile / PB.targets := Seq(
+      scalapb.gen() -> (Compile / sourceManaged).value / "scalapb"
+    ),
+    scalacOptions ++= Seq("-Wconf:msg=(discarded non-Unit):silent")
+  )
   .dependsOn(core.jvm)
   .enablePlugins(JmhPlugin)
 
