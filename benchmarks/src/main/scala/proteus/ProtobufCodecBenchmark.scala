@@ -20,6 +20,78 @@ import proteus.ProtobufCodecBenchmark.*
 @Measurement(iterations = 10, time = 1, timeUnit = TimeUnit.SECONDS)
 @Fork(1)
 class ProtobufCodecBenchmark {
+  @Benchmark
+  def roundTripSimpleMessage_Proteus(bh: Blackhole): Unit = {
+    val encoded = aCodec.encode(simpleData)
+    bh.consume(aCodec.decode(encoded))
+  }
+
+  @Benchmark
+  def roundTripComplexMessage_Proteus(bh: Blackhole): Unit = {
+    val encoded = aCodec.encode(complexData)
+    bh.consume(aCodec.decode(encoded))
+  }
+
+  @Benchmark
+  def roundTripLargeMessage_Proteus(bh: Blackhole): Unit = {
+    val encoded = aCodec.encode(largeData)
+    bh.consume(aCodec.decode(encoded))
+  }
+
+  @Benchmark
+  def roundTripSimpleMessage_ScalaPB_Chimney(bh: Blackhole): Unit = {
+    val encoded = domainToScalaPB(simpleData).toByteArray
+    bh.consume(scalaPBToDomain(scalapb.A.parseFrom(encoded)))
+  }
+
+  @Benchmark
+  def roundTripComplexMessage_ScalaPB_Chimney(bh: Blackhole): Unit = {
+    val encoded = domainToScalaPB(complexData).toByteArray
+    bh.consume(scalaPBToDomain(scalapb.A.parseFrom(encoded)))
+  }
+
+  @Benchmark
+  def roundTripLargeMessage_ScalaPB_Chimney(bh: Blackhole): Unit = {
+    val encoded = domainToScalaPB(largeData).toByteArray
+    bh.consume(scalaPBToDomain(scalapb.A.parseFrom(encoded)))
+  }
+}
+
+object ProtobufCodecBenchmark {
+
+  type DateTime = OffsetDateTime
+
+  object DateTime {
+    def unsafeSystemNow(): DateTime = OffsetDateTime.now()
+
+    val timeZoneId: ZoneId = ZoneId.of("Asia/Seoul")
+
+    val min: DateTime = OffsetDateTime.ofInstant(Instant.EPOCH, timeZoneId)
+
+    def ofEpochMilli(millis: Long, zoneId: ZoneId = timeZoneId): DateTime = {
+      val instant = Instant.ofEpochMilli(millis)
+
+      OffsetDateTime.ofInstant(instant, zoneId)
+    }
+  }
+
+  extension (dateTime: DateTime) {
+    def toEpochMilli: Long =
+      dateTime.toInstant.toEpochMilli
+  }
+
+  enum Enum derives Schema {
+    case E1, E2, E3
+  }
+
+  enum OneOfExample derives Schema {
+    case O1(a: Int)
+    case O2(b: String)
+  }
+
+  case class A(a: Int, b: String, c: A2, d: List[A2], e: Option[A2], f: Map[Int, A2], g: DateTime, h: Enum, i: OneOfExample) derives Schema
+
+  case class A2(a: Boolean, b: List[Int]) derives Schema
 
   val simpleData = A(
     a = 1,
@@ -80,11 +152,7 @@ class ProtobufCodecBenchmark {
         dt => Time(dt.toEpochMilli)
       )
 
-  val codec = Schema[A].derive(deriver)
-
-  val encodedSimple  = codec.encode(simpleData)
-  val encodedComplex = codec.encode(complexData)
-  val encodedLarge   = codec.encode(largeData)
+  val aCodec = Schema[A].derive(deriver)
 
   implicit val dateTimeToTime: Transformer[DateTime, scalapb.Time] =
     dt => scalapb.Time(currentTimeMillis = dt.toEpochMilli)
@@ -114,77 +182,13 @@ class ProtobufCodecBenchmark {
       case partial.Result.Value(value)   => value
       case partial.Result.Errors(errors) => throw new RuntimeException(s"Transformation failed: $errors")
     }
-
-  @Benchmark
-  def roundTripSimpleMessage_Proteus(bh: Blackhole): Unit = {
-    val encoded = codec.encode(simpleData)
-    bh.consume(codec.decode(encoded))
-  }
-
-  @Benchmark
-  def roundTripComplexMessage_Proteus(bh: Blackhole): Unit = {
-    val encoded = codec.encode(complexData)
-    bh.consume(codec.decode(encoded))
-  }
-
-  @Benchmark
-  def roundTripLargeMessage_Proteus(bh: Blackhole): Unit = {
-    val encoded = codec.encode(largeData)
-    bh.consume(codec.decode(encoded))
-  }
-
-  @Benchmark
-  def roundTripSimpleMessage_ScalaPB_Chimney(bh: Blackhole): Unit = {
-    val encoded = domainToScalaPB(simpleData).toByteArray
-    bh.consume(scalaPBToDomain(scalapb.A.parseFrom(encoded)))
-  }
-
-  @Benchmark
-  def roundTripComplexMessage_ScalaPB_Chimney(bh: Blackhole): Unit = {
-    val encoded = domainToScalaPB(complexData).toByteArray
-    bh.consume(scalaPBToDomain(scalapb.A.parseFrom(encoded)))
-  }
-
-  @Benchmark
-  def roundTripLargeMessage_ScalaPB_Chimney(bh: Blackhole): Unit = {
-    val encoded = domainToScalaPB(largeData).toByteArray
-    bh.consume(scalaPBToDomain(scalapb.A.parseFrom(encoded)))
-  }
 }
 
-object ProtobufCodecBenchmark {
-
-  type DateTime = OffsetDateTime
-
-  object DateTime {
-    def unsafeSystemNow(): DateTime = OffsetDateTime.now()
-
-    val timeZoneId: ZoneId = ZoneId.of("Asia/Seoul")
-
-    val min: DateTime = OffsetDateTime.ofInstant(Instant.EPOCH, timeZoneId)
-
-    def ofEpochMilli(millis: Long, zoneId: ZoneId = timeZoneId): DateTime = {
-      val instant = Instant.ofEpochMilli(millis)
-
-      OffsetDateTime.ofInstant(instant, zoneId)
-    }
+@main
+def runTest =
+  while (true) {
+    val encoded  = aCodec.encode(largeData)
+    val _        = aCodec.decode(encoded)
+    val encoded2 = domainToScalaPB(largeData).toByteArray
+    val _        = scalaPBToDomain(scalapb.A.parseFrom(encoded2))
   }
-
-  extension (dateTime: DateTime) {
-    def toEpochMilli: Long =
-      dateTime.toInstant.toEpochMilli
-  }
-
-  enum Enum derives Schema {
-    case E1, E2, E3
-  }
-
-  enum OneOfExample derives Schema {
-    case O1(a: Int)
-    case O2(b: String)
-  }
-
-  case class A(a: Int, b: String, c: A2, d: List[A2], e: Option[A2], f: Map[Int, A2], g: DateTime, h: Enum, i: OneOfExample) derives Schema
-
-  case class A2(a: Boolean, b: List[Int]) derives Schema
-}
