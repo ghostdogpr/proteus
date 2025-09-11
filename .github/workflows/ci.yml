@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: ['main']
+  release:
+    types:
+      - published
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+    steps:
+      - name: Checkout current branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Setup Scala and Java
+        uses: coursier/setup-action@v1
+        with:
+          jvm: temurin:17
+          apps: sbt
+      - name: Cache scala dependencies
+        uses: coursier/cache-action@v6
+      - name: Lint code
+        run: sbt check
+
+  test:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+    steps:
+      - name: Checkout current branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Setup Scala and Java
+        uses: coursier/setup-action@v1
+        with:
+          jvm: temurin:17
+          apps: sbt
+      - name: Cache scala dependencies
+        uses: coursier/cache-action@v6
+      - name: Run tests
+        run: sbt test
+        
+  publish:
+    runs-on: ubuntu-24.04
+    needs: [lint, test]
+    if: github.event_name != 'pull_request'
+    steps:
+      - name: Checkout current branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Setup Scala and Java
+        uses: coursier/setup-action@v1
+        with:
+          jvm: temurin:17
+          apps: sbt
+      - name: Cache scala dependencies
+        uses: coursier/cache-action@v6
+      - name: Release artifacts
+        run: sbt ci-release
+        env:
+          PGP_PASSPHRASE: ${{ secrets.PGP_PASSPHRASE }}
+          PGP_SECRET: ${{ secrets.PGP_SECRET }}
+          SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
+          SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
