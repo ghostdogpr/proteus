@@ -20,6 +20,9 @@ jobs:
           fetch-depth: 0
       - name: Setup Scala and Java
         uses: coursier/setup-action@v1
+        with:
+          jvm: temurin:17
+          apps: sbt
       - name: Cache scala dependencies
         uses: coursier/cache-action@v6
       - name: Lint code
@@ -38,6 +41,7 @@ jobs:
         uses: coursier/setup-action@v1
         with:
           jvm: temurin:17
+          apps: sbt
       - name: Cache scala dependencies
         uses: coursier/cache-action@v6
       - name: Run tests
@@ -56,6 +60,7 @@ jobs:
         uses: coursier/setup-action@v1
         with:
           jvm: temurin:17
+          apps: sbt
       - name: Cache scala dependencies
         uses: coursier/cache-action@v6
       - name: Release artifacts
