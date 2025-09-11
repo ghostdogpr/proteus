@@ -21,14 +21,8 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
   def instance[B: Schema](instance: => ProtobufCodec[B]): ProtobufDeriver =
     copy(instances = instances :+ InstanceOverrideByType(Schema[B].reflect.typeName, Lazy(instance)))
 
-  def instance[B](typeName: TypeName[B], instance: => ProtobufCodec[B]): ProtobufDeriver =
-    copy(instances = instances :+ InstanceOverrideByType(typeName, Lazy(instance)))
-
   def modifier[B: Schema](modifier: Modifier.Reflect): ProtobufDeriver =
     copy(modifiers = modifiers :+ ModifierReflectOverrideByType(Schema[B].reflect.typeName, modifier))
-
-  def modifier[B](typeName: TypeName[B], modifier: Modifier.Reflect): ProtobufDeriver =
-    copy(modifiers = modifiers :+ ModifierReflectOverrideByType(typeName, modifier))
 
   inline def modifier[B: Schema](termName: String, modifier: Modifier.Term): ProtobufDeriver = {
     inline summonInline[Mirror.Of[B]] match {
@@ -43,9 +37,6 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
     }
     copy(modifiers = modifiers :+ ModifierTermOverride(Schema[B].reflect.typeName, termName, modifier))
   }
-
-  def modifier[B](typeName: TypeName[B], termName: String, modifier: Modifier.Term): ProtobufDeriver =
-    copy(modifiers = modifiers :+ ModifierTermOverride(typeName, termName, modifier))
 
   def enable(flag: DerivationFlag): ProtobufDeriver =
     copy(flags = flags + flag)
