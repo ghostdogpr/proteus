@@ -15,12 +15,14 @@ case class Service[Rpcs] private (packageName: Option[String], name: String, rpc
     (ProtoIR.TopLevelDef.ServiceDef(ProtoIR.Service(name, rpcs.map(_.toProtoIR))) ::
       rpcs.flatMap(_.messagesToProtoIR)).distinct
 
+  val allDependencies: Set[Dependency] = dependencies.toSet ++ dependencies.flatMap(_.allDependencies)
+
   private val typeReferences = toProtoIR.flatMap(_.collectTypeReferences).toSet
 
   def fileDescriptor(dependencies: List[Dependency]): FileDescriptor = {
-    val fileBuilder = FileDescriptorProto.newBuilder().setName(s"${name.toLowerCase}.proto").setPackage(packageName.getOrElse(""))
-
-    val usedDependencies          = dependencies.filter(_.hasAnyOf(typeReferences))
+    val fileBuilder               = FileDescriptorProto.newBuilder().setName(s"${name.toLowerCase}.proto").setPackage(packageName.getOrElse(""))
+    val allDependencies           = dependencies.toSet ++ dependencies.flatMap(_.allDependencies)
+    val usedDependencies          = allDependencies.filter(_.hasAnyOf(typeReferences))
     val dependencyFileDescriptors = usedDependencies.flatMap(_.fileDescriptor)
 
     dependencyFileDescriptors.foreach(fileDescriptor => fileBuilder.addDependency(fileDescriptor.getName))
@@ -42,7 +44,7 @@ case class Service[Rpcs] private (packageName: Option[String], name: String, rpc
     copy(dependencies = dependencies :+ dependency)
 
   def render(options: List[ProtoIR.TopLevelOption]): String = {
-    val filteredDependencies = dependencies.filter(_.hasAnyOf(typeReferences))
+    val filteredDependencies = allDependencies.filter(_.hasAnyOf(typeReferences))
     val dependencyTypes      = filteredDependencies.flatMap(_.types).map(_.name).toSet
     val filteredDefinitions  = toProtoIR.filterNot(d => dependencyTypes.contains(d.name))
     Renderer.render(

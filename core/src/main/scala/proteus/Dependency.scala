@@ -14,8 +14,10 @@ case class Dependency(
   types: ListSet[ProtoIR.TopLevelDef],
   dependencies: List[Dependency]
 ) {
+  val allDependencies: Set[Dependency] = dependencies.toSet ++ dependencies.flatMap(_.allDependencies)
+
   val typeReferences       = types.flatMap(_.collectTypeReferences).toSet
-  val filteredDependencies = dependencies.filter(_.hasAnyOf(typeReferences))
+  val filteredDependencies = allDependencies.filter(_.hasAnyOf(typeReferences))
 
   val toImportStatement: ProtoIR.Statement.ImportStatement =
     ProtoIR.Statement.ImportStatement(s"${path.fold("")(_ + "/")}$dependencyName.proto")
@@ -24,7 +26,7 @@ case class Dependency(
     add(Schema[A].derive(deriver))
 
   def add[A](codec: ProtobufCodec[A]): Dependency = {
-    val t = ProtobufCodec.toProtoIR(codec).filter(t => !dependencies.exists(_.hasAnyOf(Set(t.name))))
+    val t = ProtobufCodec.toProtoIR(codec).filter(t => !allDependencies.exists(_.hasAnyOf(Set(t.name))))
     copy(types = types ++ t)
   }
 

@@ -577,6 +577,27 @@ message ResponseWithShared {
 
         assertTrue(rendered == expected)
       },
+      test("should handle transitive dependencies correctly") {
+        val level1 = Dependency("level1").add[SharedMessage]
+        val level2 = Dependency("level2").add[RequestWithShared].dependsOn(level1)
+        val level3 = Dependency("level3").add[ResponseWithShared].dependsOn(level2)
+
+        val rendered = level3.render(options)
+        val expected = """syntax = "proto3";
+
+option java_package = "com.test";
+option csharp_namespace = "Test";
+
+import "level1.proto";
+
+message ResponseWithShared {
+    string result = 1;
+    SharedMessage shared = 2;
+}
+"""
+
+        assertTrue(rendered == expected)
+      },
       test("should sort types by order of declaration, then top-down in rendered output") {
         val multiTypeDep = Dependency("multi")
           .add[Priority]
