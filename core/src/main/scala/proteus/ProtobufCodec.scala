@@ -207,13 +207,16 @@ object ProtobufCodec {
     def toProtoIR: ProtoIR.Message = {
       val elements = fields.map(_.toProtoIR)
 
-      def findNested[A](codec: ProtobufCodec[A]): List[ProtoIR.MessageElement.NestedMessageElement] =
+      def findNested[A](codec: ProtobufCodec[A], goDeep: Boolean = false): List[ProtoIR.MessageElement.NestedMessageElement] =
         codec match {
-          case c: Message[_]           => if (c.nested) List(ProtoIR.MessageElement.NestedMessageElement(c.toProtoIR)) else Nil
-          case c: Transform[_, _]      => findNested(c.codec)
-          case c: Optional[_]          => findNested(c.codec)
-          case c: Repeated[_, _]       => findNested(c.element)
-          case c: RepeatedMap[_, _, _] => findNested(c.element)
+          case c: Message[_]           =>
+            if (c.nested) List(ProtoIR.MessageElement.NestedMessageElement(c.toProtoIR))
+            else if (goDeep) c.simpleFields.collect(field => findNested(field.codec)).flatten.distinct
+            else Nil
+          case c: Transform[_, _]      => findNested(c.codec, goDeep)
+          case c: Optional[_]          => findNested(c.codec, goDeep)
+          case c: Repeated[_, _]       => findNested(c.element, goDeep = true)
+          case c: RepeatedMap[_, _, _] => findNested(c.element, goDeep = true)
           case c: RecursiveMessage[_]  => findNested(c.codec)
           case _                       => Nil
         }

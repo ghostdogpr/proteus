@@ -165,6 +165,27 @@ message MapMessage {
 
         assertTrue(rendered == expected)
       },
+      test("map field with nested message value renders correctly") {
+        case class Inner(value: String) derives Schema
+        case class MapMessage(id: Int, data: Map[String, Inner]) derives Schema
+        val codec    = Schema[MapMessage].derive(deriver.modifier[Inner](nested))
+        val rendered = renderCodec(codec)
+        val expected = """syntax = "proto3";
+
+package test;
+
+message MapMessage {
+    message Inner {
+        string value = 1;
+    }
+    
+    int32 id = 1;
+    map<string, Inner> data = 2;
+}
+"""
+
+        assertTrue(rendered == expected)
+      },
       test("map field with message key renders correctly") {
         case class KeyMessage(value: String) derives Schema
         case class MapMessage(id: Int, data: Map[KeyMessage, Int]) derives Schema
