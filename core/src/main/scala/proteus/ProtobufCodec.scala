@@ -215,7 +215,7 @@ object ProtobufCodec {
             else Nil
           case c: Transform[_, _]      => findNested(c.codec, goDeep)
           case c: Optional[_]          => findNested(c.codec, goDeep)
-          case c: Repeated[_, _]       => findNested(c.element, goDeep = true)
+          case c: Repeated[_, _]       => findNested(c.element, goDeep)
           case c: RepeatedMap[_, _, _] => findNested(c.element, goDeep = true)
           case c: RecursiveMessage[_]  => findNested(c.codec)
           case _                       => Nil
