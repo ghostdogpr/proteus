@@ -606,9 +606,9 @@ enum Priority {
         case class Container(empty: EmptyMessage, id: Int) derives Schema
 
         val emptyAsEmptyDeriver = deriver.enable(ProtobufDeriver.DerivationFlag.EmptyMessageAsEmpty)
-        val codec = Schema[Container].derive(emptyAsEmptyDeriver)
-        val rendered = renderCodec(codec)
-        val expected = """syntax = "proto3";
+        val codec               = Schema[Container].derive(emptyAsEmptyDeriver)
+        val rendered            = renderCodec(codec)
+        val expected            = """syntax = "proto3";
 
 package test;
 
@@ -627,9 +627,9 @@ message Empty {}
         case class Container(empty: Option[EmptyMessage], id: Int) derives Schema
 
         val emptyAsEmptyDeriver = deriver.enable(ProtobufDeriver.DerivationFlag.EmptyMessageAsEmpty)
-        val codec = Schema[Container].derive(emptyAsEmptyDeriver)
-        val rendered = renderCodec(codec)
-        val expected = """syntax = "proto3";
+        val codec               = Schema[Container].derive(emptyAsEmptyDeriver)
+        val rendered            = renderCodec(codec)
+        val expected            = """syntax = "proto3";
 
 package test;
 
@@ -650,9 +650,9 @@ message Empty {}
         val combinedDeriver = deriver
           .enable(ProtobufDeriver.DerivationFlag.EmptyMessageAsEmpty)
           .enable(ProtobufDeriver.DerivationFlag.OptionalAsOneOf)
-        val codec = Schema[Container].derive(combinedDeriver)
-        val rendered = renderCodec(codec)
-        val expected = """syntax = "proto3";
+        val codec           = Schema[Container].derive(combinedDeriver)
+        val rendered        = renderCodec(codec)
+        val expected        = """syntax = "proto3";
 
 package test;
 
