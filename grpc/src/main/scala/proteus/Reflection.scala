@@ -5,8 +5,10 @@ import zio.blocks.schema.Schema
 import proteus.Modifiers.*
 import proteus.Modifiers.OneOfFlag.*
 
-case class ServerReflectionRequest(host: String, messageRequest: MessageRequest) derives Schema
-case class ServerReflectionResponse(validHost: String, originalRequest: ServerReflectionRequest, messageResponse: MessageResponse) derives Schema
+case class ServerReflectionRequest(host: String, messageRequest: MessageRequest) derives Schema, ProtobufCodec
+case class ServerReflectionResponse(validHost: String, originalRequest: ServerReflectionRequest, messageResponse: MessageResponse)
+  derives Schema,
+    ProtobufCodec
 
 sealed trait MessageRequest derives Schema
 object MessageRequest {

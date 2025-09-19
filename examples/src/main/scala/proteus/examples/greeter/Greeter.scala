@@ -4,8 +4,8 @@ import zio.blocks.schema.Schema
 
 import proteus.*
 
-case class HelloRequest(name: String) derives Schema
-case class HelloReply(message: String) derives Schema
+case class HelloRequest(name: String) derives Schema, ProtobufCodec
+case class HelloReply(message: String) derives Schema, ProtobufCodec
 
 given ProtobufDeriver = ProtobufDeriver
 

@@ -18,17 +18,17 @@ object GrpcTestUtils {
   // Complex Message Types (for testing all protobuf features)
   // =============================================================================
 
-  enum Priority derives Schema {
+  enum Priority derives Schema, ProtobufCodec {
     case Low, Medium, High, Critical
   }
 
-  enum ContactMethod derives Schema {
+  enum ContactMethod derives Schema, ProtobufCodec {
     case Email(address: String)
     case Phone(number: String, country: String)
     case Slack(workspace: String, channel: String)
   }
 
-  case class Address(street: String, city: String, country: String, zipCode: Int) derives Schema
+  case class Address(street: String, city: String, country: String, zipCode: Int) derives Schema, ProtobufCodec
 
   case class ComplexRequest(
     id: Long,
@@ -42,7 +42,8 @@ object GrpcTestUtils {
     contact: ContactMethod,
     address: Address,
     count: Option[Int]
-  ) derives Schema
+  ) derives Schema,
+      ProtobufCodec
 
   case class ComplexResponse(
     processedId: Long,
@@ -57,21 +58,22 @@ object GrpcTestUtils {
     confirmedAddress: Address,
     processingNote: String,
     timestamp: Long
-  ) derives Schema
+  ) derives Schema,
+      ProtobufCodec
 
   // =============================================================================
   // Simple Metadata Types (for testing client/server metadata)
   // =============================================================================
 
-  case class MetadataRequest(message: String) derives Schema
-  case class MetadataResponse(echo: String, clientId: String, serverNote: String) derives Schema
+  case class MetadataRequest(message: String) derives Schema, ProtobufCodec
+  case class MetadataResponse(echo: String, clientId: String, serverNote: String) derives Schema, ProtobufCodec
 
   // =============================================================================
   // Simple Streaming Types (for testing all streaming patterns)
   // =============================================================================
 
-  case class StreamRequest(value: Int) derives Schema
-  case class StreamResponse(result: Int) derives Schema
+  case class StreamRequest(value: Int) derives Schema, ProtobufCodec
+  case class StreamResponse(result: Int) derives Schema, ProtobufCodec
 
   // =============================================================================
   // RPC Definitions

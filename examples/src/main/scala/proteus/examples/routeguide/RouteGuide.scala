@@ -5,12 +5,12 @@ import _root_.zio.blocks.schema.Schema
 import proteus.*
 
 // Basic types
-case class Point(latitude: Int, longitude: Int) derives Schema
-case class Rectangle(lo: Point, hi: Point) derives Schema
+case class Point(latitude: Int, longitude: Int) derives Schema, ProtobufCodec
+case class Rectangle(lo: Point, hi: Point) derives Schema, ProtobufCodec
 
-case class Feature(name: String, location: Point) derives Schema
-case class RouteNote(location: Point, message: String) derives Schema
-case class RouteSummary(pointCount: Int, featureCount: Int, distance: Int, elapsedTime: Int) derives Schema
+case class Feature(name: String, location: Point) derives Schema, ProtobufCodec
+case class RouteNote(location: Point, message: String) derives Schema, ProtobufCodec
+case class RouteSummary(pointCount: Int, featureCount: Int, distance: Int, elapsedTime: Int) derives Schema, ProtobufCodec
 
 given ProtobufDeriver = ProtobufDeriver
 

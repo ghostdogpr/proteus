@@ -7,10 +7,10 @@ import proteus.GrpcTestUtils.*
 
 object RenderSpec extends ZIOSpecDefault {
 
-  case class SharedMessage(value: String) derives Schema
-  case class UnusedMessage(data: String) derives Schema
-  case class RequestWithShared(id: Int, shared: SharedMessage) derives Schema
-  case class ResponseWithShared(result: String, shared: SharedMessage) derives Schema
+  case class SharedMessage(value: String) derives Schema, ProtobufCodec
+  case class UnusedMessage(data: String) derives Schema, ProtobufCodec
+  case class RequestWithShared(id: Int, shared: SharedMessage) derives Schema, ProtobufCodec
+  case class ResponseWithShared(result: String, shared: SharedMessage) derives Schema, ProtobufCodec
 
   given ProtobufDeriver = ProtobufDeriver
 
@@ -715,8 +715,8 @@ option csharp_namespace = "Test";
         assertTrue(rendered == expected)
       },
       test("should handle multiple services with shared enums using fromServices") {
-        case class RequestWithPriority(priority: Priority, data: String) derives Schema
-        case class ResponseWithPriority(priority: Priority, result: String) derives Schema
+        case class RequestWithPriority(priority: Priority, data: String) derives Schema, ProtobufCodec
+        case class ResponseWithPriority(priority: Priority, result: String) derives Schema, ProtobufCodec
 
         val rpc1     = Rpc.unary[RequestWithPriority, ResponseWithPriority]("Method1")
         val rpc2     = Rpc.unary[ComplexRequest, ComplexResponse]("Method2")

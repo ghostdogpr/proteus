@@ -5,8 +5,6 @@ import java.nio.file.*
 
 import scala.collection.immutable.ListSet
 
-import zio.blocks.schema.Schema
-
 case class Dependency(
   dependencyName: String,
   packageName: Option[String],
@@ -22,10 +20,7 @@ case class Dependency(
   val toImportStatement: ProtoIR.Statement.ImportStatement =
     ProtoIR.Statement.ImportStatement(s"${path.fold("")(_ + "/")}$dependencyName.proto")
 
-  def add[A: Schema](using deriver: ProtobufDeriver): Dependency =
-    add(Schema[A].derive(deriver))
-
-  def add[A](codec: ProtobufCodec[A]): Dependency = {
+  def add[A](using codec: ProtobufCodec[A]): Dependency = {
     val t = ProtobufCodec.toProtoIR(codec).filter(t => !allDependencies.exists(_.hasAnyOf(Set(t.name))))
     copy(types = types ++ t)
   }
