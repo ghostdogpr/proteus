@@ -78,10 +78,6 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
       if (visited.containsKey(typeName)) {
         recursive.put(typeName, ())
         Lazy(ProtobufCodec.RecursiveMessage(() => instanceCache.get(typeName).asInstanceOf[ProtobufCodec.Message[A]]))
-      } else if (fields.length == 0 && flags.contains(DerivationFlag.EmptyMessageAsEmpty)) {
-        val recordBinding = binding.asInstanceOf[Binding.Record[A]]
-        val value         = recordBinding.constructor.construct(Registers(RegisterOffset.Zero), RegisterOffset.Zero)
-        Lazy(Empty.emptyCodec.transform(_ => value, _ => Empty()))
       } else {
         visited.put(typeName, ())
         val recordBinding = binding.asInstanceOf[Binding.Record[A]]
@@ -539,7 +535,7 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
 
 object ProtobufDeriver extends ProtobufDeriver(Set.empty, Vector.empty, Vector.empty) {
   enum DerivationFlag {
-    case OptionalAsOneOf, EmptyMessageAsEmpty
+    case OptionalAsOneOf
   }
 
   private case class TermInstance[F[_, _], A](term: Term[F, ?, A], instance: ProtobufCodec[A])
