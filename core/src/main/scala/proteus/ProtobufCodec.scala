@@ -59,6 +59,9 @@ sealed trait ProtobufCodec[A] {
 }
 
 object ProtobufCodec {
+  inline def derived[T](using deriver: ProtobufDeriver, schema: Schema[T]): ProtobufCodec[T] =
+    schema.derive(deriver)
+
   private val pool = new ThreadLocal[(Registers, AtomicBoolean)] {
     override def initialValue(): (Registers, AtomicBoolean) = (Registers(RegisterOffset.Zero), new AtomicBoolean(false))
   }

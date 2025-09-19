@@ -2,7 +2,7 @@ package proteus
 package json
 
 import io.circe.*
-import zio.blocks.schema.{PrimitiveType, Schema}
+import zio.blocks.schema.PrimitiveType
 import zio.blocks.schema.binding.*
 import zio.blocks.schema.binding.RegisterOffset.RegisterOffset
 
@@ -10,7 +10,7 @@ import proteus.ProtobufCodec.*
 import proteus.ProtobufCodec.MessageField.*
 import proteus.internal.*
 
-implicit def jsonWriterCodec[A](using schema: Schema[A], deriver: ProtobufDeriver): Encoder[A] =
+implicit def jsonWriterCodec[A](using codec: ProtobufCodec[A]): Encoder[A] =
   new Encoder[A] {
     def apply(a: A): Json =
       withRegisters { registers =>
@@ -75,7 +75,6 @@ implicit def jsonWriterCodec[A](using schema: Schema[A], deriver: ProtobufDerive
               }
           }
 
-        val codec = schema.derive(deriver)
         loop(a, codec, RegisterOffset.Zero)
       }
   }
