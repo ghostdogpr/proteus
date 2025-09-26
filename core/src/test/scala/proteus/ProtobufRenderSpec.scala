@@ -848,6 +848,52 @@ enum Status {
 
         assertTrue(standardRendered == expectedStandard) &&
           assertTrue(autoPrefixRendered == expectedAutoPrefix)
+      },
+      test("AutoPrefixEnums handles complex type names correctly") {
+        enum XMLParser derives Schema { case Ready }
+        enum HTTPStatus derives Schema { case Active }
+        enum HTML5Parser derives Schema { case Valid }
+        enum IOUtils derives Schema { case Available }
+        
+        case class ComplexMessage(
+          xml: XMLParser,
+          http: HTTPStatus, 
+          html: HTML5Parser,
+          io: IOUtils
+        ) derives Schema
+
+        val codec = Schema[ComplexMessage].derive(deriverWithAutoPrefixEnums)
+        val rendered = renderCodec(codec)
+        
+        val expected = """syntax = "proto3";
+
+package test;
+
+message ComplexMessage {
+    XMLParser xml = 1;
+    HTTPStatus http = 2;
+    HTML5Parser html = 3;
+    IOUtils io = 4;
+}
+
+enum XMLParser {
+    XML_PARSER_READY = 0;
+}
+
+enum HTTPStatus {
+    HTTP_STATUS_ACTIVE = 0;
+}
+
+enum HTML5Parser {
+    HTML5_PARSER_VALID = 0;
+}
+
+enum IOUtils {
+    IO_UTILS_AVAILABLE = 0;
+}
+"""
+
+        assertTrue(rendered == expected)
       }
     ),
     suite("Recursive Types")(
