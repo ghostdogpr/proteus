@@ -894,6 +894,32 @@ enum IOUtils {
 """
 
         assertTrue(rendered == expected)
+      },
+      test("enumPrefix modifier takes priority over AutoPrefixEnums flag") {
+        enum Status derives Schema { case Active, Inactive, Pending }
+        case class StatusMessage(status: Status) derives Schema
+
+        val codecWithExplicitPrefix = Schema[StatusMessage].derive(
+          deriverWithAutoPrefixEnums.modifier[Status](enumPrefix("USER"))
+        )
+
+        val rendered = renderCodec(codecWithExplicitPrefix)
+        val expected = """syntax = "proto3";
+
+package test;
+
+message StatusMessage {
+    Status status = 1;
+}
+
+enum Status {
+    USER_ACTIVE = 0;
+    USER_INACTIVE = 1;
+    USER_PENDING = 2;
+}
+"""
+
+        assertTrue(rendered == expected)
       }
     ),
     suite("Recursive Types")(

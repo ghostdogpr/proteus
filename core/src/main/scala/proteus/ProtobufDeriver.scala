@@ -214,11 +214,7 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
       filteredCases.foreach { c =>
         while (reservedIndexes.contains(index)) index += 1
         val a        = constructEnumCase(c).asInstanceOf[A]
-        val prefix   = if (flags.contains(DerivationFlag.AutoPrefixEnums)) {
-          typeNameToUpperSnakeCase(getTypeName(typeName, modifiers))
-        } else {
-          getEnumPrefix(modifiers)
-        }
+        val prefix   = getEnumPrefix(modifiers, flags, typeName)
         val enumName = getEnumMemberName(c.name, c.modifiers, prefix)
         builder += ProtobufCodec.EnumValue(enumName, index, a)
         index += 1
@@ -450,10 +446,10 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
       .collectFirst { case Modifier.config(`reservedModifier`, value) => value.split(",").map(_.trim.toInt).toSet }
       .getOrElse(Set.empty)
 
-  private def getEnumPrefix(modifiers: Seq[Modifier]): String =
+  private def getEnumPrefix(modifiers: Seq[Modifier], flags: Set[DerivationFlag], typeName: TypeName[?]): String =
     modifiers
       .collectFirst { case Modifier.config(`enumPrefixModifier`, prefix) => prefix }
-      .getOrElse("")
+      .getOrElse(if (flags.contains(DerivationFlag.AutoPrefixEnums)) typeNameToUpperSnakeCase(getTypeName(typeName, modifiers)) else "")
 
   private def getComment(modifiers: Seq[Modifier]): Option[String] =
     modifiers.collectFirst { case Modifier.config(`commentModifier`, value) => value }
