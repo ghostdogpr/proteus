@@ -850,21 +850,21 @@ enum Status {
           assertTrue(autoPrefixRendered == expectedAutoPrefix)
       },
       test("AutoPrefixEnums handles complex type names correctly") {
-        enum XMLParser derives Schema { case Ready }
-        enum HTTPStatus derives Schema { case Active }
-        enum HTML5Parser derives Schema { case Valid }
-        enum IOUtils derives Schema { case Available }
-        
+        enum XMLParser derives Schema   { case Ready     }
+        enum HTTPStatus derives Schema  { case Active    }
+        enum HTML5Parser derives Schema { case Valid     }
+        enum IOUtils derives Schema     { case Available }
+
         case class ComplexMessage(
           xml: XMLParser,
-          http: HTTPStatus, 
+          http: HTTPStatus,
           html: HTML5Parser,
           io: IOUtils
         ) derives Schema
 
-        val codec = Schema[ComplexMessage].derive(deriverWithAutoPrefixEnums)
+        val codec    = Schema[ComplexMessage].derive(deriverWithAutoPrefixEnums)
         val rendered = renderCodec(codec)
-        
+
         val expected = """syntax = "proto3";
 
 package test;
