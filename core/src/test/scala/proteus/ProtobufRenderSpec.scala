@@ -810,10 +810,10 @@ message Empty {}
         enum Status derives Schema { case Active, Inactive, Pending }
         case class StatusMessage(status: Status) derives Schema
 
-        val standardCodec = Schema[StatusMessage].derive(deriver)
+        val standardCodec   = Schema[StatusMessage].derive(deriver)
         val autoPrefixCodec = Schema[StatusMessage].derive(deriverWithAutoPrefixEnums)
 
-        val standardRendered = renderCodec(standardCodec)
+        val standardRendered   = renderCodec(standardCodec)
         val autoPrefixRendered = renderCodec(autoPrefixCodec)
 
         val expectedStandard = """syntax = "proto3";

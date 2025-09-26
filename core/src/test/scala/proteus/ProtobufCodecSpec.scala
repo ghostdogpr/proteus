@@ -789,21 +789,21 @@ object ProtobufCodecSpec extends ZIOSpecDefault {
         case class StandardStatusMessage(status: Status) derives Schema
         case class AutoPrefixStatusMessage(status: Status) derives Schema
 
-        val standardCodec = Schema[StandardStatusMessage].derive(deriver)
+        val standardCodec   = Schema[StandardStatusMessage].derive(deriver)
         val autoPrefixCodec = Schema[AutoPrefixStatusMessage].derive(deriverWithAutoPrefixEnums)
 
         val testCases = List(Status.Active, Status.Inactive, Status.Pending)
-        
+
         val results = testCases.map { status =>
-          val standardMessage = StandardStatusMessage(status)
+          val standardMessage   = StandardStatusMessage(status)
           val autoPrefixMessage = AutoPrefixStatusMessage(status)
-          
-          val standardEncoded = standardCodec.encode(standardMessage)
+
+          val standardEncoded   = standardCodec.encode(standardMessage)
           val autoPrefixEncoded = autoPrefixCodec.encode(autoPrefixMessage)
-          
-          val standardDecoded = standardCodec.decode(standardEncoded)
+
+          val standardDecoded   = standardCodec.decode(standardEncoded)
           val autoPrefixDecoded = autoPrefixCodec.decode(autoPrefixEncoded)
-          
+
           // The enum values should encode/decode identically regardless of prefix flag
           (standardDecoded.status, autoPrefixDecoded.status, standardEncoded sameElements autoPrefixEncoded)
         }
