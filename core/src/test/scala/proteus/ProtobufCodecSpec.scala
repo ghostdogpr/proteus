@@ -40,6 +40,7 @@ object ProtobufCodecSpec extends ZIOSpecDefault {
 
   val deriver                    = ProtobufDeriver
   val deriverWithOptionalAsOneOf = deriver.enable(ProtobufDeriver.DerivationFlag.OptionalAsOneOf)
+  val deriverWithAutoPrefixEnums = deriver.enable(ProtobufDeriver.DerivationFlag.AutoPrefixEnums)
 
   val testDateTimeSchema: ProtobufCodec[OffsetDateTime] =
     Schema[DateTimeWrapper]
@@ -780,6 +781,36 @@ object ProtobufCodecSpec extends ZIOSpecDefault {
 
         assert(decodedEmail)(equalTo(originalEmail)) &&
           assert(decodedPhone)(equalTo(originalPhone))
+      }
+    ),
+    suite("Derivation Flags")(
+      test("AutoPrefixEnums flag does not affect codec behavior") {
+        enum Status derives Schema { case Active, Inactive, Pending }
+        case class StandardStatusMessage(status: Status) derives Schema
+        case class AutoPrefixStatusMessage(status: Status) derives Schema
+
+        val standardCodec = Schema[StandardStatusMessage].derive(deriver)
+        val autoPrefixCodec = Schema[AutoPrefixStatusMessage].derive(deriverWithAutoPrefixEnums)
+
+        val testCases = List(Status.Active, Status.Inactive, Status.Pending)
+        
+        val results = testCases.map { status =>
+          val standardMessage = StandardStatusMessage(status)
+          val autoPrefixMessage = AutoPrefixStatusMessage(status)
+          
+          val standardEncoded = standardCodec.encode(standardMessage)
+          val autoPrefixEncoded = autoPrefixCodec.encode(autoPrefixMessage)
+          
+          val standardDecoded = standardCodec.decode(standardEncoded)
+          val autoPrefixDecoded = autoPrefixCodec.decode(autoPrefixEncoded)
+          
+          // The enum values should encode/decode identically regardless of prefix flag
+          (standardDecoded.status, autoPrefixDecoded.status, standardEncoded sameElements autoPrefixEncoded)
+        }
+
+        assert(results.map(_._1))(equalTo(testCases)) &&
+          assert(results.map(_._2))(equalTo(testCases)) &&
+          assert(results.forall(_._3))(isTrue)
       }
     )
   )

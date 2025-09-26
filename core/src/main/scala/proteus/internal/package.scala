@@ -44,6 +44,9 @@ private[proteus] def toCamelCase(s: String): String =
     case head :: tail => head.toLowerCase + tail.map(_.capitalize).mkString
   }
 
+private[proteus] def typeNameToUpperSnakeCase(s: String): String =
+  s.replaceAll("([a-z])([A-Z])", "$1_$2").toUpperCase
+
 private[proteus] val oneOfModifier      = "proteus.oneof"
 private[proteus] val nestedModifier     = "proteus.nested"
 private[proteus] val excludedModifier   = "proteus.excluded"
