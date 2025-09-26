@@ -71,11 +71,18 @@ object ProtoIR {
   case class EnumValue(name: String, intValue: Int)
   case class Enum(name: String, values: List[EnumValue], reserved: List[Reserved], comment: Option[String] = None)
 
-  final case class Service(name: String, rpcs: List[Rpc])
+  final case class Service(name: String, rpcs: List[Rpc], comment: Option[String] = None)
 
   final case class RpcMessage(fqn: Fqn)
 
-  final case class Rpc(name: String, request: RpcMessage, response: RpcMessage, streamingRequest: Boolean, streamingResponse: Boolean)
+  final case class Rpc(
+    name: String,
+    request: RpcMessage,
+    response: RpcMessage,
+    streamingRequest: Boolean,
+    streamingResponse: Boolean,
+    comment: Option[String]
+  )
 
   sealed trait Type { self =>
     def collectTypeReferences: Set[String] =

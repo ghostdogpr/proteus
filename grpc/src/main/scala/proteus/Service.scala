@@ -8,11 +8,17 @@ import scala.collection.immutable.ListSet
 import com.google.protobuf.DescriptorProtos.*
 import com.google.protobuf.Descriptors.FileDescriptor
 
-case class Service[Rpcs] private (packageName: Option[String], name: String, rpcs: List[Rpc[?, ?]], dependencies: List[Dependency]) {
+case class Service[Rpcs] private (
+  packageName: Option[String],
+  name: String,
+  rpcs: List[Rpc[?, ?]],
+  dependencies: List[Dependency],
+  comment: Option[String]
+) {
   val fullyQualifiedName: String = packageName.fold(name)(s => s"$s.$name")
 
   val toProtoIR: List[ProtoIR.TopLevelDef] =
-    (ProtoIR.TopLevelDef.ServiceDef(ProtoIR.Service(name, rpcs.map(_.toProtoIR))) ::
+    (ProtoIR.TopLevelDef.ServiceDef(ProtoIR.Service(name, rpcs.map(_.toProtoIR), comment)) ::
       rpcs.flatMap(_.messagesToProtoIR)).distinct
 
   val allDependencies: Set[Dependency] = dependencies.toSet ++ dependencies.flatMap(_.allDependencies)
@@ -38,7 +44,7 @@ case class Service[Rpcs] private (packageName: Option[String], name: String, rpc
   }
 
   def rpc[Request, Response](rpc: Rpc[Request, Response]): Service[Rpcs & rpc.type] =
-    Service(packageName, name, rpcs :+ rpc, dependencies)
+    Service(packageName, name, rpcs :+ rpc, dependencies, comment)
 
   def dependsOn(dependency: Dependency): Service[Rpcs] =
     copy(dependencies = dependencies :+ dependency)
@@ -70,10 +76,13 @@ case class Service[Rpcs] private (packageName: Option[String], name: String, rpc
 
 object Service {
   def apply(name: String): Service[Any] =
-    Service(None, name, List.empty, Nil)
+    Service(None, name, List.empty, Nil, None)
 
   def apply(packageName: String, name: String): Service[Any] =
-    Service(Some(packageName), name, List.empty, Nil)
+    Service(Some(packageName), name, List.empty, Nil, None)
+
+  def apply(packageName: String, name: String, comment: String): Service[Any] =
+    Service(Some(packageName), name, List.empty, Nil, Some(comment))
 }
 
 extension (dep: Dependency.type) {

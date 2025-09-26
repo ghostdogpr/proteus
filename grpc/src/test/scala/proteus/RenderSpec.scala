@@ -397,6 +397,69 @@ message ResponseWithShared {
 """
 
         assertTrue(serviceRendered == expected)
+      },
+      test("should render RPC comments") {
+        case class CommentRequest(message: String) derives Schema, ProtobufCodec
+        case class CommentResponse(echo: String) derives Schema, ProtobufCodec
+
+        val commentedRpc       = Rpc.unary[CommentRequest, CommentResponse]("ProcessWithComment", "This RPC processes requests with special handling")
+        val serviceWithComment = Service("test.package", "CommentService").rpc(commentedRpc)
+
+        val renderedProto = serviceWithComment.render(options)
+        val expected      = """syntax = "proto3";
+
+package test.package;
+
+option java_package = "com.test";
+option csharp_namespace = "Test";
+
+service CommentService {
+    // This RPC processes requests with special handling
+    rpc ProcessWithComment (CommentRequest) returns (CommentResponse) {}
+}
+
+message CommentRequest {
+    string message = 1;
+}
+
+message CommentResponse {
+    string echo = 1;
+}
+"""
+
+        assertTrue(renderedProto == expected)
+      },
+      test("should render service comments") {
+        case class ServiceRequest(data: String) derives Schema, ProtobufCodec
+        case class ServiceResponse(result: String) derives Schema, ProtobufCodec
+
+        val testRpc            = Rpc.unary[ServiceRequest, ServiceResponse]("ProcessData")
+        val serviceWithComment = Service("test.package", "CommentedService", "This service handles data processing operations")
+          .rpc(testRpc)
+
+        val renderedProto = serviceWithComment.render(options)
+        val expected      = """syntax = "proto3";
+
+package test.package;
+
+option java_package = "com.test";
+option csharp_namespace = "Test";
+
+// This service handles data processing operations
+service CommentedService {
+    rpc ProcessData (ServiceRequest) returns (ServiceResponse) {}
+}
+
+message ServiceRequest {
+    string data = 1;
+}
+
+message ServiceResponse {
+    string result = 1;
+}
+"""
+
+        assertTrue(renderedProto == expected)
       }
     ),
     suite("Dependency Rendering")(

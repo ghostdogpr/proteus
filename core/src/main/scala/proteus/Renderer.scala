@@ -121,21 +121,30 @@ object Renderer {
     }
 
     def renderService(service: Service): Text = {
-      val hasContent = service.rpcs.nonEmpty
+      val commentLine = service.comment.map(c => line(s"// $c")).getOrElse(many())
+      val hasContent  = service.rpcs.nonEmpty
       if (hasContent) {
         many(
+          commentLine,
           line(s"service ${service.name} {"),
           indent(service.rpcs.map(renderRpc)),
           line("}")
         )
-      } else line(s"service ${service.name} {}")
+      } else {
+        many(
+          commentLine,
+          line(s"service ${service.name} {}")
+        )
+      }
     }
 
     def renderRpc(rpc: Rpc): Text = {
+      val commentLine  = rpc.comment.map(c => line(s"// $c")).getOrElse(many())
       val requestType  = if (rpc.streamingRequest) s"stream ${rpc.request.fqn.render}" else rpc.request.fqn.render
       val responseType = if (rpc.streamingResponse) s"stream ${rpc.response.fqn.render}" else rpc.response.fqn.render
-      line(
-        s"rpc ${rpc.name} ($requestType) returns ($responseType) {}"
+      many(
+        commentLine,
+        line(s"rpc ${rpc.name} ($requestType) returns ($responseType) {}")
       )
     }
 
