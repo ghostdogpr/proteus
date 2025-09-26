@@ -11,6 +11,7 @@ object ProtobufRenderSpec extends ZIOSpecDefault {
 
   val deriver                    = ProtobufDeriver
   val deriverWithOptionalAsOneOf = deriver.enable(ProtobufDeriver.DerivationFlag.OptionalAsOneOf)
+  val deriverWithAutoPrefixEnums = deriver.enable(ProtobufDeriver.DerivationFlag.AutoPrefixEnums)
 
   def renderCodec[A](codec: ProtobufCodec[A], packageName: String = "test"): String = {
     val topLevelDefs    = ProtobufCodec.toProtoIR(codec)
@@ -804,6 +805,95 @@ message Empty {}
 
         assertTrue(standardRendered == expectedStandard) &&
           assertTrue(oneOfRendered == expectedOneOf)
+      },
+      test("AutoPrefixEnums flag adds type name as prefix to enum members") {
+        enum Status derives Schema { case Active, Inactive, Pending }
+        case class StatusMessage(status: Status) derives Schema
+
+        val standardCodec   = Schema[StatusMessage].derive(deriver)
+        val autoPrefixCodec = Schema[StatusMessage].derive(deriverWithAutoPrefixEnums)
+
+        val standardRendered   = renderCodec(standardCodec)
+        val autoPrefixRendered = renderCodec(autoPrefixCodec)
+
+        val expectedStandard = """syntax = "proto3";
+
+package test;
+
+message StatusMessage {
+    Status status = 1;
+}
+
+enum Status {
+    ACTIVE = 0;
+    INACTIVE = 1;
+    PENDING = 2;
+}
+"""
+
+        val expectedAutoPrefix = """syntax = "proto3";
+
+package test;
+
+message StatusMessage {
+    Status status = 1;
+}
+
+enum Status {
+    STATUS_ACTIVE = 0;
+    STATUS_INACTIVE = 1;
+    STATUS_PENDING = 2;
+}
+"""
+
+        assertTrue(standardRendered == expectedStandard) &&
+          assertTrue(autoPrefixRendered == expectedAutoPrefix)
+      },
+      test("AutoPrefixEnums handles complex type names correctly") {
+        enum XMLParser derives Schema   { case Ready     }
+        enum HTTPStatus derives Schema  { case Active    }
+        enum HTML5Parser derives Schema { case Valid     }
+        enum IOUtils derives Schema     { case Available }
+
+        case class ComplexMessage(
+          xml: XMLParser,
+          http: HTTPStatus,
+          html: HTML5Parser,
+          io: IOUtils
+        ) derives Schema
+
+        val codec    = Schema[ComplexMessage].derive(deriverWithAutoPrefixEnums)
+        val rendered = renderCodec(codec)
+
+        val expected = """syntax = "proto3";
+
+package test;
+
+message ComplexMessage {
+    XMLParser xml = 1;
+    HTTPStatus http = 2;
+    HTML5Parser html = 3;
+    IOUtils io = 4;
+}
+
+enum XMLParser {
+    XML_PARSER_READY = 0;
+}
+
+enum HTTPStatus {
+    HTTP_STATUS_ACTIVE = 0;
+}
+
+enum HTML5Parser {
+    HTML5_PARSER_VALID = 0;
+}
+
+enum IOUtils {
+    IO_UTILS_AVAILABLE = 0;
+}
+"""
+
+        assertTrue(rendered == expected)
       }
     ),
     suite("Recursive Types")(

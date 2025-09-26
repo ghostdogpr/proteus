@@ -214,7 +214,11 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
       filteredCases.foreach { c =>
         while (reservedIndexes.contains(index)) index += 1
         val a        = constructEnumCase(c).asInstanceOf[A]
-        val prefix   = getEnumPrefix(modifiers)
+        val prefix   = if (flags.contains(DerivationFlag.AutoPrefixEnums)) {
+          typeNameToUpperSnakeCase(getTypeName(typeName, modifiers))
+        } else {
+          getEnumPrefix(modifiers)
+        }
         val enumName = getEnumMemberName(c.name, c.modifiers, prefix)
         builder += ProtobufCodec.EnumValue(enumName, index, a)
         index += 1
@@ -537,6 +541,7 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
 object ProtobufDeriver extends ProtobufDeriver(Set.empty, Vector.empty, Vector.empty) {
   enum DerivationFlag {
     case OptionalAsOneOf
+    case AutoPrefixEnums
   }
 
   private case class TermInstance[F[_, _], A](term: Term[F, ?, A], instance: ProtobufCodec[A])
