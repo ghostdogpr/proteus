@@ -199,20 +199,9 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
     doc: Doc,
     modifiers: Seq[Modifier.Reflect]
   )(implicit F: HasBinding[F], D: HasInstance[F]): Lazy[ProtobufCodec[A]] = {
-
-    def flattenCases(cases: IndexedSeq[Term[F, ?, ?]]): IndexedSeq[Term[F, ?, ?]] =
-      cases.flatMap { c =>
-        c.value match {
-          case v: Reflect.Variant[F, _] => flattenCases(v.cases)
-          case _                        => IndexedSeq(c)
-        }
-      }
-
-    val filteredCases = flattenCases(
-      cases.filterNot(c =>
-        c.modifiers.exists { case Modifier.config(`excludedModifier`, _) => true; case _ => false } ||
-          c.value.modifiers.exists { case Modifier.config(`excludedModifier`, _) => true; case _ => false }
-      )
+    val filteredCases = cases.filterNot(c =>
+      c.modifiers.exists { case Modifier.config(`excludedModifier`, _) => true; case _ => false } ||
+        c.value.modifiers.exists { case Modifier.config(`excludedModifier`, _) => true; case _ => false }
     )
     if (typeName.name == unitOption.name && typeName.namespace == unitOption.namespace)
       D.instance(filteredCases.find(c => c.name == unitSome.name).get.value.asRecord.get.fields.head.value.metadata)
