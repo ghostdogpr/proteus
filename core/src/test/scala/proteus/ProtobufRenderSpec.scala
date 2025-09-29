@@ -999,6 +999,68 @@ enum Status {
         assertTrue(rendered == expected)
       }
     ),
+    suite("Sealed Trait Hierarchies")(
+      test("nested sealed trait hierarchy with empty case classes renders as enum") {
+        sealed trait A derives Schema
+        case class A1() extends A
+        sealed trait B  extends A
+        case class B1() extends B
+
+        case class Container(value: A) derives Schema
+        val codec    = Schema[Container].derive(deriver)
+        val rendered = renderCodec(codec)
+        val expected = """syntax = "proto3";
+
+package test;
+
+message Container {
+    A value = 1;
+}
+
+enum A {
+    A1 = 0;
+    B1 = 1;
+}
+"""
+
+        assertTrue(rendered == expected)
+      },
+      test("nested sealed trait hierarchy with fields renders as flattened oneOf") {
+        sealed trait A derives Schema
+        case class A1(value: String) extends A
+        sealed trait B               extends A
+        case class B1(count: Int)    extends B
+
+        case class Container(value: A) derives Schema
+        val codec    = Schema[Container].derive(deriver)
+        val rendered = renderCodec(codec)
+        val expected = """syntax = "proto3";
+
+package test;
+
+message Container {
+    A value = 1;
+}
+
+message A {
+    oneof value {
+        A1 a1 = 1;
+        B1 b1 = 2;
+    }
+}
+
+message A1 {
+    string value = 1;
+}
+
+message B1 {
+    int32 count = 1;
+}
+"""
+
+        assertTrue(rendered == expected)
+      }
+    ),
     suite("Recursive Types")(
       test("recursive type renders correctly") {
         case class Recursive(a: Int, b: Option[Recursive]) derives Schema
