@@ -212,6 +212,25 @@ message KeyMessage {
 """
 
         assertTrue(rendered == expected)
+      },
+      test("map field with optional value should render correctly") {
+        case class MapWithOptionalValue(map: Map[Int, Option[Int]]) derives Schema
+        val codec    = Schema[MapWithOptionalValue].derive(deriver)
+        val rendered = renderCodec(codec)
+        val expected = """syntax = "proto3";
+
+package test;
+
+message MapWithOptionalValue {
+    repeated IntOptionIntEntry map = 1;
+}
+
+message IntOptionIntEntry {
+    int32 key = 1;
+    optional int32 value = 2;
+}
+"""
+        assertTrue(rendered == expected)
       }
     ),
     suite("Modifier Rendering")(

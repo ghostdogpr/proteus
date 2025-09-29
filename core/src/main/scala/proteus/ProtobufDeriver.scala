@@ -322,7 +322,7 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
     }
     D.instance(key.metadata).flatMap { keyInstance =>
       D.instance(value.metadata).map { valueInstance =>
-        if (isValidKeyType(keyInstance))
+        if (isValidKeyType(keyInstance) && isValidValueTypeForMap(valueInstance))
           ProtobufCodec.RepeatedMap[M, K, V](
             ProtobufCodec.Message(
               "",
@@ -345,7 +345,7 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
           ProtobufCodec
             .Repeated[List, (K, V)](
               ProtobufCodec.Message(
-                s"${key.typeName.name}${value.typeName.name}Entry",
+                s"${getTypeName(key.typeName, Nil)}${getTypeName(value.typeName, Nil)}Entry",
                 Array(
                   SimpleField("key", 1, keyInstance, keyRegister, getDefaultValue(using keyInstance), None),
                   SimpleField("value", 2, valueInstance, valueRegister, getDefaultValue(using valueInstance), None)
@@ -538,6 +538,13 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
         }
       case ProtobufCodec.Transform(_, _, codec)   => isValidKeyType(codec)
       case _                                      => false
+    }
+
+  private def isValidValueTypeForMap[A](codec: ProtobufCodec[A]): Boolean =
+    codec match {
+      case _: ProtobufCodec.Optional[_]         => false // Optional values require repeated entry format
+      case ProtobufCodec.Transform(_, _, codec) => isValidValueTypeForMap(codec)
+      case _                                    => true
     }
 
   private val unitOption = TypeName.option(TypeName.unit)
