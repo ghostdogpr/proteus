@@ -68,6 +68,8 @@ sealed trait ProtobufCodec[A] {
 }
 
 object ProtobufCodec {
+  def apply[A](using codec: ProtobufCodec[A]): ProtobufCodec[A] = codec
+
   inline def derived[T](using deriver: ProtobufDeriver, schema: Schema[T]): ProtobufCodec[T] =
     schema.derive(deriver)
 

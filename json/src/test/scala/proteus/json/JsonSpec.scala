@@ -1,6 +1,7 @@
 package proteus
 package json
 
+import io.circe.*
 import io.circe.syntax.*
 import zio.blocks.schema.Schema
 import zio.test.*
@@ -10,6 +11,7 @@ import proteus.Modifiers.*
 
 object JsonSpec extends ZIOSpecDefault {
   given ProtobufDeriver = ProtobufDeriver
+  given Registry        = Registry.empty
 
   def spec = suite("JsonSpec")(
     suite("Primitive Types")(
@@ -318,6 +320,52 @@ object JsonSpec extends ZIOSpecDefault {
           result == """{"id":1,"name":"John Doe","address":{"street":"123 Main St","city":"NYC","zip":"10001"},"contact":{"email":"john@example.com","phones":["555-1234","555-5678"]},"tags":[{"role":"admin"},{"dept":"engineering"}],"active":true}""" ||
             result == """{"id":1,"name":"John Doe","address":{"street":"123 Main St","city":"NYC","zip":"10001"},"contact":{"email":"john@example.com","phones":["555-1234","555-5678"]},"tags":[{"dept":"engineering"},{"role":"admin"}],"active":true}"""
         )
+      }
+    ),
+    suite("Registry")(
+      test("custom encoder in registry overrides default encoding") {
+        case class CustomMessage(value: Int) derives Schema, ProtobufCodec
+        val codec = ProtobufCodec[CustomMessage]
+
+        val customEncoder: Encoder[CustomMessage] = (msg: CustomMessage) => Json.obj("custom" -> Json.fromInt(msg.value * 100))
+
+        given Registry = Registry.empty.add(codec, customEncoder)
+
+        val instance = CustomMessage(42)
+        val result   = instance.asJson.noSpaces
+
+        assertTrue(result == """{"custom":4200}""")
+      },
+      test("custom encoder for primitive type in message") {
+        case class Message(id: Int, name: String) derives Schema, ProtobufCodec
+        val codec = ProtobufCodec[Message]
+
+        val customEncoder: Encoder[Message] = (msg: Message) =>
+          Json.obj(
+            "identifier" -> Json.fromInt(msg.id),
+            "label"      -> Json.fromString(msg.name.toUpperCase)
+          )
+
+        given Registry = Registry.empty.add(codec, customEncoder)
+
+        val instance = Message(123, "test")
+        val result   = instance.asJson.noSpaces
+
+        assertTrue(result == """{"identifier":123,"label":"TEST"}""")
+      },
+      test("custom encoder for enum changes representation") {
+        enum Status derives Schema, ProtobufCodec { case Active, Inactive, Pending }
+        case class StatusMessage(status: Status) derives Schema, ProtobufCodec
+
+        val statusCodec                    = ProtobufCodec[Status]
+        val customEncoder: Encoder[Status] = (status: Status) => Json.fromInt(status.ordinal + 1000)
+
+        given Registry = Registry.empty.add(statusCodec, customEncoder)
+
+        val instance = StatusMessage(Status.Active)
+        val result   = instance.asJson.noSpaces
+
+        assertTrue(result == """{"status":1000}""")
       }
     )
   )
