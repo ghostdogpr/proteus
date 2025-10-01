@@ -14,8 +14,8 @@ case class Registry(instances: Map[ProtobufCodec[?], Encoder[?]]) {
   def get[A](codec: ProtobufCodec[A]): Encoder[A] =
     instances.getOrElse(codec, null).asInstanceOf[Encoder[A]]
 
-  def add[A](codec: ProtobufCodec[A], encoder: Encoder[A]): Registry =
-    copy(instances = instances + (codec -> encoder))
+  def add[A: ProtobufCodec](encoder: Encoder[A]): Registry =
+    copy(instances = instances + (ProtobufCodec[A] -> encoder))
 }
 object Registry                                                   {
   val empty: Registry = Registry(Map.empty)

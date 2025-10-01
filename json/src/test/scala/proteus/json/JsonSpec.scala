@@ -325,11 +325,10 @@ object JsonSpec extends ZIOSpecDefault {
     suite("Registry")(
       test("custom encoder in registry overrides default encoding") {
         case class CustomMessage(value: Int) derives Schema, ProtobufCodec
-        val codec = ProtobufCodec[CustomMessage]
 
         val customEncoder: Encoder[CustomMessage] = (msg: CustomMessage) => Json.obj("custom" -> Json.fromInt(msg.value * 100))
 
-        given Registry = Registry.empty.add(codec, customEncoder)
+        given Registry = Registry.empty.add(customEncoder)
 
         val instance = CustomMessage(42)
         val result   = instance.asJson.noSpaces
@@ -338,7 +337,6 @@ object JsonSpec extends ZIOSpecDefault {
       },
       test("custom encoder for primitive type in message") {
         case class Message(id: Int, name: String) derives Schema, ProtobufCodec
-        val codec = ProtobufCodec[Message]
 
         val customEncoder: Encoder[Message] = (msg: Message) =>
           Json.obj(
@@ -346,7 +344,7 @@ object JsonSpec extends ZIOSpecDefault {
             "label"      -> Json.fromString(msg.name.toUpperCase)
           )
 
-        given Registry = Registry.empty.add(codec, customEncoder)
+        given Registry = Registry.empty.add(customEncoder)
 
         val instance = Message(123, "test")
         val result   = instance.asJson.noSpaces
@@ -357,10 +355,9 @@ object JsonSpec extends ZIOSpecDefault {
         enum Status derives Schema, ProtobufCodec { case Active, Inactive, Pending }
         case class StatusMessage(status: Status) derives Schema, ProtobufCodec
 
-        val statusCodec                    = ProtobufCodec[Status]
         val customEncoder: Encoder[Status] = (status: Status) => Json.fromInt(status.ordinal + 1000)
 
-        given Registry = Registry.empty.add(statusCodec, customEncoder)
+        given Registry = Registry.empty.add(customEncoder)
 
         val instance = StatusMessage(Status.Active)
         val result   = instance.asJson.noSpaces
