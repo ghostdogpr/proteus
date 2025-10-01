@@ -8,7 +8,6 @@ import io.grpc.netty.{NettyChannelBuilder, NettyServerBuilder}
 import io.grpc.protobuf.services.ProtoReflectionServiceV1
 import scalapb.zio_grpc.{RequestContext, ZChannel}
 import zio.*
-import zio.blocks.schema.Schema
 import zio.stream.*
 import zio.test.*
 
@@ -24,30 +23,6 @@ object ZioBackendSpec extends ZIOSpecDefault {
   val serverService = ServerService(using ZioServerBackend)
     .rpc(complexRpc, processComplexRequestZio)
     .build(testService)
-
-  given ProtobufDeriver = ProtobufDeriver
-
-  case class CommonType() derives Schema, ProtobufCodec
-
-  val dependency = Dependency("test").add[CommonType]
-
-  case class Req1() derives Schema, ProtobufCodec
-  case class Resp1(common: CommonType) derives Schema, ProtobufCodec
-  val rpc1 = Rpc.unary[Req1, Resp1]("Svc1Rpc")
-  val svc1 = Service("Svc1").rpc(rpc1).dependsOn(dependency)
-
-  case class Req2() derives Schema, ProtobufCodec
-  case class Resp2(common: CommonType) derives Schema, ProtobufCodec
-  val rpc2 = Rpc.unary[Req2, Resp2]("Svc2Rpc")
-  val svc2 = Service("Svc2").rpc(rpc2).dependsOn(dependency)
-
-  val sv1Service = ServerService(using ZioServerBackend)
-    .rpc(rpc1, _ => ZIO.succeed(Resp1(CommonType())))
-    .build(svc1)
-
-  val sv2Service = ServerService(using ZioServerBackend)
-    .rpc(rpc2, _ => ZIO.succeed(Resp2(CommonType())))
-    .build(svc2)
 
   def processWithMetadataZio(req: MetadataRequest, ctx: RequestContext): IO[StatusException, MetadataResponse] =
     for {
@@ -81,14 +56,7 @@ object ZioBackendSpec extends ZIOSpecDefault {
     test("should list services via gRPC reflection client") {
       val port              = 7020
       val reflectionService = ProtoReflectionServiceV1.newInstance
-      val server            = NettyServerBuilder
-        .forPort(port)
-        .addService(serverService)
-        .addService(sv1Service)
-        .addService(sv2Service)
-        .addService(reflectionService)
-        .build()
-        .start()
+      val server            = NettyServerBuilder.forPort(port).addService(serverService).addService(reflectionService).build().start()
       val channel           = NettyChannelBuilder.forAddress("localhost", port).usePlaintext().build()
       val zChannel          = ZChannel(channel, Seq.empty)
       val clientBackend     = new ZioClientBackend(zChannel)
