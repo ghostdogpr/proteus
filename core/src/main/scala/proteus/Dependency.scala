@@ -16,6 +16,8 @@ case class Dependency(
 
   val typeReferences       = types.flatMap(_.collectTypeReferences).toSet
   val filteredDependencies = allDependencies.filter(_.hasAnyOf(typeReferences))
+  val dependencyTypes      = filteredDependencies.flatMap(_.types).toSet
+  val filteredTypes        = types -- dependencyTypes
 
   val toImportStatement: ProtoIR.Statement.ImportStatement =
     ProtoIR.Statement.ImportStatement(s"${path.fold("")(_ + "/")}$dependencyName.proto")
@@ -29,12 +31,9 @@ case class Dependency(
     types.exists(typeDef => typeNames.contains(typeDef.name))
 
   def dependsOn(dependency: Dependency): Dependency =
-    copy(types = types -- dependency.types, dependencies = dependencies :+ dependency)
+    copy(types = types -- dependency.types -- dependency.dependencyTypes, dependencies = dependencies :+ dependency)
 
-  def render(options: List[ProtoIR.TopLevelOption]): String = {
-    val dependencyTypes = filteredDependencies.flatMap(_.types).map(_.name).toSet
-    val filteredTypes   = types.filterNot(d => dependencyTypes.contains(d.name))
-
+  def render(options: List[ProtoIR.TopLevelOption]): String =
     Renderer.render(
       ProtoIR.CompilationUnit(
         packageName = packageName,
@@ -43,7 +42,6 @@ case class Dependency(
           filteredTypes.map(ProtoIR.Statement.TopLevelStatement(_)).toList
       )
     )
-  }
 
   def renderToFile(options: List[ProtoIR.TopLevelOption], folder: String): Unit = {
     val rendered = render(options)
