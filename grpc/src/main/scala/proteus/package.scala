@@ -35,7 +35,7 @@ extension (field: ProtoIR.Field) {
     oneofIndex.foreach(fieldBuilder.setOneofIndex)
 
     def makeFqn(name: String): String =
-      s".${topLevelFqns.get(name).getOrElse(s"$parentFqn$name")}"
+      s".${topLevelFqns.get(name).getOrElse(s"$parentFqn.$name")}"
 
     field.ty match {
       case listType: ProtoIR.Type.ListType    =>
