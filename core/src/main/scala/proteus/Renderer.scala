@@ -169,8 +169,8 @@ object Renderer {
         case MapType(keyType, valueType) =>
           s"map<${renderType(keyType)}, ${renderType(valueType)}>"
         case ListType(valueType)         => s"repeated ${renderType(valueType)}"
-        case RefType(fqn)                => fqn.render
-        case EnumRefType(fqn)            => fqn.render
+        case RefType(name)               => name
+        case EnumRefType(name)           => name
       }
     }
 

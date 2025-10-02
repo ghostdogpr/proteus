@@ -564,8 +564,8 @@ object ProtobufCodec {
           case _: PrimitiveType.Float   => ProtoIR.Type.Float
           case _                        => throw new Exception(s"Unsupported primitive type: $c")
         }
-      case c: Message[_]           => ProtoIR.Type.RefType(ProtoIR.Fqn(None, c.name))
-      case c: Enum[_]              => ProtoIR.Type.EnumRefType(ProtoIR.Fqn(None, c.name))
+      case c: Message[_]           => ProtoIR.Type.RefType(c.name)
+      case c: Enum[_]              => ProtoIR.Type.EnumRefType(c.name)
       case c: Repeated[_, _]       => ProtoIR.Type.ListType(toProtoType(c.element))
       case c: RepeatedMap[_, _, _] =>
         ProtoIR.Type.MapType(toProtoType(c.element.simpleFields(0).codec), toProtoType(c.element.simpleFields(1).codec))

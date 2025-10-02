@@ -30,24 +30,27 @@ extension (protoType: ProtoIR.Type) {
 }
 
 extension (field: ProtoIR.Field) {
-  def addToDescriptor(builder: DescriptorProto.Builder, oneofIndex: Option[Int], parentName: String): Unit = {
+  def addToDescriptor(builder: DescriptorProto.Builder, oneofIndex: Option[Int], parentFqn: String, topLevelFqns: Map[String, String]): Unit = {
     val fieldBuilder = FieldDescriptorProto.newBuilder().setName(field.name).setNumber(field.number)
     oneofIndex.foreach(fieldBuilder.setOneofIndex)
+
+    def makeFqn(name: String): String =
+      s".${topLevelFqns.get(name).getOrElse(s"$parentFqn$name")}"
 
     field.ty match {
       case listType: ProtoIR.Type.ListType    =>
         fieldBuilder.setLabel(FieldDescriptorProto.Label.LABEL_REPEATED)
         fieldBuilder.setType(listType.valueType.toDescriptorType)
         listType.valueType match {
-          case enumType: ProtoIR.Type.EnumRefType => fieldBuilder.setTypeName(enumType.fqn.render)
-          case messageType: ProtoIR.Type.RefType  => fieldBuilder.setTypeName(messageType.fqn.render)
+          case enumType: ProtoIR.Type.EnumRefType => fieldBuilder.setTypeName(makeFqn(enumType.name))
+          case messageType: ProtoIR.Type.RefType  => fieldBuilder.setTypeName(makeFqn(messageType.name))
           case _                                  =>
         }
       case mapType: ProtoIR.Type.MapType      =>
         fieldBuilder.setLabel(FieldDescriptorProto.Label.LABEL_REPEATED)
         fieldBuilder.setType(FieldDescriptorProto.Type.TYPE_MESSAGE)
         builder.getName()
-        fieldBuilder.setTypeName(s"$parentName.${toCamelCase(field.name)}Entry")
+        fieldBuilder.setTypeName(s".$parentFqn.${toCamelCase(field.name)}Entry")
         val mapEntryBuilder      =
           DescriptorProto.newBuilder().setName(s"${toCamelCase(field.name)}Entry").setOptions(MessageOptions.newBuilder().setMapEntry(true))
         val mapKeyFieldBuilder   = FieldDescriptorProto
@@ -56,8 +59,8 @@ extension (field: ProtoIR.Field) {
           .setNumber(1)
           .setType(mapType.keyType.toDescriptorType)
         mapType.keyType match {
-          case enumType: ProtoIR.Type.EnumRefType => mapKeyFieldBuilder.setTypeName(enumType.fqn.render)
-          case messageType: ProtoIR.Type.RefType  => mapKeyFieldBuilder.setTypeName(messageType.fqn.render)
+          case enumType: ProtoIR.Type.EnumRefType => mapKeyFieldBuilder.setTypeName(makeFqn(enumType.name))
+          case messageType: ProtoIR.Type.RefType  => mapKeyFieldBuilder.setTypeName(makeFqn(messageType.name))
           case _                                  =>
         }
         mapEntryBuilder.addField(mapKeyFieldBuilder.build())
@@ -67,18 +70,18 @@ extension (field: ProtoIR.Field) {
           .setNumber(2)
           .setType(mapType.valueType.toDescriptorType)
         mapType.valueType match {
-          case enumType: ProtoIR.Type.EnumRefType => mapValueFieldBuilder.setTypeName(enumType.fqn.render)
-          case messageType: ProtoIR.Type.RefType  => mapValueFieldBuilder.setTypeName(messageType.fqn.render)
+          case enumType: ProtoIR.Type.EnumRefType => mapValueFieldBuilder.setTypeName(makeFqn(enumType.name))
+          case messageType: ProtoIR.Type.RefType  => mapValueFieldBuilder.setTypeName(makeFqn(messageType.name))
           case _                                  =>
         }
         mapEntryBuilder.addField(mapValueFieldBuilder.build())
         builder.addNestedType(mapEntryBuilder.build())
       case enumType: ProtoIR.Type.EnumRefType =>
         fieldBuilder.setType(FieldDescriptorProto.Type.TYPE_ENUM)
-        fieldBuilder.setTypeName(enumType.fqn.render)
+        fieldBuilder.setTypeName(makeFqn(enumType.name))
       case messageType: ProtoIR.Type.RefType  =>
         fieldBuilder.setType(FieldDescriptorProto.Type.TYPE_MESSAGE)
-        fieldBuilder.setTypeName(messageType.fqn.render)
+        fieldBuilder.setTypeName(makeFqn(messageType.name))
       case _                                  =>
         fieldBuilder.setType(field.ty.toDescriptorType)
     }
@@ -88,19 +91,18 @@ extension (field: ProtoIR.Field) {
 }
 
 extension (msg: ProtoIR.Message) {
-  def toDescriptor(packageName: Option[String], name: String): DescriptorProto = {
+  def toDescriptor(fqn: String, topLevelFqns: Map[String, String]): DescriptorProto = {
     val builder = DescriptorProto.newBuilder().setName(msg.name)
 
-    val fullName = packageName.fold(name)(s => s"$s.$name")
     msg.elements.foreach {
       case ProtoIR.MessageElement.FieldElement(field)                 =>
-        field.addToDescriptor(builder, None, fullName)
+        field.addToDescriptor(builder, None, fqn, topLevelFqns)
       case ProtoIR.MessageElement.OneofElement(oneof)                 =>
         builder.addOneofDecl(OneofDescriptorProto.newBuilder().setName(oneof.name).build())
         val oneofIndex = builder.getOneofDeclCount - 1
-        oneof.fields.foreach(_.addToDescriptor(builder, Some(oneofIndex), fullName))
+        oneof.fields.foreach(_.addToDescriptor(builder, Some(oneofIndex), fqn, topLevelFqns))
       case ProtoIR.MessageElement.NestedMessageElement(nestedMessage) =>
-        builder.addNestedType(nestedMessage.toDescriptor(Some(fullName), nestedMessage.name))
+        builder.addNestedType(nestedMessage.toDescriptor(s"$fqn.${nestedMessage.name}", topLevelFqns))
       case ProtoIR.MessageElement.EnumDefElement(nestedEnum)          =>
         builder.addEnumType(nestedEnum.toDescriptor)
       case ProtoIR.MessageElement.NestedEnumElement(nestedEnum)       =>
@@ -147,7 +149,7 @@ extension (dependency: Dependency) {
         FileDescriptorProto.newBuilder().setName(s"${dependency.dependencyName}").setPackage(dependency.packageName.getOrElse(""))
       dependency.types.foreach {
         case ProtoIR.TopLevelDef.MessageDef(msg)  =>
-          sharedFileBuilder.addMessageType(msg.toDescriptor(dependency.packageName, msg.name))
+          sharedFileBuilder.addMessageType(msg.toDescriptor(dependency.packageName.fold("")(_ + ".") + msg.name, dependency.topLevelFqns))
         case ProtoIR.TopLevelDef.EnumDef(enumDef) => sharedFileBuilder.addEnumType(enumDef.toDescriptor)
         case ProtoIR.TopLevelDef.ServiceDef(_)    =>
       }

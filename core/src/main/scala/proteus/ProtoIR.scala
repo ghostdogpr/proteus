@@ -90,8 +90,8 @@ object ProtoIR {
         case _: ProtoIR.Type.PrimitiveType            => Set.empty
         case ProtoIR.Type.MapType(keyType, valueType) => keyType.collectTypeReferences ++ valueType.collectTypeReferences
         case ProtoIR.Type.ListType(valueType)         => valueType.collectTypeReferences
-        case ProtoIR.Type.RefType(fqn)                => Set(fqn.name)
-        case ProtoIR.Type.EnumRefType(fqn)            => Set(fqn.name)
+        case ProtoIR.Type.RefType(name)               => Set(name)
+        case ProtoIR.Type.EnumRefType(name)           => Set(name)
       }
   }
   object Type       {
@@ -115,8 +115,8 @@ object ProtoIR {
 
     final case class MapType(keyType: Type, valueType: Type) extends Type
     final case class ListType(valueType: Type)               extends Type
-    final case class RefType(fqn: Fqn)                       extends Type
-    final case class EnumRefType(fqn: Fqn)                   extends Type
+    final case class RefType(name: String)                   extends Type
+    final case class EnumRefType(name: String)               extends Type
   }
 
   final case class Fqn(packageName: Option[List[String]], name: String) {

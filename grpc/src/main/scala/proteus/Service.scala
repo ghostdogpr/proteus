@@ -35,8 +35,13 @@ case class Service[Rpcs] private (
 
     val dependencyTypes = usedDependencies.flatMap(_.types).map(_.name).toSet
 
-    toProtoIR.filterNot(d => dependencyTypes.contains(d.name)).foreach {
-      case ProtoIR.TopLevelDef.MessageDef(msg)     => fileBuilder.addMessageType(msg.toDescriptor(packageName, msg.name)): Unit
+    val types                             = toProtoIR.filterNot(d => dependencyTypes.contains(d.name))
+    val topLevelFqns: Map[String, String] =
+      (dependencies.flatMap(_.topLevelFqns) ++ types.map(t => (t.name, packageName.fold("")(_ + ".") + t.name))).toMap
+
+    types.foreach {
+      case ProtoIR.TopLevelDef.MessageDef(msg)     =>
+        fileBuilder.addMessageType(msg.toDescriptor(packageName.fold("")(_ + ".") + msg.name, topLevelFqns)): Unit
       case ProtoIR.TopLevelDef.EnumDef(enumDef)    => fileBuilder.addEnumType(enumDef.toDescriptor): Unit
       case ProtoIR.TopLevelDef.ServiceDef(service) => fileBuilder.addService(service.toDescriptor): Unit
     }
