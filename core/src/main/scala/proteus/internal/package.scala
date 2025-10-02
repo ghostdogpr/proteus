@@ -44,6 +44,12 @@ private[proteus] def toCamelCase(s: String): String =
     case head :: tail => head.toLowerCase + tail.map(_.capitalize).mkString
   }
 
+private[proteus] def toUpperCamelCase(s: String): String =
+  s.split("_").toList match {
+    case Nil   => ""
+    case parts => parts.map(_.capitalize).mkString
+  }
+
 private[proteus] def typeNameToUpperSnakeCase(s: String): String =
   s.replaceAll("([a-z0-9])([A-Z])", "$1_$2").replaceAll("([A-Z])([A-Z][a-z])", "$1_$2").toUpperCase
 

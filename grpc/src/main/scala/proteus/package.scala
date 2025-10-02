@@ -50,9 +50,9 @@ extension (field: ProtoIR.Field) {
         fieldBuilder.setLabel(FieldDescriptorProto.Label.LABEL_REPEATED)
         fieldBuilder.setType(FieldDescriptorProto.Type.TYPE_MESSAGE)
         builder.getName()
-        fieldBuilder.setTypeName(s".$parentFqn.${toCamelCase(field.name)}Entry")
+        fieldBuilder.setTypeName(s".$parentFqn.${toUpperCamelCase(field.name)}Entry")
         val mapEntryBuilder      =
-          DescriptorProto.newBuilder().setName(s"${toCamelCase(field.name)}Entry").setOptions(MessageOptions.newBuilder().setMapEntry(true))
+          DescriptorProto.newBuilder().setName(s"${toUpperCamelCase(field.name)}Entry").setOptions(MessageOptions.newBuilder().setMapEntry(true))
         val mapKeyFieldBuilder   = FieldDescriptorProto
           .newBuilder()
           .setName("key")
