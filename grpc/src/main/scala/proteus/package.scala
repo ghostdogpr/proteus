@@ -30,7 +30,7 @@ extension (protoType: ProtoIR.Type) {
 }
 
 extension (field: ProtoIR.Field) {
-  def addToDescriptor(builder: DescriptorProto.Builder, oneofIndex: Option[Int]): Unit = {
+  def addToDescriptor(builder: DescriptorProto.Builder, oneofIndex: Option[Int], parentName: String): Unit = {
     val fieldBuilder = FieldDescriptorProto.newBuilder().setName(field.name).setNumber(field.number)
     oneofIndex.foreach(fieldBuilder.setOneofIndex)
 
@@ -46,7 +46,8 @@ extension (field: ProtoIR.Field) {
       case mapType: ProtoIR.Type.MapType      =>
         fieldBuilder.setLabel(FieldDescriptorProto.Label.LABEL_REPEATED)
         fieldBuilder.setType(FieldDescriptorProto.Type.TYPE_MESSAGE)
-        fieldBuilder.setTypeName(s"${toCamelCase(field.name)}Entry")
+        builder.getName()
+        fieldBuilder.setTypeName(s"$parentName.${toCamelCase(field.name)}Entry")
         val mapEntryBuilder      =
           DescriptorProto.newBuilder().setName(s"${toCamelCase(field.name)}Entry").setOptions(MessageOptions.newBuilder().setMapEntry(true))
         val mapKeyFieldBuilder   = FieldDescriptorProto
@@ -87,18 +88,19 @@ extension (field: ProtoIR.Field) {
 }
 
 extension (msg: ProtoIR.Message) {
-  def toDescriptor: DescriptorProto = {
+  def toDescriptor(packageName: Option[String], name: String): DescriptorProto = {
     val builder = DescriptorProto.newBuilder().setName(msg.name)
 
+    val fullName = packageName.fold(name)(s => s"$s.$name")
     msg.elements.foreach {
       case ProtoIR.MessageElement.FieldElement(field)                 =>
-        field.addToDescriptor(builder, None)
+        field.addToDescriptor(builder, None, fullName)
       case ProtoIR.MessageElement.OneofElement(oneof)                 =>
         builder.addOneofDecl(OneofDescriptorProto.newBuilder().setName(oneof.name).build())
         val oneofIndex = builder.getOneofDeclCount - 1
-        oneof.fields.foreach(_.addToDescriptor(builder, Some(oneofIndex)))
+        oneof.fields.foreach(_.addToDescriptor(builder, Some(oneofIndex), fullName))
       case ProtoIR.MessageElement.NestedMessageElement(nestedMessage) =>
-        builder.addNestedType(nestedMessage.toDescriptor)
+        builder.addNestedType(nestedMessage.toDescriptor(Some(fullName), nestedMessage.name))
       case ProtoIR.MessageElement.EnumDefElement(nestedEnum)          =>
         builder.addEnumType(nestedEnum.toDescriptor)
       case ProtoIR.MessageElement.NestedEnumElement(nestedEnum)       =>
@@ -144,7 +146,8 @@ extension (dependency: Dependency) {
       val sharedFileBuilder =
         FileDescriptorProto.newBuilder().setName(s"${dependency.dependencyName}").setPackage(dependency.packageName.getOrElse(""))
       dependency.types.foreach {
-        case ProtoIR.TopLevelDef.MessageDef(msg)  => sharedFileBuilder.addMessageType(msg.toDescriptor)
+        case ProtoIR.TopLevelDef.MessageDef(msg)  =>
+          sharedFileBuilder.addMessageType(msg.toDescriptor(dependency.packageName, msg.name))
         case ProtoIR.TopLevelDef.EnumDef(enumDef) => sharedFileBuilder.addEnumType(enumDef.toDescriptor)
         case ProtoIR.TopLevelDef.ServiceDef(_)    =>
       }
