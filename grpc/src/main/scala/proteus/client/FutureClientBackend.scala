@@ -9,11 +9,11 @@ import io.grpc.*
 import io.grpc.stub.*
 
 class FutureClientBackend(channel: Channel) extends ClientBackendUnary[Future] {
-  def client[Request, Response](service: Service[?], rpc: Rpc.Unary[Request, Response]): Future[Request => Future[Response]] = {
+  def client[Request, Response](service: Service[?], rpc: Rpc.Unary[Request, Response], options: CallOptions): Future[Request => Future[Response]] = {
     val methodDescriptor = rpc.toMethodDescriptor(service)
     Future.successful { request =>
       val promise = Promise[Response]()
-      val call    = channel.newCall(methodDescriptor, CallOptions.DEFAULT)
+      val call    = channel.newCall(methodDescriptor, options)
 
       try {
         val listener = new StreamObserver[Response] {
@@ -32,7 +32,8 @@ class FutureClientBackend(channel: Channel) extends ClientBackendUnary[Future] {
 
   def clientWithMetadata[Request, Response](
     service: Service[?],
-    rpc: Rpc.Unary[Request, Response]
+    rpc: Rpc.Unary[Request, Response],
+    options: CallOptions
   ): Future[(Request, Metadata) => Future[(Response, Metadata)]] = {
     val methodDescriptor = rpc.toMethodDescriptor(service)
     Future.successful { (request, requestMetadata) =>
@@ -42,7 +43,7 @@ class FutureClientBackend(channel: Channel) extends ClientBackendUnary[Future] {
       val interceptor              = MetadataUtils.newCaptureMetadataInterceptor(responseHeaders, responseTrailers)
       val interceptedChannel       = ClientInterceptors.intercept(channel, interceptor)
       val metadataAttachingChannel = ClientInterceptors.intercept(interceptedChannel, MetadataUtils.newAttachHeadersInterceptor(requestMetadata))
-      val call                     = metadataAttachingChannel.newCall(methodDescriptor, CallOptions.DEFAULT)
+      val call                     = metadataAttachingChannel.newCall(methodDescriptor, options)
 
       val responseRef = new AtomicReference[Response]()
 
