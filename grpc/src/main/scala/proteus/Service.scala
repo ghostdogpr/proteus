@@ -37,7 +37,7 @@ case class Service[Rpcs] private (
 
     val types                             = toProtoIR.filterNot(d => dependencyTypes.contains(d.name))
     val topLevelFqns: Map[String, String] =
-      (dependencies.flatMap(_.topLevelFqns) ++ types.map(t => (t.name, packageName.fold("")(_ + ".") + t.name))).toMap
+      (usedDependencies.flatMap(_.topLevelFqns) ++ types.map(t => (t.name, packageName.fold("")(_ + ".") + t.name))).toMap
 
     types.foreach {
       case ProtoIR.TopLevelDef.MessageDef(msg)     =>
