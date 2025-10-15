@@ -145,7 +145,7 @@ extension (service: ProtoIR.Service) {
 extension (dependency: Dependency) {
   def fileDescriptor: Option[FileDescriptor] =
     if (dependency.types.nonEmpty) {
-      val sharedFileBuilder =
+      val sharedFileBuilder         =
         FileDescriptorProto
           .newBuilder()
           .setName(s"${dependency.path.fold("")(_ + "/")}${dependency.dependencyName}.proto")
