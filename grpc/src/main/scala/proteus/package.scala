@@ -148,14 +148,16 @@ extension (dependency: Dependency) {
       val sharedFileBuilder =
         FileDescriptorProto
           .newBuilder()
-          .setName(s"${dependency.path.fold("")(_ + "/")}${dependency.dependencyName}")
+          .setName(s"${dependency.path.fold("")(_ + "/")}${dependency.dependencyName}.proto")
           .setPackage(dependency.packageName.getOrElse(""))
+      val dependencyFileDescriptors = dependency.filteredDependencies.flatMap(_.fileDescriptor)
+      dependencyFileDescriptors.foreach(fd => sharedFileBuilder.addDependency(fd.getName))
       dependency.types.foreach {
         case ProtoIR.TopLevelDef.MessageDef(msg)  =>
           sharedFileBuilder.addMessageType(msg.toDescriptor(dependency.packageName.fold("")(_ + ".") + msg.name, dependency.topLevelFqns))
         case ProtoIR.TopLevelDef.EnumDef(enumDef) => sharedFileBuilder.addEnumType(enumDef.toDescriptor)
         case ProtoIR.TopLevelDef.ServiceDef(_)    =>
       }
-      Some(FileDescriptor.buildFrom(sharedFileBuilder.build(), dependency.filteredDependencies.flatMap(_.fileDescriptor).toArray))
+      Some(FileDescriptor.buildFrom(sharedFileBuilder.build(), dependencyFileDescriptors.toArray))
     } else None
 }
