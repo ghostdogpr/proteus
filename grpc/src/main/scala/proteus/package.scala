@@ -103,7 +103,7 @@ extension (msg: ProtoIR.Message) {
 
     msg.elements.foreach {
       case ProtoIR.MessageElement.FieldElement(field)                 =>
-        field.addToDescriptor(builder, None, fqn, augmentedFqns)
+        if (field != ProtoIR.excludedField) field.addToDescriptor(builder, None, fqn, augmentedFqns)
       case ProtoIR.MessageElement.OneofElement(oneof)                 =>
         builder.addOneofDecl(OneofDescriptorProto.newBuilder().setName(oneof.name).build())
         val oneofIndex = builder.getOneofDeclCount - 1
