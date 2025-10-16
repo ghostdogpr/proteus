@@ -506,6 +506,7 @@ object ProtobufCodec {
         case c: Message[_]          => handleMessage(c, registers, offset)
         case c: RecursiveMessage[_] => handleMessage(c.codec, registers, offset)
         case c: Transform[_, _]     => c.from(loop(c.codec, offset))
+        case c: Enum[_]             => c.valuesByIndex(input.readEnum())
         case _                      => throw new Exception(s"Invalid root codec: $codec")
       }
 
