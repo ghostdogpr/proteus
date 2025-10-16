@@ -94,18 +94,18 @@ object ProtobufCodecSpec extends ZIOSpecDefault {
       },
       test("enum as root codec encoding/decoding") {
         enum Status derives Schema { case Active, Inactive, Pending }
-        
+
         // Create a direct codec for the enum (this tests the new Enum case in loop function)
         val enumCodec = Schema[Status].derive(deriver)
-        
+
         val testCases = List(Status.Active, Status.Inactive, Status.Pending)
-        
+
         val results = testCases.map { enumValue =>
           val encoded = enumCodec.encode(enumValue)
           val decoded = enumCodec.decode(encoded)
           decoded == enumValue
         }
-        
+
         // Verify all enum values can be used as root codec
         assert(results.forall(identity))(isTrue)
       },
