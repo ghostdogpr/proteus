@@ -184,6 +184,12 @@ object JsonSpec extends ZIOSpecDefault {
         val result   = instance.asJson.noSpaces
         assertTrue(result == """{"data":[{"one":1},{"two":2}]}""" || result == """{"data":[{"two":2},{"one":1}]}""")
       },
+      test("toJson serializes Map[Int, Int]") {
+        case class MapMessage(data: Map[Int, Int]) derives Schema, ProtobufCodec
+        val instance = MapMessage(Map(1 -> 1, 2 -> 2))
+        val result   = instance.asJson.noSpaces
+        assertTrue(result == """{"data":[{"1":1},{"2":2}]}""" || result == """{"data":[{"2":2},{"1":1}]}""")
+      },
       test("toJson serializes empty Map") {
         case class MapMessage(data: Map[String, String]) derives Schema, ProtobufCodec
         val instance = MapMessage(Map.empty)

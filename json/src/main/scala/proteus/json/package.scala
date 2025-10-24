@@ -75,12 +75,10 @@ implicit def jsonWriterCodec[A](using codec: ProtobufCodec[A], registry: Registr
                     val it      = c.deconstructor.deconstruct(b.asInstanceOf[m[k, v]])
                     val builder = List.newBuilder[Json]
                     while (it.hasNext) {
-                      val v = it.next
-                      builder +=
-                        Json.obj(
-                          loop(c.deconstructor.getKey(v), c.element.fields(0).asInstanceOf[SimpleField[?]].codec, offset).asString.getOrElse("") ->
-                            loop(c.deconstructor.getValue(v), c.element.fields(1).asInstanceOf[SimpleField[?]].codec, offset)
-                        )
+                      val v     = it.next
+                      val key   = loop(c.deconstructor.getKey(v), c.element.fields(0).asInstanceOf[SimpleField[?]].codec, offset)
+                      val value = loop(c.deconstructor.getValue(v), c.element.fields(1).asInstanceOf[SimpleField[?]].codec, offset)
+                      builder += Json.obj(key.asString.getOrElse(key.noSpaces) -> value)
                     }
                     Json.arr(builder.result()*)
                   case Bytes                   => Json.fromString("<bytes>")
