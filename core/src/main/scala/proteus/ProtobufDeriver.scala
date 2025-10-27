@@ -521,7 +521,12 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
               val defaultValue = getDefaultValue(using field.codec)
               if (defaultValue == null) break(null.asInstanceOf[A])
               setToRegister(registers, RegisterOffset.Zero, field.register, defaultValue)
-            case _: OneofField[?]        =>
+            case oneOf: OneofField[?]    =>
+              oneOf.cases.headOption.foreach { field =>
+                val defaultValue = getDefaultValue(using field.codec)
+                if (defaultValue == null) break(null.asInstanceOf[A])
+                setToRegister(registers, RegisterOffset.Zero, field.register, defaultValue)
+              }
             case field: ExcludedField[?] =>
               val defaultValue = field.defaultValue
               if (defaultValue == null) break(null.asInstanceOf[A])
