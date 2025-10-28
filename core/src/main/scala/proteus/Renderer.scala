@@ -86,14 +86,21 @@ object Renderer {
       )
   }
 
-  def renderOneof(oneof: Oneof): Text =
+  def renderOneof(oneof: Oneof): Text = {
+    val commentLine = oneof.comment.map(c => line(s"// $c")).getOrElse(many())
     if (oneof.fields.nonEmpty) {
       many(
+        commentLine,
         line(s"oneof ${oneof.name} {"),
         indent(oneof.fields.map(renderField(_, isOneof = true))),
         line("}")
       )
-    } else line(s"oneof ${oneof.name} {}")
+    } else
+      many(
+        commentLine,
+        line(s"oneof ${oneof.name} {}")
+      )
+  }
 
   def renderMessageElement(element: MessageElement): Text =
     element match {

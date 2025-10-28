@@ -119,7 +119,8 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
                       register,
                       new Discriminator[A] {
                         def discriminate(a: A): Int = o.discriminator.discriminate(to(a).asInstanceOf[inner])
-                      }
+                      },
+                      o.comment
                     )
                   case ProtobufCodec.Message(_, Array(o: OneofField[?]), _, _, _, _, true, _, _)                                            =>
                     val idIterator = getReservedIndexes(field.term.modifiers).iterator
@@ -136,7 +137,8 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
                         field.copy(id = caseId, register = register)
                       },
                       register,
-                      o.discriminator
+                      o.discriminator,
+                      o.comment
                     )
                   case ProtobufCodec.Optional(codec) if flags.contains(DerivationFlag.OptionalAsOneOf)                                      =>
                     id += 1
@@ -149,7 +151,7 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
                       getFieldName(field.term.name, field.term.modifiers),
                       Array(
                         SimpleField(s"no_$name", emptyId, Empty.emptyCodec.transform(_ => None, _ => Empty()), register, null, None),
-                        SimpleField(s"${name}_value", valueId, codec.transform(Some(_), _.get), register, null, getComment(field.term.modifiers))
+                        SimpleField(s"${name}_value", valueId, codec.transform(Some(_), _.get), register, null, None)
                       ),
                       register,
                       new Discriminator[A] {
@@ -157,7 +159,8 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
                           case None    => 0
                           case Some(_) => 1
                         }
-                      }
+                      },
+                      getComment(field.term.modifiers)
                     )
                   case instance                                                                                                             =>
                     val fieldId = getReservedIndex(field.term.modifiers) match {
@@ -267,7 +270,8 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
             item
           }.toArray,
           register.asInstanceOf[Register[Any]],
-          discriminator
+          discriminator,
+          getComment(modifiers)
         )
         ProtobufCodec.Message(
           getTypeName(typeName, modifiers),

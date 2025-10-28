@@ -859,6 +859,42 @@ message FullUser {
 """
 
         assertTrue(rendered == expected)
+      },
+      test("proteus comment modifier renders oneof comments") {
+        enum ContactMethod derives Schema {
+          case Email(address: String)
+          case Phone(number: String)
+        }
+        case class ContactMessage(contact: ContactMethod) derives Schema
+
+        val codec    = Schema[ContactMessage].derive(
+          deriver
+            .modifier[ContactMethod](oneOf(OneOfFlag.Inline))
+            .modifier[ContactMethod](comment("Preferred contact method"))
+        )
+        val rendered = renderCodec(codec)
+        val expected = """syntax = "proto3";
+
+package test;
+
+message ContactMessage {
+    // Preferred contact method
+    oneof contact {
+        Email email = 1;
+        Phone phone = 2;
+    }
+}
+
+message Email {
+    string address = 1;
+}
+
+message Phone {
+    string number = 1;
+}
+"""
+
+        assertTrue(rendered == expected)
       }
     ),
     suite("Derivation Flags")(

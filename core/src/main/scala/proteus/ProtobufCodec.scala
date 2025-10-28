@@ -121,8 +121,13 @@ object ProtobufCodec {
       }
     }
 
-    final case class OneofField[A](name: String, cases: Array[SimpleField[?]], register: Register[Any], discriminator: Discriminator[A])
-      extends MessageField[A] {
+    final case class OneofField[A](
+      name: String,
+      cases: Array[SimpleField[?]],
+      register: Register[Any],
+      discriminator: Discriminator[A],
+      comment: Option[String] = None
+    ) extends MessageField[A] {
       def toProtoWriter(registers: Registers, offset: RegisterOffset, nextOffset: RegisterOffset): ProtobufWriter = {
         val res   = getFromRegister(registers, offset, register).asInstanceOf[A]
         val field = cases(discriminator.discriminate(res))
@@ -134,7 +139,7 @@ object ProtobufCodec {
           .map(field => ProtoIR.Field(toProtoType(field.codec), field.name, field.id, deprecated = false, optional = isOptional(using field.codec)))
           .toList
           .sortBy(_.number)
-        ProtoIR.MessageElement.OneofElement(ProtoIR.Oneof(name, fields))
+        ProtoIR.MessageElement.OneofElement(ProtoIR.Oneof(name, fields, comment))
       }
     }
 
