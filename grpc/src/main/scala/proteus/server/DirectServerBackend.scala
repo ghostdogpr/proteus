@@ -16,7 +16,7 @@ class DirectServerBackend[Context](interceptor: ServerContextInterceptor[[A] =>>
                 try {
                   val responseMetadata = new Metadata()
                   val response         =
-                    interceptor.unary(message, ctx => logic(message, ctx))(using rpc.requestCodec, rpc.responseCodec)(
+                    interceptor.unary(ctx => logic(message, ctx))(using rpc.requestCodec, rpc.responseCodec)(message)(
                       RequestResponseMetadata(headers, responseMetadata)
                     )
                   call.sendHeaders(new Metadata())

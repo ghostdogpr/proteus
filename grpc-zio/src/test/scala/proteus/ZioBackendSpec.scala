@@ -228,19 +228,17 @@ object ZioBackendSpec extends ZIOSpecDefault {
           RequestContext
         ] {
           def unary[Req: ProtobufCodec, Resp: ProtobufCodec](
-            request: Req,
             io: RequestContext => IO[String, Resp]
-          ): (RequestContext => IO[StatusException, Resp]) =
-            ctx => io(ctx).mapError(error => Status.INTERNAL.withDescription(error).asException())
+          ): (Req => RequestContext => IO[StatusException, Resp]) =
+            _ => ctx => io(ctx).mapError(error => Status.INTERNAL.withDescription(error).asException())
           def clientStreaming[Req: ProtobufCodec, Resp: ProtobufCodec](
             io: ZStream[Any, String, Req] => RequestContext => IO[String, Resp]
           ): (ZStream[Any, StatusException, Req] => RequestContext => IO[StatusException, Resp]) =
             stream => ctx => io(stream.mapError(_.getMessage))(ctx).mapError(error => Status.INTERNAL.withDescription(error).asException())
           def serverStreaming[Req: ProtobufCodec, Resp: ProtobufCodec](
-            request: Req,
             io: RequestContext => ZStream[Any, String, Resp]
-          ): (RequestContext => ZStream[Any, StatusException, Resp]) =
-            ctx => io(ctx).mapError(error => Status.INTERNAL.withDescription(error).asException())
+          ): (Req => RequestContext => ZStream[Any, StatusException, Resp]) =
+            _ => ctx => io(ctx).mapError(error => Status.INTERNAL.withDescription(error).asException())
           def bidiStreaming[Req: ProtobufCodec, Resp: ProtobufCodec](
             io: ZStream[Any, String, Req] => RequestContext => ZStream[Any, String, Resp]
           ): (ZStream[Any, StatusException, Req] => RequestContext => ZStream[Any, StatusException, Resp]) =

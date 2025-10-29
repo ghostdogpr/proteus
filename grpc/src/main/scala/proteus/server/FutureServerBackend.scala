@@ -20,7 +20,7 @@ class FutureServerBackend[Context](interceptor: ServerContextInterceptor[Future,
                 import scala.concurrent.ExecutionContext.Implicits.global
                 val responseMetadata = new Metadata()
                 val futureResponse   =
-                  interceptor.unary(message, ctx => logic(message, ctx))(using rpc.requestCodec, rpc.responseCodec)(
+                  interceptor.unary(ctx => logic(message, ctx))(using rpc.requestCodec, rpc.responseCodec)(message)(
                     RequestResponseMetadata(headers, responseMetadata)
                   )
                 futureResponse.onComplete { result =>

@@ -23,7 +23,7 @@ class Fs2ServerBackend[F[_]: Async, G[_], Context](
         Fs2ServerCallHandler[F](dispatcher, serverOptions).unaryToUnaryCallTrailers { (req, context) =>
           val responseMetadata = new Metadata()
           interceptor
-            .unary(req, ctx => logic(req, ctx))(using rpc.requestCodec, rpc.responseCodec)(RequestResponseMetadata(context, responseMetadata))
+            .unary(ctx => logic(req, ctx))(using rpc.requestCodec, rpc.responseCodec)(req)(RequestResponseMetadata(context, responseMetadata))
             .map((_, responseMetadata))
         }
       case ServerRpc.ClientStreaming(rpc, logic) =>
@@ -37,7 +37,7 @@ class Fs2ServerBackend[F[_]: Async, G[_], Context](
         }
       case ServerRpc.ServerStreaming(rpc, logic) =>
         Fs2ServerCallHandler[F](dispatcher, serverOptions).unaryToStreamingCall { (req, context) =>
-          interceptor.serverStreaming(req, ctx => logic(req, ctx))(using rpc.requestCodec, rpc.responseCodec)(
+          interceptor.serverStreaming(ctx => logic(req, ctx))(using rpc.requestCodec, rpc.responseCodec)(req)(
             RequestResponseMetadata(context, new Metadata())
           )
         }

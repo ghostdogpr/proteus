@@ -20,7 +20,7 @@ class ZioServerBackend[R, E, Context](
       case ServerRpc.Unary(rpc, logic)           =>
         ZServerCallHandler.unaryCallHandler(
           runtime,
-          (req, context) => interceptor.unary(req, ctx => logic(req, ctx))(using rpc.requestCodec, rpc.responseCodec)(context)
+          (req, context) => interceptor.unary(ctx => logic(req, ctx))(using rpc.requestCodec, rpc.responseCodec)(req)(context)
         )
       case ServerRpc.ClientStreaming(rpc, logic) =>
         ZServerCallHandler.clientStreamingCallHandler(
@@ -31,7 +31,7 @@ class ZioServerBackend[R, E, Context](
       case ServerRpc.ServerStreaming(rpc, logic) =>
         ZServerCallHandler.serverStreamingCallHandler(
           runtime,
-          (req, context) => interceptor.serverStreaming(req, ctx => logic(req, ctx))(using rpc.requestCodec, rpc.responseCodec)(context)
+          (req, context) => interceptor.serverStreaming(ctx => logic(req, ctx))(using rpc.requestCodec, rpc.responseCodec)(req)(context)
         )
       case ServerRpc.BidiStreaming(rpc, logic)   =>
         ZServerCallHandler.bidiCallHandler(
