@@ -252,7 +252,7 @@ object ZioBackendSpec extends ZIOSpecDefault {
         .rpc(complexRpc, _ => ZIO.fail("boom"))
         .build(testService)
 
-      val port          = 7011
+      val port          = 7016
       val server        = NettyServerBuilder.forPort(port).addService(serverService).build().start()
       val channel       = NettyChannelBuilder.forAddress("localhost", port).usePlaintext().build()
       val zChannel      = ZChannel(channel, Seq.empty)
