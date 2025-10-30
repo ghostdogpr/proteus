@@ -25,9 +25,12 @@ case class Service[Rpcs] private (
 
   private lazy val typeReferences = toProtoIR.flatMap(_.collectTypeReferences).toSet
 
-  private lazy val usedDependencies = allDependencies.filter(_.hasAnyOf(typeReferences))
-  private lazy val dependencyTypes  = usedDependencies.flatMap(_.types).map(_.name).toSet
-  private lazy val filteredTypes    = toProtoIR.filterNot(d => dependencyTypes.contains(d.name))
+  private lazy val filteredTypes          = {
+    val dependencyTypes = allDependencies.filter(_.hasAnyOf(typeReferences)).flatMap(_.types).map(_.name).toSet
+    toProtoIR.filterNot(d => dependencyTypes.contains(d.name))
+  }
+  private lazy val filteredTypeReferences = filteredTypes.flatMap(_.collectTypeReferences).toSet
+  private lazy val usedDependencies       = allDependencies.filter(_.hasAnyOf(filteredTypeReferences))
 
   lazy val fileDescriptor: FileDescriptor = {
     val fileBuilder               = FileDescriptorProto.newBuilder().setName(s"${name.toLowerCase}.proto").setPackage(packageName.getOrElse(""))
