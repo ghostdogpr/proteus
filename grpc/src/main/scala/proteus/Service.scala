@@ -111,13 +111,14 @@ extension (dep: Dependency.type) {
     fromServices(dependencyName, Some(packageName), Some(path), services*)
 
   private def fromServices(dependencyName: String, packageName: Option[String], path: Option[String], services: Service[?]*): Dependency = {
-    val allTypes     = ListSet.from(services.flatMap(_.toProtoIR))
-    val dependencies = services.toList.flatMap(_.dependencies).distinct
+    val allTypes      = ListSet.from(services.flatMap(_.toProtoIR))
+    val dependencies  = services.toList.flatMap(_.dependencies).distinct
+    val filteredTypes = allTypes.filterNot(t => dependencies.exists(_.hasAnyOf(Set(t.name))))
 
     val requestResponseTypeNames =
       services.flatMap(_.rpcs.flatMap(rpc => List(rpc.toProtoIR.request.fqn.name, rpc.toProtoIR.response.fqn.name))).toSet
 
-    val commonTypes = allTypes.filterNot {
+    val commonTypes = filteredTypes.filterNot {
       case ProtoIR.TopLevelDef.MessageDef(msg)  => requestResponseTypeNames.contains(msg.name)
       case ProtoIR.TopLevelDef.EnumDef(enumDef) => requestResponseTypeNames.contains(enumDef.name)
       case ProtoIR.TopLevelDef.ServiceDef(_)    => true
