@@ -895,6 +895,79 @@ message Phone {
 """
 
         assertTrue(rendered == expected)
+      },
+      test("proteus comment modifier renders multiline type-level comments") {
+        case class UserData(id: Int, name: String) derives Schema
+
+        val codec    = Schema[UserData].derive(
+          deriver.modifier[UserData](comment("User data structure\nContains basic user information\nUsed for authentication"))
+        )
+        val rendered = renderCodec(codec)
+        val expected = """syntax = "proto3";
+
+package test;
+
+// User data structure
+// Contains basic user information
+// Used for authentication
+message UserData {
+    int32 id = 1;
+    string name = 2;
+}
+"""
+
+        assertTrue(rendered == expected)
+      },
+      test("proteus comment modifier renders multiline field comments") {
+        case class DataMessage(id: Int, description: String) derives Schema
+
+        val codec    = Schema[DataMessage].derive(
+          deriver
+            .modifier[DataMessage]("description", comment("Long description field\nCan contain multiple lines\nMay include detailed information"))
+        )
+        val rendered = renderCodec(codec)
+        val expected = """syntax = "proto3";
+
+package test;
+
+message DataMessage {
+    int32 id = 1;
+    // Long description field
+    // Can contain multiple lines
+    // May include detailed information
+    string description = 2;
+}
+"""
+
+        assertTrue(rendered == expected)
+      },
+      test("proteus comment modifier renders multiline enum comments") {
+        enum Priority derives Schema { case Low, Medium, High }
+        case class Task(priority: Priority) derives Schema
+
+        val codec    = Schema[Task].derive(
+          deriver.modifier[Priority](comment("Task priority levels\nUsed to determine urgency\nAffects processing order"))
+        )
+        val rendered = renderCodec(codec)
+        val expected = """syntax = "proto3";
+
+package test;
+
+message Task {
+    Priority priority = 1;
+}
+
+// Task priority levels
+// Used to determine urgency
+// Affects processing order
+enum Priority {
+    LOW = 0;
+    MEDIUM = 1;
+    HIGH = 2;
+}
+"""
+
+        assertTrue(rendered == expected)
       }
     ),
     suite("Derivation Flags")(

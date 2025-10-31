@@ -4,6 +4,15 @@ import proteus.ProtoIR.*
 import proteus.Text.*
 
 object Renderer {
+  private def renderComment(comment: String): Text = {
+    val lines = comment.split("\n")
+    if (lines.length == 1) {
+      line(s"// $comment")
+    } else {
+      many(lines.map(l => line(s"// $l")).toList)
+    }
+  }
+
   def render(compilationUnit: CompilationUnit): String = {
     val text = many(
       statement(s"""syntax = "proto3""""),
@@ -52,7 +61,7 @@ object Renderer {
 
   def renderEnum(enumeration: Enum): Text = {
     val hasContent  = enumeration.reserved.nonEmpty || enumeration.values.nonEmpty
-    val commentLine = enumeration.comment.map(c => line(s"// $c")).getOrElse(many())
+    val commentLine = enumeration.comment.map(renderComment).getOrElse(many())
     if (hasContent) {
       many(
         commentLine,
@@ -70,7 +79,7 @@ object Renderer {
 
   def renderMessage(message: Message): Text = {
     val hasContent  = message.reserved.nonEmpty || message.elements.nonEmpty
-    val commentLine = message.comment.map(c => line(s"// $c")).getOrElse(many())
+    val commentLine = message.comment.map(renderComment).getOrElse(many())
     if (hasContent) {
       many(
         commentLine,
@@ -87,7 +96,7 @@ object Renderer {
   }
 
   def renderOneof(oneof: Oneof): Text = {
-    val commentLine = oneof.comment.map(c => line(s"// $c")).getOrElse(many())
+    val commentLine = oneof.comment.map(renderComment).getOrElse(many())
     if (oneof.fields.nonEmpty) {
       many(
         commentLine,
@@ -143,12 +152,25 @@ object Renderer {
         case _: Type.ListType | _: Type.MapType                            =>
           ""
       }
-      val comment    = field.comment.map(c => s" // $c").getOrElse("")
-      line(s"$optional$ty ${field.name} = ${field.number}$deprecated;$comment")
+
+      field.comment match {
+        case Some(c) if c.contains("\n") =>
+          // Multiline comment - render on previous line(s)
+          many(
+            renderComment(c),
+            line(s"$optional$ty ${field.name} = ${field.number}$deprecated;")
+          )
+        case Some(c)                     =>
+          // Single-line comment - render inline
+          line(s"$optional$ty ${field.name} = ${field.number}$deprecated; // $c")
+        case None                        =>
+          // No comment
+          line(s"$optional$ty ${field.name} = ${field.number}$deprecated;")
+      }
     }
 
   def renderService(service: Service): Text = {
-    val commentLine = service.comment.map(c => line(s"// $c")).getOrElse(many())
+    val commentLine = service.comment.map(renderComment).getOrElse(many())
     val hasContent  = service.rpcs.nonEmpty
     if (hasContent) {
       many(
@@ -166,7 +188,7 @@ object Renderer {
   }
 
   def renderRpc(rpc: Rpc): Text = {
-    val commentLine  = rpc.comment.map(c => line(s"// $c")).getOrElse(many())
+    val commentLine  = rpc.comment.map(renderComment).getOrElse(many())
     val requestType  = if (rpc.streamingRequest) s"stream ${rpc.request.fqn.render}" else rpc.request.fqn.render
     val responseType = if (rpc.streamingResponse) s"stream ${rpc.response.fqn.render}" else rpc.response.fqn.render
     many(
