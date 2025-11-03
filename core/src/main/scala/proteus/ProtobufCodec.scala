@@ -136,7 +136,16 @@ object ProtobufCodec {
 
       def toProtoIR: ProtoIR.MessageElement.OneofElement = {
         val fields = cases
-          .map(field => ProtoIR.Field(toProtoType(field.codec), field.name, field.id, deprecated = false, optional = isOptional(using field.codec)))
+          .map(field =>
+            ProtoIR.Field(
+              toProtoType(field.codec),
+              field.name,
+              field.id,
+              deprecated = false,
+              optional = isOptional(using field.codec),
+              comment = field.comment
+            )
+          )
           .toList
           .sortBy(_.number)
         ProtoIR.MessageElement.OneofElement(ProtoIR.Oneof(name, fields, comment))

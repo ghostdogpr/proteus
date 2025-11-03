@@ -56,9 +56,9 @@ object ProtoIR {
 
   final case class Oneof(name: String, fields: List[Field], comment: Option[String] = None)
 
-  final case class Field(ty: Type, name: String, number: Int, deprecated: Boolean = false, optional: Boolean = false, comment: Option[String] = None)
+  final case class Field(ty: Type, name: String, number: Int, deprecated: Boolean, optional: Boolean, comment: Option[String])
 
-  val excludedField: Field = Field(Type.Bool, "", 0, deprecated = false, optional = false)
+  val excludedField: Field = Field(Type.Bool, "", 0, deprecated = false, optional = false, None)
 
   sealed trait Reserved
   object Reserved {
