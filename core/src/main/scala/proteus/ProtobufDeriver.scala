@@ -87,8 +87,8 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
         Lazy
           .collectAll(fields.map(field => D.instance(field.value.metadata).map(TermInstance(field, _))).toVector)
           .map { fieldsWithInstances =>
-            val reservedIndexes    = getReservedIndexes(modifiers)
-            val allReservedIndexes = reservedIndexes ++ getReservedIndexes(fieldsWithInstances.flatMap(_.term.modifiers))
+            val reservedIndexes    = getReservedIndexes(modifiers).toSet
+            val allReservedIndexes = reservedIndexes ++ getReservedIndexes(fieldsWithInstances.flatMap(_.term.modifiers)).toSet
             val nested             = modifiers.collectFirst { case Modifier.config(`nestedModifier`, _) => true }.getOrElse(false)
             val builder            = Array.newBuilder[ProtobufCodec.MessageField[?]]
             var id                 = 0
@@ -220,8 +220,8 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
         .map(ProtobufCodec.Optional(_).asInstanceOf[ProtobufCodec[A]])
     else if (isEnum(filteredCases, modifiers)) {
       val nested             = modifiers.collectFirst { case Modifier.config(`nestedModifier`, _) => true }.getOrElse(false)
-      val reservedIndexes    = getReservedIndexes(modifiers).toList
-      val allReservedIndexes = reservedIndexes ++ filteredCases.flatMap(c => getReservedIndexes(c.modifiers).toList)
+      val reservedIndexes    = getReservedIndexes(modifiers).toSet
+      val allReservedIndexes = reservedIndexes ++ filteredCases.flatMap(c => getReservedIndexes(c.modifiers).toSet)
       val builder            = List.newBuilder[ProtobufCodec.EnumValue[A]]
       var index              = 0
       filteredCases.foreach { c =>
@@ -239,7 +239,7 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
         val enumName   = getEnumMemberName(c.name, c.modifiers, prefix, suffix)
         builder += ProtobufCodec.EnumValue(enumName, fieldIndex, a, getComment(c.modifiers))
       }
-      Lazy(ProtobufCodec.Enum(getTypeName(typeName, modifiers), builder.result(), reservedIndexes, nested = nested, getComment(modifiers)))
+      Lazy(ProtobufCodec.Enum(getTypeName(typeName, modifiers), builder.result(), reservedIndexes.toList, nested = nested, getComment(modifiers)))
     } else {
       val nested        = modifiers.collectFirst { case Modifier.config(`nestedModifier`, _) => true }.getOrElse(false)
       val inlineOneOf   = modifiers.collectFirst { case Modifier.config(`oneOfModifier`, value) => value.contains("inline") }.getOrElse(false)
@@ -248,8 +248,8 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
         .getOrElse(flags.contains(DerivationFlag.NestedOneOf))
       val discriminator = binding.asInstanceOf[Binding.Variant[A]].discriminator
       Lazy.collectAll(filteredCases.map(c => D.instance(c.value.metadata).map(TermInstance(c, _))).toVector).map { casesWithInstances =>
-        val reservedIndexes    = getReservedIndexes(modifiers)
-        val allReservedIndexes = reservedIndexes ++ getReservedIndexes(casesWithInstances.flatMap(_.term.modifiers))
+        val reservedIndexes    = getReservedIndexes(modifiers).toSet
+        val allReservedIndexes = reservedIndexes ++ getReservedIndexes(casesWithInstances.flatMap(_.term.modifiers)).toSet
         val builder            = Array.newBuilder[ProtobufCodec.MessageField[?]]
         var id                 = 1
         val register           = Register.Object(0)
@@ -475,10 +475,10 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
         s"$prefix${toUpperSnakeCase(memberName)}$suffix"
       }
 
-  private def getReservedIndexes(modifiers: Seq[Modifier]): Set[Int] =
+  private def getReservedIndexes(modifiers: Seq[Modifier]): List[Int] =
     modifiers
-      .collectFirst { case Modifier.config(`reservedModifier`, value) => value.split(",").map(_.trim.toInt).toSet }
-      .getOrElse(Set.empty)
+      .collectFirst { case Modifier.config(`reservedModifier`, value) => value.split(",").map(_.trim.toInt).toList }
+      .getOrElse(Nil)
 
   private def getReservedIndex(modifiers: Seq[Modifier]): Option[Int] =
     modifiers.collectFirst { case Modifier.config(`reservedModifier`, value) => value.toIntOption }.flatten

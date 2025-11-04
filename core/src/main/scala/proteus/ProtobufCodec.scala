@@ -201,7 +201,7 @@ object ProtobufCodec {
       ProtoIR.Enum(
         name,
         values.sortBy(_.index).map(v => ProtoIR.EnumValue(v.name, v.index, v.comment)).toList,
-        reserved = reserved.toList.sorted.map(ProtoIR.Reserved.Number(_)),
+        reserved = reserved.sorted.map(ProtoIR.Reserved.Number(_)),
         comment = comment
       )
   }
