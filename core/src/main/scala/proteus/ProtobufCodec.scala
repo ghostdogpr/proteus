@@ -233,12 +233,16 @@ object ProtobufCodec {
       val nextOffset = RegisterOffset.add(offset, usedRegisters)
       val builder    = List.newBuilder[ProtobufWriter]
       var i          = 0
+      var size       = 0
       while (i < fields.length) {
         val res = fields(i).toProtoWriter(registers, offset, nextOffset)
-        if (res ne null) builder += res
+        if (res ne null) {
+          builder += res
+          size += ProtobufWriter.fullSize(res)
+        }
         i += 1
       }
-      internal.ProtobufWriter.Message(id, builder.result())
+      internal.ProtobufWriter.Message(id, builder.result(), size)
     }
 
     def toProtoIR: ProtoIR.Message = {
@@ -304,11 +308,15 @@ object ProtobufCodec {
       else {
         val builder         = List.newBuilder[ProtobufWriter]
         val makeProtoWriter = elementProtoWriter(if (packed) -1 else id, registers, offset)
+        var size            = 0
         while (it.hasNext) {
           val res = makeProtoWriter(it.next)
-          if (res ne null) builder += res
+          if (res ne null) {
+            builder += res
+            size += ProtobufWriter.fullSize(res)
+          }
         }
-        internal.ProtobufWriter.Repeated(builder.result(), id, packed)
+        internal.ProtobufWriter.Repeated(builder.result(), id, packed, size)
       }
     }
   }
@@ -323,12 +331,16 @@ object ProtobufCodec {
       if (it.isEmpty && !alwaysEncode) null
       else {
         val builder = List.newBuilder[ProtobufWriter]
+        var size    = 0
         while (it.hasNext) {
           val kv  = it.next
           val res = element.toProtoWriter((deconstructor.getKey(kv), deconstructor.getValue(kv)), id, registers, offset)
-          if (res ne null) builder += res
+          if (res ne null) {
+            builder += res
+            size += ProtobufWriter.fullSize(res)
+          }
         }
-        internal.ProtobufWriter.Repeated(builder.result(), id, packed = false)
+        internal.ProtobufWriter.Repeated(builder.result(), id, packed = false, size)
       }
     }
   }
