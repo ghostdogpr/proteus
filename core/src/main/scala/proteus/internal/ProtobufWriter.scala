@@ -31,18 +31,8 @@ private[proteus] object ProtobufWriter {
     def write(using output: CodedOutputStream): Unit = if (id == -1) output.writeStringNoTag(a) else output.writeString(id, a)
   }
 
-  final case class Message(id: Int, fields: List[ProtobufWriter]) extends ProtobufWriter {
-    val innerSize: Int                               = {
-      var size      = 0
-      var remaining = fields
-      while (remaining ne Nil) {
-        size += ProtobufWriter.fullSize(remaining.head)
-        remaining = remaining.tail
-      }
-      size
-    }
-    val fullSize: Int                                =
-      CodedOutputStream.computeUInt32Size(id, innerSize) + innerSize
+  final case class Message(id: Int, fields: List[ProtobufWriter], innerSize: Int) extends ProtobufWriter {
+    val fullSize: Int                                = CodedOutputStream.computeUInt32Size(id, innerSize) + innerSize
     def write(using output: CodedOutputStream): Unit = {
       if (id != -1) {
         output.writeTag(id, 2)
@@ -56,16 +46,7 @@ private[proteus] object ProtobufWriter {
     }
   }
 
-  final case class Repeated(elements: List[ProtobufWriter], id: Int, packed: Boolean) extends ProtobufWriter {
-    val innerSize: Int                               = {
-      var size      = 0
-      var remaining = elements
-      while (remaining ne Nil) {
-        size += ProtobufWriter.fullSize(remaining.head)
-        remaining = remaining.tail
-      }
-      size
-    }
+  final case class Repeated(elements: List[ProtobufWriter], id: Int, packed: Boolean, innerSize: Int) extends ProtobufWriter {
     val fullSize: Int                                =
       if (packed && (elements ne Nil)) CodedOutputStream.computeUInt32Size(id, innerSize) + innerSize
       else innerSize

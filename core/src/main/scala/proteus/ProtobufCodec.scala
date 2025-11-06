@@ -13,7 +13,6 @@ import zio.blocks.schema.binding.RegisterOffset.RegisterOffset
 
 import proteus.ProtobufCodec.MessageField.*
 import proteus.internal.*
-import proteus.internal.FieldMap.FieldMapEntry
 
 sealed trait ProtobufCodec[A] {
   type Focus = A
@@ -188,7 +187,7 @@ object ProtobufCodec {
 
   final case class Enum[A](name: String, values: List[EnumValue[A]], reserved: List[Int], nested: Boolean, comment: Option[String] = None)
     extends ProtobufCodec[A] {
-    val valuesByIndex: HashMap[Int, A]   = HashMap.from(values.map(v => (v.index, v.value)))
+    val valuesByIndex: IntDenseMap[A]    = IntDenseMap.from(values.map(v => (v.index, v.value)))
     val indexesByValue: HashMap[A, Int]  = HashMap.from(values.map(v => (v.value, v.index)))
     val namesByValue: HashMap[A, String] = HashMap.from(values.map(v => (v.value, v.name)))
 
@@ -217,29 +216,33 @@ object ProtobufCodec {
     nested: Boolean,
     comment: Option[String] = None
   ) extends ProtobufCodec[A] {
-    val simpleFields: List[SimpleField[?]] = fields.toList.flatMap {
+    val simpleFields: List[SimpleField[?]]   = fields.toList.flatMap {
       case f: SimpleField[?]   => List(f)
       case f: OneofField[?]    => f.cases.toList
       case f: ExcludedField[?] => Nil
     }
-    val fieldMap: FieldMap                 = FieldMap(HashMap.from(fields.zipWithIndex.flatMap {
+    val fieldMap: IntDenseMap[FieldMapEntry] = IntDenseMap.from(fields.zipWithIndex.flatMap {
       case (f: SimpleField[?], idx)   => List(f.id -> FieldMapEntry(f, idx))
       case (f: OneofField[?], idx)    => f.cases.map(c => c.id -> FieldMapEntry(c, idx)).toList
       case (f: ExcludedField[?], idx) => Nil
-    }))
-    val mayUseBuilder: Boolean             = simpleFields.exists(_.mayUseBuilder)
+    })
+    val mayUseBuilder: Boolean               = simpleFields.exists(_.mayUseBuilder)
 
     def toProtoWriter(a: A, id: Int, registers: Registers, offset: RegisterOffset): ProtobufWriter = {
       deconstructor.deconstruct(registers, offset, a)
       val nextOffset = RegisterOffset.add(offset, usedRegisters)
       val builder    = List.newBuilder[ProtobufWriter]
       var i          = 0
+      var size       = 0
       while (i < fields.length) {
         val res = fields(i).toProtoWriter(registers, offset, nextOffset)
-        if (res ne null) builder += res
+        if (res ne null) {
+          builder += res
+          size += ProtobufWriter.fullSize(res)
+        }
         i += 1
       }
-      internal.ProtobufWriter.Message(id, builder.result())
+      internal.ProtobufWriter.Message(id, builder.result(), size)
     }
 
     def toProtoIR: ProtoIR.Message = {
@@ -305,11 +308,15 @@ object ProtobufCodec {
       else {
         val builder         = List.newBuilder[ProtobufWriter]
         val makeProtoWriter = elementProtoWriter(if (packed) -1 else id, registers, offset)
+        var size            = 0
         while (it.hasNext) {
           val res = makeProtoWriter(it.next)
-          if (res ne null) builder += res
+          if (res ne null) {
+            builder += res
+            size += ProtobufWriter.fullSize(res)
+          }
         }
-        internal.ProtobufWriter.Repeated(builder.result(), id, packed)
+        internal.ProtobufWriter.Repeated(builder.result(), id, packed, size)
       }
     }
   }
@@ -324,12 +331,16 @@ object ProtobufCodec {
       if (it.isEmpty && !alwaysEncode) null
       else {
         val builder = List.newBuilder[ProtobufWriter]
+        var size    = 0
         while (it.hasNext) {
           val kv  = it.next
           val res = element.toProtoWriter((deconstructor.getKey(kv), deconstructor.getValue(kv)), id, registers, offset)
-          if (res ne null) builder += res
+          if (res ne null) {
+            builder += res
+            size += ProtobufWriter.fullSize(res)
+          }
         }
-        internal.ProtobufWriter.Repeated(builder.result(), id, packed = false)
+        internal.ProtobufWriter.Repeated(builder.result(), id, packed = false, size)
       }
     }
   }
@@ -452,7 +463,7 @@ object ProtobufCodec {
           if (res == null) null.asInstanceOf[A] else c.from(res)
         case c: Optional[_]          => Some(loop(c.codec, field, tag))
         case c: Repeated[c, e]       =>
-          if (c.packed && (tag & 0x7) == 2) handlePackedRepeated(c, nextOffset)
+          if (c.packed && (tag & 0x7) == 2) handlePackedRepeated(c)
           else handleRepeated(c, field, tag)
         case c: RepeatedMap[m, k, v] => handleRepeatedMap(c, field)
         case Bytes                   => input.readByteArray()
@@ -465,7 +476,7 @@ object ProtobufCodec {
       if (tag == 0) done = true
       else {
         val fieldId = tag >>> 3
-        val field   = m.fieldMap.get(fieldId)
+        val field   = m.fieldMap(fieldId)
         if (field ne null) {
           val value = loop(field.field.codec, field, tag)
           visited(field.index) = true
@@ -488,8 +499,8 @@ object ProtobufCodec {
       case _                        => throw new Exception(s"Unsupported primitive type: $p")
     }
 
-  private def handlePackedRepeated[C[_], E](r: Repeated[C, E], offset: RegisterOffset)(using input: CodedInputStream): C[E] = {
-    def loop[A](codec: ProtobufCodec[A], offset: RegisterOffset): () => A =
+  private def handlePackedRepeated[C[_], E](r: Repeated[C, E])(using input: CodedInputStream): C[E] = {
+    def loop[A](codec: ProtobufCodec[A]): () => A =
       codec match {
         case c: Primitive[_]    =>
           c.primitiveType match {
@@ -501,13 +512,13 @@ object ProtobufCodec {
             case _                        => throw new Exception(s"Unsupported packed primitive type: $c")
           }
         case c: Enum[_]         => () => c.valuesByIndex(input.readEnum())
-        case c: Transform[_, _] => () => c.from(loop(c.codec, offset)())
+        case c: Transform[_, _] => () => c.from(loop(c.codec)())
         case _                  => throw new Exception(s"Invalid packed type: $codec")
       }
 
     val builder = r.constructor.newObjectBuilder[E]()
     withLimit {
-      val getElement = loop(r.element, offset)
+      val getElement = loop(r.element)
       while (input.getBytesUntilLimit > 0)
         r.constructor.addObject(builder, getElement())
     }
