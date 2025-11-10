@@ -71,12 +71,12 @@ private[proteus] object ProtobufWriter {
   def write(writer: ProtobufWriter)(using output: CodedOutputStream): Unit =
     writer match {
       case f: ProtobufWriter.Message         => f.write
+      case f: ProtobufWriter.Repeated        => f.write
       case f: ProtobufWriter.IntPrimitive    => f.write
       case f: ProtobufWriter.LongPrimitive   => f.write
       case f: ProtobufWriter.StringPrimitive => f.write
       case f: ProtobufWriter.BoolPrimitive   => f.write
       case f: ProtobufWriter.DoublePrimitive => f.write
-      case f: ProtobufWriter.Repeated        => f.write
       case f: ProtobufWriter.FloatPrimitive  => f.write
       case f: ProtobufWriter.Bytes           => f.write
     }
@@ -84,12 +84,12 @@ private[proteus] object ProtobufWriter {
   def innerSize(writer: ProtobufWriter): Int =
     writer match {
       case f: ProtobufWriter.Message         => f.innerSize
+      case f: ProtobufWriter.Repeated        => f.innerSize
       case f: ProtobufWriter.IntPrimitive    => f.innerSize
       case f: ProtobufWriter.LongPrimitive   => f.innerSize
       case f: ProtobufWriter.StringPrimitive => f.innerSize
       case f: ProtobufWriter.BoolPrimitive   => f.innerSize
       case f: ProtobufWriter.DoublePrimitive => f.innerSize
-      case f: ProtobufWriter.Repeated        => f.innerSize
       case f: ProtobufWriter.FloatPrimitive  => f.innerSize
       case f: ProtobufWriter.Bytes           => f.innerSize
     }
@@ -97,12 +97,12 @@ private[proteus] object ProtobufWriter {
   def fullSize(writer: ProtobufWriter): Int =
     writer match {
       case f: ProtobufWriter.Message         => f.fullSize
+      case f: ProtobufWriter.Repeated        => f.fullSize
       case f: ProtobufWriter.IntPrimitive    => f.innerSize
       case f: ProtobufWriter.LongPrimitive   => f.innerSize
       case f: ProtobufWriter.StringPrimitive => f.innerSize
       case f: ProtobufWriter.BoolPrimitive   => f.innerSize
       case f: ProtobufWriter.DoublePrimitive => f.innerSize
-      case f: ProtobufWriter.Repeated        => f.fullSize
       case f: ProtobufWriter.FloatPrimitive  => f.innerSize
       case f: ProtobufWriter.Bytes           => f.innerSize
     }

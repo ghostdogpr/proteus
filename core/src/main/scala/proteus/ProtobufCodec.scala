@@ -191,7 +191,7 @@ object ProtobufCodec {
     val indexesByValue: HashMap[A, Int]  = HashMap.from(values.map(v => (v.value, v.index)))
     val namesByValue: HashMap[A, String] = HashMap.from(values.map(v => (v.value, v.name)))
 
-    def toProtoWriter(a: A, id: Int, alwaysEncode: Boolean): ProtobufWriter = {
+    def toProtoWriter(a: A, id: Int, alwaysEncode: Boolean): ProtobufWriter.IntPrimitive = {
       val index = indexesByValue(a)
       if (index == 0 && !alwaysEncode) null else internal.ProtobufWriter.IntPrimitive(index, id)
     }
@@ -228,7 +228,7 @@ object ProtobufCodec {
     })
     val mayUseBuilder: Boolean               = simpleFields.exists(_.mayUseBuilder)
 
-    def toProtoWriter(a: A, id: Int, registers: Registers, offset: RegisterOffset): ProtobufWriter = {
+    def toProtoWriter(a: A, id: Int, registers: Registers, offset: RegisterOffset): ProtobufWriter.Message = {
       deconstructor.deconstruct(registers, offset, a)
       val nextOffset = RegisterOffset.add(offset, usedRegisters)
       val builder    = List.newBuilder[ProtobufWriter]
@@ -289,7 +289,10 @@ object ProtobufCodec {
         case c: Primitive[_]        => (id, _, _) => c.toProtoWriter(_, id, alwaysEncode = true)
         case c: Message[_]          => (id, registers, offset) => c.toProtoWriter(_, id, registers, offset)
         case c: Enum[_]             => (id, _, _) => c.toProtoWriter(_, id, alwaysEncode = true)
-        case c: Transform[_, _]     => (id, registers, offset) => a => toElementProtoWriter(c.codec)(id, registers, offset)(c.to(a))
+        case c: Transform[_, _]     =>
+          (id, registers, offset) =>
+            val makeWriter = toElementProtoWriter(c.codec)(id, registers, offset)
+            a => makeWriter(c.to(a))
         case c: Optional[_]         =>
           (id, registers, offset) => {
             case None        => null
@@ -302,7 +305,7 @@ object ProtobufCodec {
     val elementProtoWriter: (Int, Registers, RegisterOffset) => E => ProtobufWriter =
       toElementProtoWriter(element)
 
-    def toProtoWriter(a: C[E], id: Int, registers: Registers, offset: RegisterOffset, alwaysEncode: Boolean): ProtobufWriter = {
+    def toProtoWriter(a: C[E], id: Int, registers: Registers, offset: RegisterOffset, alwaysEncode: Boolean): ProtobufWriter.Repeated = {
       val it = deconstructor.deconstruct(a)
       if (it.isEmpty && !alwaysEncode) null
       else {
@@ -326,7 +329,7 @@ object ProtobufCodec {
     constructor: MapConstructor[C],
     deconstructor: MapDeconstructor[C]
   ) extends ProtobufCodec[C[K, V]] {
-    def toProtoWriter(a: C[K, V], id: Int, registers: Registers, offset: RegisterOffset, alwaysEncode: Boolean): ProtobufWriter = {
+    def toProtoWriter(a: C[K, V], id: Int, registers: Registers, offset: RegisterOffset, alwaysEncode: Boolean): ProtobufWriter.Repeated = {
       val it = deconstructor.deconstruct(a)
       if (it.isEmpty && !alwaysEncode) null
       else {
@@ -337,7 +340,7 @@ object ProtobufCodec {
           val res = element.toProtoWriter((deconstructor.getKey(kv), deconstructor.getValue(kv)), id, registers, offset)
           if (res ne null) {
             builder += res
-            size += ProtobufWriter.fullSize(res)
+            size += res.fullSize
           }
         }
         internal.ProtobufWriter.Repeated(builder.result(), id, packed = false, size)
@@ -346,7 +349,7 @@ object ProtobufCodec {
   }
 
   case object Bytes extends ProtobufCodec[Array[Byte]] {
-    def toProtoWriter(a: Array[Byte], id: Int, alwaysEncode: Boolean): ProtobufWriter =
+    def toProtoWriter(a: Array[Byte], id: Int, alwaysEncode: Boolean): ProtobufWriter.Bytes =
       if (a.isEmpty && !alwaysEncode) null else internal.ProtobufWriter.Bytes(a, id)
   }
 
