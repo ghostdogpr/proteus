@@ -17,6 +17,6 @@ class ProtobufMarshaller[T](using codec: ProtobufCodec[T]) extends Marshaller[T]
     try
       codec.decode(stream)
     catch {
-      case e: Exception => throw Status.DATA_LOSS.withDescription("Failed to parse protobuf input").withCause(e).asRuntimeException()
+      case e: Exception => throw Status.INVALID_ARGUMENT.withDescription("Failed to parse protobuf input").withCause(e).asRuntimeException()
     }
 }
