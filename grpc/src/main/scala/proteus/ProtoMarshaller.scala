@@ -3,9 +3,20 @@ package proteus
 import java.io.*
 
 import io.grpc.MethodDescriptor.Marshaller
+import io.grpc.Status
 
 class ProtobufMarshaller[T](using codec: ProtobufCodec[T]) extends Marshaller[T] {
-  def stream(value: T): InputStream = new ByteArrayInputStream(codec.encode(value))
+  def stream(value: T): InputStream =
+    try
+      new ByteArrayInputStream(codec.encode(value))
+    catch {
+      case e: Exception => throw Status.INTERNAL.withDescription("Failed to encode protobuf output").withCause(e).asRuntimeException()
+    }
 
-  def parse(stream: InputStream): T = codec.decode(stream)
+  def parse(stream: InputStream): T =
+    try
+      codec.decode(stream)
+    catch {
+      case e: Exception => throw Status.DATA_LOSS.withDescription("Failed to parse protobuf input").withCause(e).asRuntimeException()
+    }
 }

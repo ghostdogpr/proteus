@@ -436,7 +436,7 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
         (b: B) =>
           wrapperBinding.wrap(b) match {
             case Right(a)    => a
-            case Left(error) => throw new Exception(s"Wrapper conversion failed for type ${typeName.name}: $error")
+            case Left(error) => throw new Exception(s"Wrapper conversion failed for type ${typeName.name} (value: $b): $error")
           },
         (a: A) => wrapperBinding.unwrap(a)
       )
