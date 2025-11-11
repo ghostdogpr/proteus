@@ -21,37 +21,37 @@ import proteus.ProtobufCodecBenchmark.*
 @Fork(1)
 class ProtobufCodecBenchmark {
   @Benchmark
-  def roundTripSimpleMessage_Proteus(bh: Blackhole): Unit = {
+  def simple_proteus(bh: Blackhole): Unit = {
     val encoded = aCodec.encode(simpleData)
     bh.consume(aCodec.decode(encoded))
   }
 
   @Benchmark
-  def roundTripComplexMessage_Proteus(bh: Blackhole): Unit = {
+  def complex_proteus(bh: Blackhole): Unit = {
     val encoded = aCodec.encode(complexData)
     bh.consume(aCodec.decode(encoded))
   }
 
   @Benchmark
-  def roundTripLargeMessage_Proteus(bh: Blackhole): Unit = {
+  def large_proteus(bh: Blackhole): Unit = {
     val encoded = aCodec.encode(largeData)
     bh.consume(aCodec.decode(encoded))
   }
 
   @Benchmark
-  def roundTripSimpleMessage_ScalaPB_Chimney(bh: Blackhole): Unit = {
+  def simple_scalapb_chimney(bh: Blackhole): Unit = {
     val encoded = domainToScalaPB(simpleData).toByteArray
     bh.consume(scalaPBToDomain(scalapb.A.parseFrom(encoded)))
   }
 
   @Benchmark
-  def roundTripComplexMessage_ScalaPB_Chimney(bh: Blackhole): Unit = {
+  def complex_scalapb_chimney(bh: Blackhole): Unit = {
     val encoded = domainToScalaPB(complexData).toByteArray
     bh.consume(scalaPBToDomain(scalapb.A.parseFrom(encoded)))
   }
 
   @Benchmark
-  def roundTripLargeMessage_ScalaPB_Chimney(bh: Blackhole): Unit = {
+  def large_scalapb_chimney(bh: Blackhole): Unit = {
     val encoded = domainToScalaPB(largeData).toByteArray
     bh.consume(scalaPBToDomain(scalapb.A.parseFrom(encoded)))
   }
@@ -186,7 +186,7 @@ def runTest =
   while (true) {
     val data     = largeData
     val encoded  = aCodec.encode(data)
-    val decoded  = aCodec.decode(encoded)
+    // val decoded  = aCodec.decode(encoded)
     val encoded2 = domainToScalaPB(data).toByteArray
-    val decoded2 = scalaPBToDomain(scalapb.A.parseFrom(encoded2))
+    // val decoded2 = scalaPBToDomain(scalapb.A.parseFrom(encoded2))
   }
