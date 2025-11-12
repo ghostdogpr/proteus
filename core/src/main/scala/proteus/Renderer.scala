@@ -1,7 +1,8 @@
 package proteus
 
 import proteus.ProtoIR.*
-import proteus.Text.*
+import proteus.internal.Text
+import proteus.internal.Text.*
 
 object Renderer {
   private def renderComment(comment: String): Text = {

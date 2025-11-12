@@ -5,6 +5,8 @@ import java.nio.file.*
 
 import scala.collection.immutable.ListSet
 
+import proteus.internal.Text
+
 /**
   * A dependency is a collection of protobuf types.
   * It is typically used to bundle types together and write them to a single .proto file.
