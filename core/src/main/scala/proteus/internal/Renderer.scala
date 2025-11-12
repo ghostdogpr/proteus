@@ -1,18 +1,10 @@
 package proteus
+package internal
 
 import proteus.ProtoIR.*
-import proteus.internal.Text
 import proteus.internal.Text.*
 
-object Renderer {
-  private def renderComment(comment: String): Text = {
-    val lines = comment.split("\n")
-    if (lines.length == 1) {
-      line(s"// $comment")
-    } else {
-      many(lines.map(l => line(s"// $l")).toList)
-    }
-  }
+private[proteus] object Renderer {
 
   def render(compilationUnit: CompilationUnit): String = {
     val text = many(
@@ -35,26 +27,35 @@ object Renderer {
     renderText(text)
   }
 
-  def renderPackageName(packageName: String): Text =
-    statement(s"package $packageName")
-
-  def renderOption(opt: TopLevelOption): Text =
-    statement(s"""option ${opt.key} = "${opt.value}"""")
-
-  def renderStatement(st: Statement): Text =
-    st match {
-      case Statement.ImportStatement(path)  => statement(s"""import "$path"""")
-      case Statement.TopLevelStatement(tld) => renderTopLevelDef(tld)
-    }
-
-  def renderTopLevelDef(tld: TopLevelDef): Text =
-    tld match {
+  def renderTopLevelDef(topLevelDef: TopLevelDef): Text =
+    topLevelDef match {
       case TopLevelDef.MessageDef(message) => renderMessage(message)
       case TopLevelDef.EnumDef(enumDef)    => renderEnum(enumDef)
       case TopLevelDef.ServiceDef(service) => renderService(service)
     }
 
-  def renderEnumElement(enumValue: EnumValue): Text =
+  private def renderComment(comment: String): Text = {
+    val lines = comment.split("\n")
+    if (lines.length == 1) {
+      line(s"// $comment")
+    } else {
+      many(lines.map(l => line(s"// $l")).toList)
+    }
+  }
+
+  private def renderPackageName(packageName: String): Text =
+    statement(s"package $packageName")
+
+  private def renderOption(opt: TopLevelOption): Text =
+    statement(s"""option ${opt.key} = "${opt.value}"""")
+
+  private def renderStatement(st: Statement): Text =
+    st match {
+      case Statement.ImportStatement(path)  => statement(s"""import "$path"""")
+      case Statement.TopLevelStatement(tld) => renderTopLevelDef(tld)
+    }
+
+  private def renderEnumElement(enumValue: EnumValue): Text =
     enumValue match {
       case EnumValue(identifier, intvalue, comment) =>
         comment match {
@@ -73,7 +74,7 @@ object Renderer {
         }
     }
 
-  def renderEnum(enumeration: Enum): Text = {
+  private def renderEnum(enumeration: Enum): Text = {
     val hasContent  = enumeration.reserved.nonEmpty || enumeration.values.nonEmpty
     val commentLine = enumeration.comment.map(renderComment).getOrElse(many())
     if (hasContent) {
@@ -91,7 +92,7 @@ object Renderer {
       )
   }
 
-  def renderMessage(message: Message): Text = {
+  private def renderMessage(message: Message): Text = {
     val hasContent  = message.reserved.nonEmpty || message.elements.nonEmpty
     val commentLine = message.comment.map(renderComment).getOrElse(many())
     if (hasContent) {
@@ -109,7 +110,7 @@ object Renderer {
       )
   }
 
-  def renderOneOf(oneOf: OneOf): Text = {
+  private def renderOneOf(oneOf: OneOf): Text = {
     val commentLine = oneOf.comment.map(renderComment).getOrElse(many())
     if (oneOf.fields.nonEmpty) {
       many(
@@ -125,7 +126,7 @@ object Renderer {
       )
   }
 
-  def renderMessageElement(element: MessageElement): Text =
+  private def renderMessageElement(element: MessageElement): Text =
     element match {
       case MessageElement.FieldElement(field)           => renderField(field)
       case MessageElement.OneOfElement(oneOf)           => renderOneOf(oneOf)
@@ -133,7 +134,7 @@ object Renderer {
       case MessageElement.NestedEnumElement(enumDef)    => many(renderEnum(enumDef), emptyLine)
     }
 
-  def renderReserved(reserved: List[Reserved]): Text = {
+  private def renderReserved(reserved: List[Reserved]): Text = {
     val numeric = reserved.collect {
       case Reserved.Number(number)    => s"$number"
       case Reserved.Range(start, end) => s"$start to $end"
@@ -155,7 +156,7 @@ object Renderer {
     )
   }
 
-  def renderField(field: Field, isOneOf: Boolean = false): Text =
+  private def renderField(field: Field, isOneOf: Boolean = false): Text =
     if (field == ProtoIR.excludedField) many()
     else {
       val ty         = renderType(field.ty)
@@ -183,7 +184,7 @@ object Renderer {
       }
     }
 
-  def renderService(service: Service): Text = {
+  private def renderService(service: Service): Text = {
     val commentLine = service.comment.map(renderComment).getOrElse(many())
     val hasContent  = service.rpcs.nonEmpty
     if (hasContent) {
@@ -201,7 +202,7 @@ object Renderer {
     }
   }
 
-  def renderRpc(rpc: Rpc): Text = {
+  private def renderRpc(rpc: Rpc): Text = {
     val commentLine  = rpc.comment.map(renderComment).getOrElse(many())
     val requestType  = if (rpc.streamingRequest) s"stream ${rpc.request.fqn.render}" else rpc.request.fqn.render
     val responseType = if (rpc.streamingResponse) s"stream ${rpc.response.fqn.render}" else rpc.response.fqn.render
@@ -211,7 +212,7 @@ object Renderer {
     )
   }
 
-  def renderType(ty: Type): String = {
+  private def renderType(ty: Type): String = {
     import Type._
     ty match {
       case Double                      => "double"
@@ -237,6 +238,6 @@ object Renderer {
     }
   }
 
-  def statement(string: String): Text =
+  private def statement(string: String): Text =
     line(s"$string;")
 }

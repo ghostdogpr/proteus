@@ -5,7 +5,7 @@ import java.nio.file.*
 
 import scala.collection.immutable.ListSet
 
-import proteus.internal.Text
+import proteus.internal.*
 
 /**
   * A dependency is a collection of protobuf types.

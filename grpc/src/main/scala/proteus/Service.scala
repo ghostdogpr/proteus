@@ -8,7 +8,7 @@ import scala.collection.immutable.ListSet
 import com.google.protobuf.DescriptorProtos.*
 import com.google.protobuf.Descriptors.FileDescriptor
 
-import proteus.internal.Text
+import proteus.internal.*
 
 case class Service[Rpcs] private (
   packageName: Option[String],

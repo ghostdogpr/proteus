@@ -6,6 +6,7 @@ import zio.test.*
 
 import proteus.Modifiers.*
 import proteus.ProtoIR.{CompilationUnit, Statement}
+import proteus.internal.Renderer
 
 object ProtobufRenderSpec extends ZIOSpecDefault {
 
