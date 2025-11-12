@@ -5,6 +5,10 @@ import java.nio.file.*
 
 import scala.collection.immutable.ListSet
 
+/**
+  * A dependency is a collection of protobuf types.
+  * It is typically used to bundle types together and write them to a single .proto file.
+  */
 case class Dependency(
   dependencyName: String,
   packageName: Option[String],
@@ -12,30 +16,45 @@ case class Dependency(
   types: ListSet[ProtoIR.TopLevelDef],
   dependencies: List[Dependency]
 ) {
-  val allDependencies: Set[Dependency] = dependencies.toSet ++ dependencies.flatMap(_.allDependencies)
+  private val typeReferences                            = types.flatMap(_.collectTypeReferences).toSet
+  private[proteus] val allDependencies: Set[Dependency] = dependencies.toSet ++ dependencies.flatMap(_.allDependencies)
+  private[proteus] val filteredDependencies             = allDependencies.filter(_.hasAnyOf(typeReferences))
+  private val dependencyTypes                           = filteredDependencies.flatMap(_.types).toSet
+  private val filteredTypes                             = types -- dependencyTypes
 
-  val typeReferences       = types.flatMap(_.collectTypeReferences).toSet
-  val filteredDependencies = allDependencies.filter(_.hasAnyOf(typeReferences))
-  val dependencyTypes      = filteredDependencies.flatMap(_.types).toSet
-  val filteredTypes        = types -- dependencyTypes
-
-  val topLevelFqns: Map[String, String] =
+  private[proteus] val topLevelFqns: Map[String, String] =
     (allDependencies.flatMap(_.topLevelFqns) ++ types.map(t => (t.name, packageName.fold("")(_ + ".") + t.name))).toMap
 
-  val toImportStatement: ProtoIR.Statement.ImportStatement =
+  private[proteus] val toImportStatement: ProtoIR.Statement.ImportStatement =
     ProtoIR.Statement.ImportStatement(s"${path.fold("")(_ + "/")}$dependencyName.proto")
 
+  private[proteus] def hasAnyOf(typeNames: Set[String]): Boolean =
+    types.exists(typeDef => typeNames.contains(typeDef.name))
+
+  /**
+    * Adds a new type to the current dependency.
+    *
+    * @param codec the protobuf codec for the type to add.
+    */
   def add[A](using codec: ProtobufCodec[A]): Dependency = {
     val t = ProtobufCodec.toProtoIR(codec).filter(t => !allDependencies.exists(_.hasAnyOf(Set(t.name))))
     copy(types = types ++ t)
   }
 
-  def hasAnyOf(typeNames: Set[String]): Boolean =
-    types.exists(typeDef => typeNames.contains(typeDef.name))
-
+  /**
+    * Adds a dependency to the current dependency.
+    * The types that are already included in the added dependency will be removed from the current dependency.
+    *
+    * @param dependency the dependency to add.
+    */
   def dependsOn(dependency: Dependency): Dependency =
     copy(types = types -- dependency.types -- dependency.dependencyTypes, dependencies = dependencies :+ dependency)
 
+  /**
+    * Generates a .proto file for the dependency as a string.
+    *
+    * @param options options to write at the top of the .proto file.
+    */
   def render(options: List[ProtoIR.TopLevelOption]): String = {
     val conflicts = findConflicts
     if (conflicts.nonEmpty) {
@@ -53,6 +72,12 @@ case class Dependency(
     )
   }
 
+  /**
+    * Generates a .proto file for the dependency and writes it to the given folder.
+    *
+    * @param options options to write at the top of the .proto file.
+    * @param folder the folder to write the .proto file to.
+    */
   def renderToFile(options: List[ProtoIR.TopLevelOption], folder: String): Unit = {
     val rendered = render(options)
     val fileName = s"${internal.toSnakeCase(dependencyName)}.proto"
@@ -61,6 +86,10 @@ case class Dependency(
     Files.write(fullPath, rendered.getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING): Unit
   }
 
+  /**
+    * Returns a map of types that are defined in conflicting ways.
+    * The key is the type name, and the value is a list of definitions that conflict.
+    */
   def findConflicts: Map[String, List[String]] =
     types
       .groupBy(_.name)
@@ -71,12 +100,31 @@ case class Dependency(
 }
 
 object Dependency {
+
+  /**
+    * Creates a new dependency with the given name.
+    *
+    * @param dependencyName the name of the dependency.
+    */
   def apply(dependencyName: String): Dependency =
     Dependency(dependencyName, None, None, ListSet.empty, Nil)
 
+  /**
+    * Creates a new dependency with the given name and package name.
+    *
+    * @param dependencyName the name of the dependency.
+    * @param packageName the package name of the dependency.
+    */
   def apply(dependencyName: String, packageName: String): Dependency =
     Dependency(dependencyName, Some(packageName), None, ListSet.empty, Nil)
 
+  /**
+    * Creates a new dependency with the given name, package name and path.
+    *
+    * @param dependencyName the name of the dependency.
+    * @param packageName the package name of the dependency.
+    * @param path the path to the dependency, used when generating import statements and writing to a file.
+    */
   def apply(dependencyName: String, packageName: String, path: String): Dependency =
     Dependency(dependencyName, Some(packageName), Some(path), ListSet.empty, Nil)
 }
