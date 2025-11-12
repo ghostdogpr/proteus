@@ -216,17 +216,17 @@ object ProtobufCodec {
     nested: Boolean,
     comment: Option[String] = None
   ) extends ProtobufCodec[A] {
-    val simpleFields: List[SimpleField[?]]   = fields.toList.flatMap {
+    val simpleFields: List[SimpleField[?]]  = fields.toList.flatMap {
       case f: SimpleField[?]   => List(f)
       case f: OneOfField[?]    => f.cases.toList
       case f: ExcludedField[?] => Nil
     }
-    val fieldMap: IntDenseMap[FieldMapEntry] = IntDenseMap.from(fields.zipWithIndex.flatMap {
-      case (f: SimpleField[?], idx)   => List(f.id -> FieldMapEntry(f, idx))
-      case (f: OneOfField[?], idx)    => f.cases.map(c => c.id -> FieldMapEntry(c, idx)).toList
+    val fieldMap: IntDenseMap[IndexedField] = IntDenseMap.from(fields.zipWithIndex.flatMap {
+      case (f: SimpleField[?], idx)   => List(f.id -> IndexedField(f, idx))
+      case (f: OneOfField[?], idx)    => f.cases.map(c => c.id -> IndexedField(c, idx)).toList
       case (f: ExcludedField[?], idx) => Nil
     })
-    val mayUseBuilder: Boolean               = simpleFields.exists(_.mayUseBuilder)
+    val mayUseBuilder: Boolean              = simpleFields.exists(_.mayUseBuilder)
 
     def toProtoWriter(a: A, id: Int, registers: Registers, offset: RegisterOffset): ProtobufWriter.Message = {
       deconstructor.deconstruct(registers, offset, a)
@@ -431,7 +431,7 @@ object ProtobufCodec {
     val visited    = new Array[Boolean](m.fields.length)
     val nextOffset = RegisterOffset.add(offset, m.constructor.usedRegisters)
 
-    def handleRepeated[C[_], E](r: Repeated[C, E], field: FieldMapEntry, tag: Int): C[E] = {
+    def handleRepeated[C[_], E](r: Repeated[C, E], field: IndexedField, tag: Int): C[E] = {
       val register = field.field.register
       val builder  =
         if (!visited(field.index)) {
@@ -443,7 +443,7 @@ object ProtobufCodec {
       null.asInstanceOf[C[E]]
     }
 
-    def handleRepeatedMap[M[_, _], K, V](r: RepeatedMap[M, K, V], field: FieldMapEntry): M[K, V] = {
+    def handleRepeatedMap[M[_, _], K, V](r: RepeatedMap[M, K, V], field: IndexedField): M[K, V] = {
       val register = field.field.register
       val builder  =
         if (!visited(field.index)) {
@@ -456,7 +456,7 @@ object ProtobufCodec {
       null.asInstanceOf[M[K, V]]
     }
 
-    def loop[A](codec: ProtobufCodec[A], field: FieldMapEntry, tag: Int): A =
+    def loop[A](codec: ProtobufCodec[A], field: IndexedField, tag: Int): A =
       codec match {
         case c: Message[_]           => withLimit(handleMessage(c, registers, nextOffset))
         case c: Primitive[_]         => handlePrimitive(c)

@@ -3,6 +3,10 @@ package internal
 
 import com.google.protobuf.CodedOutputStream
 
+/**
+  * Data structure for writing protobuf messages.
+  * Required to avoid calculating sizes multiple times.
+  */
 sealed private[proteus] trait ProtobufWriter
 
 private[proteus] object ProtobufWriter {

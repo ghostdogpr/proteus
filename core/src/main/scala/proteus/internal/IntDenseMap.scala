@@ -3,6 +3,11 @@ package internal
 
 import scala.collection.immutable.HashMap
 
+/**
+  * A dense map of integers to values.
+  * An array is used to store the values for small IDs which is most of protobuf field numbers.
+  * A map is used to store the values for large IDs which is less common.
+  */
 final private[proteus] class IntDenseMap[V] private (
   private val array: Array[Any],
   private val map: HashMap[Int, V],
