@@ -27,11 +27,11 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
   inline def modifier[B: Schema](termName: String, modifier: Modifier.Term): ProtobufDeriver = {
     inline summonInline[Mirror.Of[B]] match {
       case m: Mirror.ProductOf[B] =>
-        inline if (!constValue[Contains[m.MirroredElemLabels, termName.type]]) {
+        inline if (!constValue[proteus.Tuple.Contains[m.MirroredElemLabels, termName.type]]) {
           error("Field " + constValue[termName.type] + " does not exist in class " + constValue[m.MirroredLabel] + ".")
         }
       case m: Mirror.SumOf[B]     =>
-        inline if (!constValue[Contains[m.MirroredElemLabels, termName.type]]) {
+        inline if (!constValue[proteus.Tuple.Contains[m.MirroredElemLabels, termName.type]]) {
           error("Case " + constValue[termName.type] + " does not exist in sealed trait or enum " + constValue[m.MirroredLabel] + ".")
         }
     }

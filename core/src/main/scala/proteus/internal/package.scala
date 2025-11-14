@@ -61,10 +61,3 @@ private[proteus] val renameModifier     = "proteus.rename"
 private[proteus] val enumPrefixModifier = "proteus.enum.prefix"
 private[proteus] val enumSuffixModifier = "proteus.enum.suffix"
 private[proteus] val commentModifier    = "proteus.comment"
-
-// can be replaced with Tuple.Contains once moving to the next Scala LTS
-type Contains[X <: Tuple, Y] <: Boolean = X match {
-  case Y *: _     => true
-  case _ *: xs    => Contains[xs, Y]
-  case EmptyTuple => false
-}
