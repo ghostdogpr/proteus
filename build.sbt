@@ -2,12 +2,13 @@ val scala3Version = "3.3.7"
 
 val grpcVersion                 = "1.74.0"
 val scalaProtobufRuntimeVersion = "0.8.16"
-val zioBlocksSchemaVersion      = "0.0.0+735-012d36ec-SNAPSHOT"
+val zioBlocksSchemaVersion      = "0.0.0+736-a53ef0bc-SNAPSHOT"
 val zioTestVersion              = "2.1.20"
 val zioGrpcVersion              = "0.6.3"
 val fs2GrpcVersion              = "2.8.2"
 val chimneyVersion              = "1.8.2"
 val circeVersion                = "0.14.14"
+val neotypeVersion              = "0.3.0"
 
 inThisBuild(
   List(
@@ -60,9 +61,10 @@ lazy val grpc = project
   .settings(
     libraryDependencies ++=
       Seq(
-        "io.grpc" % "grpc-stub"     % grpcVersion,
-        "io.grpc" % "grpc-netty"    % grpcVersion % Test,
-        "io.grpc" % "grpc-services" % grpcVersion % Test
+        "io.grpc"               % "grpc-stub"     % grpcVersion,
+        "io.grpc"               % "grpc-netty"    % grpcVersion % Test,
+        "io.grpc"               % "grpc-services" % grpcVersion % Test,
+        "io.github.kitlangton" %% "neotype"       % neotypeVersion
       )
   )
   .dependsOn(core.jvm % "compile->compile;test->test")
