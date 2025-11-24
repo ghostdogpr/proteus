@@ -8,6 +8,10 @@ import fs2.Stream
 import fs2.grpc.client.*
 import io.grpc.*
 
+/**
+  * A client backend that wraps results in an abstract F[_] monad backed by Cats Effect typeclasses.
+  * Streaming is supported using fs2 Stream.
+  */
 class Fs2ClientBackend[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F]) extends ClientBackend[F, Stream[F, *]] {
   def client[Rpcs, Request, Response](
     rpc: Rpc.Unary[Request, Response],

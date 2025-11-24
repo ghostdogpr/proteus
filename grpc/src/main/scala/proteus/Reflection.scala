@@ -54,6 +54,11 @@ given ProtobufDeriver = ProtobufDeriver
 val serverReflectionInfoRpc = Rpc.bidiStreaming[ServerReflectionRequest, ServerReflectionResponse]("ServerReflectionInfo")
 val serverReflectionService = Service("grpc.reflection.v1", "ServerReflection").rpc(serverReflectionInfoRpc)
 
+/**
+  * A client for the server reflection service.
+  *
+  * @param backend the backend to use for the client.
+  */
 def reflectionClient[Unary[_], Streaming[_]](
   backend: client.ClientBackend[Unary, Streaming]
 ): Unary[Streaming[ServerReflectionRequest] => Streaming[ServerReflectionResponse]] =

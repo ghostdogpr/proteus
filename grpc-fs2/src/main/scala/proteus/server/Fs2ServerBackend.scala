@@ -10,6 +10,12 @@ import io.grpc.*
 
 import proteus.server.ServerInterceptor
 
+/**
+  * A server backend that wraps results in an abstract F[_] monad backed by Cats Effect typeclasses.
+  * Streaming is supported using Fs2 Stream.
+  *
+  * @param interceptor an interceptor that can run on every request.
+  */
 class Fs2ServerBackend[F[_]: Async, G[_], Context](
   interceptor: ServerInterceptor[F, G, Stream[F, *], Stream[G, *], RequestResponseMetadata, Context],
   dispatcher: Dispatcher[F],
@@ -51,12 +57,28 @@ class Fs2ServerBackend[F[_]: Async, G[_], Context](
 }
 
 object Fs2ServerBackend {
+
+  /**
+    * Creates a new fs2 server backend that wraps results in an abstract F[_] monad backed by Cats Effect typeclasses.
+    * Streaming is supported using Fs2 Stream.
+    *
+    * @param dispatcher a Cats Effect dispatcher.
+    * @param serverOptions the options to use for the server.
+    */
   def apply[F[_]: Async](
     dispatcher: Dispatcher[F],
     serverOptions: ServerOptions = ServerOptions.default
   ): Fs2ServerBackend[F, F, RequestResponseMetadata] =
     apply(ServerInterceptor.empty, dispatcher, serverOptions)
 
+  /**
+    * Creates a new fs2 server backend that wraps results in an abstract F[_] monad backed by Cats Effect typeclasses.
+    * Streaming is supported using Fs2 Stream.
+    *
+    * @param interceptor an interceptor that can run on every request.
+    * @param dispatcher a Cats Effect dispatcher.
+    * @param serverOptions the options to use for the server.
+    */
   def apply[F[_]: Async, Context](
     interceptor: ServerContextInterceptor[F, Stream[F, *], RequestResponseMetadata, Context],
     dispatcher: Dispatcher[F],

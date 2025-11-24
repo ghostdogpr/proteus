@@ -6,6 +6,10 @@ import java.util.concurrent.atomic.AtomicReference
 import io.grpc.*
 import io.grpc.stub.*
 
+/**
+  * A client backend that uses direct style to return results (no wrapper monad is used).
+  * Streaming is not supported.
+  */
 class DirectClientBackend(channel: Channel) extends ClientBackendUnary[[A] =>> A] {
   def client[Rpcs, Request, Response](
     rpc: Rpc.Unary[Request, Response],

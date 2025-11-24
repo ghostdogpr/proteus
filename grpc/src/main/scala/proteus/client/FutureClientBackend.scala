@@ -8,6 +8,10 @@ import scala.concurrent.{Future, Promise}
 import io.grpc.*
 import io.grpc.stub.*
 
+/**
+  * A client backend that returns results wrapped in a Future.
+  * Streaming is not supported.
+  */
 class FutureClientBackend(channel: Channel) extends ClientBackendUnary[Future] {
   def client[Rpcs, Request, Response](
     rpc: Rpc.Unary[Request, Response],

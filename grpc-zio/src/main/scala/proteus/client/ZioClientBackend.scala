@@ -7,6 +7,10 @@ import scalapb.zio_grpc.client.ClientCalls
 import zio.*
 import zio.stream.*
 
+/**
+  * A client backend that wraps results in a ZIO effect.
+  * Streaming is supported using ZStream.
+  */
 class ZioClientBackend(channel: ZChannel) extends ClientBackend[IO[StatusException, *], ZStream[Any, StatusException, *]] {
   def client[Rpcs, Request, Response](
     rpc: Rpc.Unary[Request, Response],

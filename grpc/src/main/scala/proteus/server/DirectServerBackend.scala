@@ -3,6 +3,12 @@ package server
 
 import io.grpc.{Metadata, ServerCall, ServerCallHandler, Status}
 
+/**
+  * A server backend that uses direct style to handle RPCs (no wrapper monad is used).
+  * Streaming is not supported.
+  *
+  * @param interceptor an interceptor that can run on every request.
+  */
 class DirectServerBackend[Context](interceptor: ServerContextInterceptor[[A] =>> A, [A] =>> A, RequestResponseMetadata, Context])
   extends ServerBackend[[A] =>> A, [A] =>> A, Context] {
   def handler[Request, Response](rpc: ServerRpc[[A] =>> A, [A] =>> A, Context, Request, Response]): ServerCallHandler[Request, Response] =
@@ -34,4 +40,9 @@ class DirectServerBackend[Context](interceptor: ServerContextInterceptor[[A] =>>
     }
 }
 
+/**
+  * A server backend that uses direct style to handle RPCs (no wrapper monad is used).
+  * Streaming is not supported.
+  * This backend doesn't have any interceptors.
+  */
 object DirectServerBackend extends DirectServerBackend(ServerInterceptor.empty)

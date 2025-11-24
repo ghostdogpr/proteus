@@ -5,6 +5,12 @@ import scala.concurrent.Future
 
 import io.grpc.{Metadata, ServerCall, ServerCallHandler, Status}
 
+/**
+  * A server backend that uses the Future monad to handle RPCs.
+  * Streaming is not supported.
+  *
+  * @param interceptor an interceptor that can run on every request.
+  */
 class FutureServerBackend[Context](interceptor: ServerContextInterceptor[Future, Future, RequestResponseMetadata, Context])
   extends ServerBackend[Future, Future, Context] {
   def handler[Request, Response](
@@ -42,4 +48,9 @@ class FutureServerBackend[Context](interceptor: ServerContextInterceptor[Future,
     }
 }
 
+/**
+  * A server backend that uses the Future monad to handle RPCs.
+  * Streaming is not supported.
+  * This backend doesn't have any interceptors.
+  */
 object FutureServerBackend extends FutureServerBackend(ServerInterceptor.empty)

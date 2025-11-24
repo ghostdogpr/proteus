@@ -9,6 +9,13 @@ import zio.stream.*
 
 import proteus.server.ServerInterceptor
 
+/**
+  * A server backend that wraps results in a ZIO effect.
+  * Streaming is supported using ZStream.
+  *
+  * @param interceptor an interceptor that can run on every request.
+  * @param runtime the ZIO runtime to use for running ZIO effects.
+  */
 class ZioServerBackend[R, E, Context](
   interceptor: ServerInterceptor[IO[StatusException, *], ZIO[R, E, *], ZStream[Any, StatusException, *], ZStream[R, E, *], RequestContext, Context],
   runtime: Runtime[Any] = Runtime.default
@@ -42,4 +49,9 @@ class ZioServerBackend[R, E, Context](
     }
 }
 
+/**
+  * A server backend that wraps results in a ZIO effect.
+  * Streaming is supported using ZStream.
+  * This backend doesn't have any interceptors and uses the default ZIO runtime.
+  */
 object ZioServerBackend extends ZioServerBackend(ServerInterceptor.empty, Runtime.default)

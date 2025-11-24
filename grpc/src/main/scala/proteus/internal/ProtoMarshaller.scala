@@ -1,11 +1,12 @@
 package proteus
+package internal
 
 import java.io.*
 
 import io.grpc.MethodDescriptor.Marshaller
 import io.grpc.Status
 
-class ProtobufMarshaller[T](using codec: ProtobufCodec[T]) extends Marshaller[T] {
+private[proteus] class ProtobufMarshaller[T](using codec: ProtobufCodec[T]) extends Marshaller[T] {
   def stream(value: T): InputStream =
     try
       new ByteArrayInputStream(codec.encode(value))

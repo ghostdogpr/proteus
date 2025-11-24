@@ -6,7 +6,7 @@ import com.google.protobuf.Descriptors.FileDescriptor
 import proteus.internal.*
 
 extension (protoType: ProtoIR.Type) {
-  def toDescriptorType: FieldDescriptorProto.Type =
+  private[proteus] def toDescriptorType: FieldDescriptorProto.Type =
     protoType match {
       case ProtoIR.Type.String         => FieldDescriptorProto.Type.TYPE_STRING
       case ProtoIR.Type.Int32          => FieldDescriptorProto.Type.TYPE_INT32
@@ -30,7 +30,12 @@ extension (protoType: ProtoIR.Type) {
 }
 
 extension (field: ProtoIR.Field) {
-  def addToDescriptor(builder: DescriptorProto.Builder, oneOfIndex: Option[Int], parentFqn: String, topLevelFqns: Map[String, String]): Unit = {
+  private[proteus] def addToDescriptor(
+    builder: DescriptorProto.Builder,
+    oneOfIndex: Option[Int],
+    parentFqn: String,
+    topLevelFqns: Map[String, String]
+  ): Unit = {
     val fieldBuilder = FieldDescriptorProto.newBuilder().setJsonName(toCamelCase(field.name)).setName(field.name).setNumber(field.number)
     oneOfIndex.foreach(fieldBuilder.setOneofIndex)
 
@@ -91,7 +96,7 @@ extension (field: ProtoIR.Field) {
 }
 
 extension (msg: ProtoIR.Message) {
-  def toDescriptor(fqn: String, topLevelFqns: Map[String, String]): DescriptorProto = {
+  private[proteus] def toDescriptor(fqn: String, topLevelFqns: Map[String, String]): DescriptorProto = {
     val builder = DescriptorProto.newBuilder().setName(msg.name)
 
     val nestedTypeNames = msg.elements.collect {
@@ -119,7 +124,7 @@ extension (msg: ProtoIR.Message) {
 }
 
 extension (enumDef: ProtoIR.Enum) {
-  def toDescriptor: EnumDescriptorProto = {
+  private[proteus] def toDescriptor: EnumDescriptorProto = {
     val builder = EnumDescriptorProto.newBuilder().setName(enumDef.name)
     enumDef.values.foreach { enumValue =>
       builder.addValue(EnumValueDescriptorProto.newBuilder().setName(enumValue.name).setNumber(enumValue.intValue).build())
@@ -129,7 +134,7 @@ extension (enumDef: ProtoIR.Enum) {
 }
 
 extension (service: ProtoIR.Service) {
-  def toDescriptor: ServiceDescriptorProto = {
+  private[proteus] def toDescriptor: ServiceDescriptorProto = {
     val serviceBuilder = ServiceDescriptorProto.newBuilder().setName(service.name)
 
     service.rpcs.foreach { rpc =>
@@ -148,7 +153,7 @@ extension (service: ProtoIR.Service) {
 }
 
 extension (dependency: Dependency) {
-  def fileDescriptor: Option[FileDescriptor] =
+  private[proteus] def fileDescriptor: Option[FileDescriptor] =
     if (dependency.types.nonEmpty) {
       val sharedFileBuilder         =
         FileDescriptorProto
