@@ -117,12 +117,23 @@ object ProtobufCodec {
     else f(Registers(RegisterOffset.Zero))
   }
 
+  /**
+    * Represents a field of a message. It can be a simple field, a one-of field, or an excluded field.
+    */
   sealed trait MessageField[A] {
     private[proteus] def toProtoWriter(registers: Registers, offset: RegisterOffset, nextOffset: RegisterOffset): ProtobufWriter
+
+    /**
+      * Converts the message field to its protobuf IR representation.
+      */
     def toProtoIR: ProtoIR.MessageElement.FieldElement | ProtoIR.MessageElement.OneOfElement
   }
 
   object MessageField {
+
+    /**
+      * Represents a simple field of a message.
+      */
     final case class SimpleField[A](
       name: String,
       id: Int,
@@ -136,6 +147,9 @@ object ProtobufCodec {
         ProtobufCodec.toProtoWriter(codec, res, id, registers, nextOffset, alwaysEncode = false)
       }
 
+      /**
+        * Converts the message field to its protobuf IR representation.
+        */
       def toProtoIR: ProtoIR.MessageElement.FieldElement = {
         val field = ProtoIR.Field(toProtoType(codec), name, id, deprecated = false, optional = isOptional(using codec), comment = comment)
         ProtoIR.MessageElement.FieldElement(field)
@@ -153,6 +167,9 @@ object ProtobufCodec {
       }
     }
 
+    /**
+      * Represents a one-of field of a message.
+      */
     final case class OneOfField[A](
       name: String,
       cases: Array[SimpleField[?]],
@@ -166,6 +183,9 @@ object ProtobufCodec {
         ProtobufCodec.toProtoWriter(field.codec, res.asInstanceOf[field.codec.Focus], field.id, registers, nextOffset, alwaysEncode = true)
       }
 
+      /**
+        * Converts the message field to its protobuf IR representation.
+        */
       def toProtoIR: ProtoIR.MessageElement.OneOfElement = {
         val fields = cases
           .map(field =>
@@ -184,13 +204,23 @@ object ProtobufCodec {
       }
     }
 
+    /**
+      * Represents an excluded field of a message.
+      */
     final case class ExcludedField[A](register: Register[Any], defaultValue: Any) extends MessageField[A] {
       private[proteus] def toProtoWriter(registers: Registers, offset: RegisterOffset, nextOffset: RegisterOffset): ProtobufWriter = null
-      def toProtoIR: ProtoIR.MessageElement.FieldElement                                                                           =
+
+      /**
+        * Converts the message field to its protobuf IR representation.
+        */
+      def toProtoIR: ProtoIR.MessageElement.FieldElement =
         ProtoIR.MessageElement.FieldElement(ProtoIR.excludedField)
     }
   }
 
+  /**
+    * Represents a primitive type supported by protobuf.
+    */
   final case class Primitive[A](primitiveType: PrimitiveType[A]) extends ProtobufCodec[A] {
     private[proteus] def toProtoWriter(a: A, id: Int, alwaysEncode: Boolean): ProtobufWriter =
       primitiveType match {
@@ -216,8 +246,14 @@ object ProtobufCodec {
       }
   }
 
+  /**
+    * Represents a value of an enum.
+    */
   final case class EnumValue[A](name: String, index: Int, value: A, comment: Option[String] = None)
 
+  /**
+    * Represents an enum type.
+    */
   final case class Enum[A](name: String, values: List[EnumValue[A]], reserved: List[Int], nested: Boolean, comment: Option[String] = None)
     extends ProtobufCodec[A] {
     val valuesByIndex: IntDenseMap[A]    = IntDenseMap.from(values.map(v => (v.index, v.value)))
@@ -229,6 +265,9 @@ object ProtobufCodec {
       if (index == 0 && !alwaysEncode) null else internal.ProtobufWriter.IntPrimitive(index, id)
     }
 
+    /**
+      * Converts the enum to its protobuf IR representation.
+      */
     def toProtoIR: ProtoIR.Enum =
       ProtoIR.Enum(
         name,
@@ -238,6 +277,9 @@ object ProtobufCodec {
       )
   }
 
+  /**
+    * Represents a message type.
+    */
   final case class Message[A](
     name: String,
     fields: Array[MessageField[?]],
@@ -249,11 +291,19 @@ object ProtobufCodec {
     nested: Boolean,
     comment: Option[String] = None
   ) extends ProtobufCodec[A] {
-    val simpleFields: List[SimpleField[?]]      = fields.toList.flatMap {
+
+    /**
+      * The list of all fields of the message (oneof fields are flattened into simple fields).
+      */
+    val simpleFields: List[SimpleField[?]] = fields.toList.flatMap {
       case f: SimpleField[?]   => List(f)
       case f: OneOfField[?]    => f.cases.toList
       case f: ExcludedField[?] => Nil
     }
+
+    /**
+      * An optimized map of the fields by their index.
+      */
     val fieldMap: IntDenseMap[IndexedField]     = IntDenseMap.from(fields.zipWithIndex.flatMap {
       case (f: SimpleField[?], idx)   => List(f.id -> IndexedField(f, idx))
       case (f: OneOfField[?], idx)    => f.cases.map(c => c.id -> IndexedField(c, idx)).toList
@@ -278,6 +328,9 @@ object ProtobufCodec {
       internal.ProtobufWriter.Message(id, builder.result(), size)
     }
 
+    /**
+      * Converts the message to its protobuf IR representation.
+      */
     def toProtoIR: ProtoIR.Message = {
       val elements = fields.map(_.toProtoIR)
 
@@ -311,6 +364,9 @@ object ProtobufCodec {
     }
   }
 
+  /**
+    * Represents a repeated type.
+    */
   final case class Repeated[C[_], E](
     element: ProtobufCodec[E],
     constructor: SeqConstructor[C],
@@ -363,6 +419,9 @@ object ProtobufCodec {
     }
   }
 
+  /**
+    * Represents a map type.
+    */
   final case class RepeatedMap[C[_, _], K, V](
     element: Message[(K, V)],
     constructor: MapConstructor[C],
@@ -393,11 +452,17 @@ object ProtobufCodec {
     }
   }
 
+  /**
+    * Represents a bytes type.
+    */
   case object Bytes extends ProtobufCodec[Array[Byte]] {
     private[proteus] def toProtoWriter(a: Array[Byte], id: Int, alwaysEncode: Boolean): ProtobufWriter.Bytes =
       if (a.isEmpty && !alwaysEncode) null else internal.ProtobufWriter.Bytes(a, id)
   }
 
+  /**
+    * Represents a transformed type.
+    */
   final case class Transform[A, B](from: A => B, to: B => A, codec: ProtobufCodec[A]) extends ProtobufCodec[B] {
     private[proteus] type Origin = A
 
@@ -405,6 +470,9 @@ object ProtobufCodec {
       ProtobufCodec.toProtoWriter(codec, to(b), id, registers, offset, alwaysEncode)
   }
 
+  /**
+    * Represents a recursive message type.
+    */
   final case class RecursiveMessage[A](thunk: () => Message[A]) extends ProtobufCodec[A] {
     private[proteus] lazy val codec = thunk()
 
@@ -412,6 +480,9 @@ object ProtobufCodec {
       codec.toProtoWriter(a, id, registers, offset)
   }
 
+  /**
+    * Represents an optional type.
+    */
   final case class Optional[A](codec: ProtobufCodec[A]) extends ProtobufCodec[Option[A]] {
     private[proteus] def toProtoWriter(a: Option[A], id: Int, registers: Registers, offset: RegisterOffset): ProtobufWriter = a match {
       case None        => null
@@ -580,7 +651,7 @@ object ProtobufCodec {
     r.constructor.resultObject(builder)
   }
 
-  def read[A](registers: Registers, offset: RegisterOffset, codec: ProtobufCodec[A])(using input: CodedInputStream): A = {
+  private def read[A](registers: Registers, offset: RegisterOffset, codec: ProtobufCodec[A])(using input: CodedInputStream): A = {
     def loop[A](codec: ProtobufCodec[A], offset: RegisterOffset): A =
       codec match {
         case c: Message[_]          => handleMessage(c, registers, offset)
@@ -608,6 +679,9 @@ object ProtobufCodec {
       case _                  => false
     }
 
+  /**
+    * Converts the given codec to its protobuf IR representation.
+    */
   def toProtoIR(codec: ProtobufCodec[?]): List[ProtoIR.TopLevelDef] = {
     val visited = new mutable.HashSet[ProtobufCodec[?]]()
 

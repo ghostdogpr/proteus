@@ -15,15 +15,34 @@ import proteus.ProtobufCodec.MessageField.*
 import proteus.ProtobufDeriver.*
 import proteus.internal.*
 
+/**
+  * A deriver for creating protobuf codecs from Scala types.
+  *
+  * @param flags the flags to use for the derivation.
+  * @param instances custom codec instances
+  * @param modifiers custom modifiers
+  */
 case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vector[InstanceOverride], modifiers: Vector[ModifierOverride])
   extends Deriver[ProtobufCodec] {
 
+  /**
+    * Adds a custom codec instance for the given type.
+    */
   def instance[B: Schema](instance: => ProtobufCodec[B]): ProtobufDeriver =
     copy(instances = instances :+ InstanceOverrideByType(Schema[B].reflect.typeName, Lazy(instance)))
 
+  /**
+    * Adds a custom modifier for the given type.
+    */
   def modifier[B: Schema](modifier: Modifier.Reflect): ProtobufDeriver =
     copy(modifiers = modifiers :+ ModifierReflectOverrideByType(Schema[B].reflect.typeName, modifier))
 
+  /**
+    * Adds a custom modifier for a term (case class field or enum member) of the given type.
+    *
+    * @param termName the name of the term to apply the modifier to (there will be a compile time error if the term does not exist)
+    * @param modifier the modifier to apply.
+    */
   inline def modifier[B: Schema](termName: String, modifier: Modifier.Term): ProtobufDeriver = {
     inline summonInline[Mirror.Of[B]] match {
       case m: Mirror.ProductOf[B] =>
@@ -38,9 +57,15 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
     copy(modifiers = modifiers :+ ModifierTermOverride(Schema[B].reflect.typeName, termName, modifier))
   }
 
+  /**
+    * Enables a derivation flag.
+    */
   def enable(flag: DerivationFlag): ProtobufDeriver =
     copy(flags = flags + flag)
 
+  /**
+    * Disables a derivation flag.
+    */
   def disable(flag: DerivationFlag): ProtobufDeriver =
     copy(flags = flags - flag)
 
@@ -596,10 +621,30 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
 }
 
 object ProtobufDeriver extends ProtobufDeriver(Set.empty, Vector.empty, Vector.empty) {
+
+  /**
+    * Flags for the derivation process.
+    */
   enum DerivationFlag {
+
+    /**
+      * Instead of using the optional keyword, the optional fields will be encoded as a oneOf field with two cases: one of type `Empty` and one for the actual value.
+      */
     case OptionalAsOneOf
+
+    /**
+      * Automatically prefix the enum members with the type name.
+      */
     case AutoPrefixEnums
+
+    /**
+      * Automatically suffix the enum members with the type name.
+      */
     case AutoSuffixEnums
+
+    /**
+      * All types used in oneof fields will be encoded as nested types inside the parent message.
+      */
     case NestedOneOf
   }
 

@@ -10,23 +10,53 @@ import proteus.ProtobufCodec.*
 import proteus.ProtobufCodec.MessageField.*
 import proteus.internal.*
 
+/**
+  * An object to register custom json encoders for protobuf codecs.
+  */
 case class Registry(instances: Map[ProtobufCodec[?], Encoder[?]]) {
+
+  /**
+    * Gets the json encoder for the given codec.
+    */
   def get[A](codec: ProtobufCodec[A]): Encoder[A] =
     instances.getOrElse(codec, null).asInstanceOf[Encoder[A]]
 
+  /**
+    * Adds a custom json encoder for the given codec.
+    */
   def add[A: ProtobufCodec](encoder: Encoder[A]): Registry =
     copy(instances = instances + (ProtobufCodec[A] -> encoder))
 }
-object Registry                                                   {
+object Registry {
+
+  /**
+    * An empty registry.
+    */
   val empty: Registry = Registry(Map.empty)
 }
 
+/**
+  * Options that affect the way protobuf codecs are encoded to json.
+  *
+  * @param formatMapEntriesAsKeyValuePairs by default, map entries are encoded as an array of key-value pairs. If this option is set to true, the map entries will be encoded as an array of objects with a `key` and `value` field.
+  */
 case class Options(formatMapEntriesAsKeyValuePairs: Boolean = false)
 
 object Options {
+
+  /**
+    * The default options.
+    */
   val default: Options = Options(formatMapEntriesAsKeyValuePairs = false)
 }
 
+/**
+  * An implicit encoder for protobuf codecs.
+  *
+  * @param codec the codec to encode.
+  * @param registry a registry with custom json encoders.
+  * @param options the options to use for the encoding.
+  */
 implicit def jsonWriterCodec[A](using codec: ProtobufCodec[A], registry: Registry, options: Options): Encoder[A] =
   new Encoder[A] {
     def apply(a: A): Json =
