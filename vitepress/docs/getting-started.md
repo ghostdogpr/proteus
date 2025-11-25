@@ -4,12 +4,12 @@
 
 It is designed to be **code-first**, meaning that it is able to generate Protobuf codecs and .proto files directly from your Scala code.
 
-It also provide a **declarative way to define gRPC services** in Scala, a bit like [tapir](https://tapir.softwaremill.com/en/latest/) does for HTTP services. You can define messages, RPCs and services in Scala, then generate clients and servers for it, using a variety of backends (direct style, Future, ZIO, fs2).
+It also provides a **declarative way to define gRPC services** in Scala, a bit like [tapir](https://tapir.softwaremill.com/en/latest/) does for HTTP services. You can define messages, RPCs, and services in Scala, then generate clients and servers for them, using a variety of backends (direct style, Future, ZIO, fs2).
 
 It is available for Scala 3.3.x LTS and later versions.
 
-::: warning Why not using code generation?
-Let's address the elephant in the room: why not using code generation like everyone else? Check the [FAQ](/faq#why-not-using-code-generation) for a detailed answer.
+::: warning Why not use code generation?
+Let's address the elephant in the room: why not use code generation like everyone else? Check the [FAQ](/faq#why-not-using-code-generation) for a detailed answer.
 :::
 
 ## Our first Protobuf codec
@@ -19,7 +19,7 @@ We first need to add the Proteus library to our project. If you are using sbt, y
 ```scala
 libraryDependencies += "com.github.ghostdogpr" %% "proteus" % "0.1.0"
 ```
-Let's creata a simple case class we would like to encode and decode into Protobuf.
+Let's create a simple case class we would like to encode and decode into Protobuf.
 
 ```scala
 case class Person(name: String, age: Int)
@@ -61,7 +61,7 @@ println(codec.render())
 
 Let's rewind and explain in detail what we just did.
 
-First we called `Schema.derived[Person]` to derive a `Schema` for the `Person` case class. Under the hood, Proteus uses `Schema` from the `zio-blocks` [library]((https://github.com/zio/zio-blocks)) to get some information about Scala types. Note that this library has no dependency (it does not depend on zio) and so is very lightweight.
+First we called `Schema.derived[Person]` to derive a `Schema` for the `Person` case class. Under the hood, Proteus uses `Schema` from the `zio-blocks` [library](https://github.com/zio/zio-blocks) to get some information about Scala types. Note that this library has no dependency (it does not depend on zio) and so is very lightweight.
 
 The code can be simplified further using the `derives` keyword:
 ```scala
@@ -71,7 +71,7 @@ With this `Schema`, Proteus can derive a `ProtobufCodec` for the `Person` case c
 
 For that, it requires a `ProtobufDeriver` instance.
 This is an object that defines how the derivation should work. You can use it to configure some derivation flags that will affect the produced schema, but also register custom instances and modifiers for specific types.
-Here we are just using `ProtobufDeriver` which is the default instance.
+Here we are just using `ProtobufDeriver`, which is the default instance.
 
 Note that we can use `Schema[Person]` without `.derived` since we already have a `Schema` instance for `Person`.
 
@@ -79,14 +79,14 @@ Note that we can use `Schema[Person]` without `.derived` since we already have a
 val codec: ProtobufCodec[Person] = Schema[Person].derive(ProtobufDeriver)
 ```
 
-That codec can now be used to `encode`, `decode` and `render` the `Person` case class!
+That codec can now be used to `encode`, `decode`, and `render` the `Person` case class!
 
 ## Where to go next?
 
-There will be times where we want the generated Protobuf schema to be different from the default one, whether it's for convenience or backward compatibility. Various customization options are available to achieve this and detailed in the [Customization](/customization) section.
+There will be times when we want the generated Protobuf schema to be different from the default one, whether it's for convenience or backward compatibility. Various customization options are available to achieve this and are detailed in the [Customization](/customization) section.
 
 The [gRPC services](/grpc-services) section details how to define complete gRPC services in Scala and use them to create clients and servers using the backend of your choice.
 
-Even if we don't use .proto files to generate our code, it is still useful to have them, whether it's for documentating our API or checking what changes were made to the schema. The [Proto file generation](/proto-file-generation) section details how to generate .proto files at compile time.
+Even if we don't use .proto files to generate our code, it is still useful to have them, whether it's for documenting our API or checking what changes were made to the schema. The [Proto file generation](/proto-file-generation) section details how to generate .proto files at compile time.
 
 Finally, take a look at the [examples](https://github.com/ghostdogpr/proteus/tree/main/examples/src/main/scala/proteus/examples) in the GitHub repository for more detailed examples.
