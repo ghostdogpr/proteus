@@ -84,6 +84,8 @@ import proteus.Modifiers.*
 val deriver = ProtobufDeriver.modifier[Person](rename("User"))
 
 println(Schema[Person].derive(deriver).render())
+// syntax = "proto3";
+// 
 // message User {
 //     string name = 1;
 //     int32 age = 2;
@@ -96,6 +98,8 @@ import proteus.Modifiers.*
 val deriver = ProtobufDeriver.modifier[Person]("name", rename("full_name"))
 
 println(Schema[Person].derive(deriver).render())
+// syntax = "proto3";
+// 
 // message Person {
 //     string full_name = 1;
 //     int32 age = 2;
