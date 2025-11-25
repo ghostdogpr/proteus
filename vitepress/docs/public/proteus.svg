@@ -1,0 +1,17 @@
+<svg width="260" height="260" viewBox="0 0 260 260" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    .c { stroke:#CB4239; fill:#CB4239; }
+  </style>
+
+  <!-- protobuf < >, top = 50, bottom = 210 -->
+  <path d="M60 50 L30 130 L60 210" fill="none" stroke="#CB4239" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"></path>
+  <path d="M200 50 L230 130 L200 210" fill="none" stroke="#CB4239" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"></path>
+
+  <!-- Scala curved bars, aligned exactly top=50 and bottom=210 -->
+  <g transform="translate(95,50)" class="c">
+    <!-- total stairs height = 160 (40 + 20 + 40 + 20 + 40) -->
+    <path d="M0 0 h70a20 20 0 0 1 0 40h-70a20 20 0 0 1 0-40z"></path>
+    <path d="M0 60 h70a20 20 0 0 1 0 40h-70a20 20 0 0 1 0-40z"></path>
+    <path d="M0 120 h70a20 20 0 0 1 0 40h-70a20 20 0 0 1 0-40z"></path>
+  </g>
+</svg>

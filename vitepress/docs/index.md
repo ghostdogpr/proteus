@@ -1,0 +1,27 @@
+---
+layout: home
+
+hero:
+  name: "Proteus"
+  text: "Protobuf library for Scala"
+  tagline: Protobuf goes Scala-first
+  image:
+    src: /proteus.svg
+    alt: Proteus
+  actions:
+    - theme: brand
+      text: Get Started
+      link: /get-started
+    - theme: alt
+      text: GitHub
+      link: https://github.com/ghostdogpr/proteus
+
+features:
+  - title: Code-First
+    details: Generate protobuf codecs directly from your Scala code. No code generation or sbt plugin required.
+  - title: Schema Generation
+    details: Generate .proto files at compile time to efficiently track changes. Various customizations are available.
+  - title: Declarative gRPC Services
+    details: Define gRPC services in Scala. Generate clients and servers from them using direct style, Future, ZIO, or fs2 backends.
+---
+
