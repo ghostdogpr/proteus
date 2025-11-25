@@ -10,8 +10,8 @@ hero:
     alt: Proteus
   actions:
     - theme: brand
-      text: Get Started
-      link: /get-started
+      text: Getting Started
+      link: /getting-started
     - theme: alt
       text: GitHub
       link: https://github.com/ghostdogpr/proteus

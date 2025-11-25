@@ -83,7 +83,10 @@ That codec can now be used to `encode`, `decode` and `render` the `Person` case 
 
 ## Where to go next?
 
-- Customizing the generated Protobuf schema
-- Generating .proto files at compile time
-- Using Proteus with gRPC
-- Using Proteus with JSON
+There will be times where we want the generated Protobuf schema to be different from the default one, whether it's for convenience or backward compatibility. Various customization options are available to achieve this and detailed in the [Customization](/customization) section.
+
+The [gRPC services](/grpc-services) section details how to define complete gRPC services in Scala and use them to create clients and servers using the backend of your choice.
+
+Even if we don't use .proto files to generate our code, it is still useful to have them, whether it's for documentating our API or checking what changes were made to the schema. The [Proto file generation](/proto-file-generation) section details how to generate .proto files at compile time.
+
+Finally, take a look at the [examples](https://github.com/ghostdogpr/proteus/tree/main/examples/src/main/scala/proteus/examples) in the GitHub repository for more detailed examples.

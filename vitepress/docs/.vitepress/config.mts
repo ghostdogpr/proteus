@@ -10,7 +10,7 @@ export default defineConfig({
   themeConfig: {
     nav: [
       { text: 'Home', link: '/' },
-      { text: 'Documentation', link: '/get-started' },
+      { text: 'Documentation', link: '/getting-started' },
       { text: 'FAQ', link: '/faq' },
     ],
 
@@ -20,9 +20,15 @@ export default defineConfig({
       {
         text: 'Documentation',
         items: [
-          { text: 'Getting Started', link: '/get-started' },
-          { text: 'FAQ', link: '/faq' },
+          { text: 'Getting started', link: '/getting-started' },
+          { text: 'Customization', link: '/customization' },
+          { text: 'gRPC services', link: '/grpc-services' },
+          { text: 'Proto file generation', link: '/proto-file-generation' },
+          { text: 'JSON support', link: '/json-support' },
         ]
+      },
+      {
+        text: 'FAQ', link: '/faq'
       }
     ],
 
