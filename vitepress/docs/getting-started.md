@@ -6,7 +6,7 @@ It is designed to be **code-first**, meaning that it is able to generate Protobu
 
 It also provides a **declarative way to define gRPC services** in Scala, a bit like [tapir](https://tapir.softwaremill.com/en/latest/) does for HTTP services. You can define messages, RPCs, and services in Scala, then generate clients and servers for them, using a variety of backends (direct style, Future, ZIO, fs2).
 
-It is available for Scala 3.3.x LTS and later versions.
+It is available for Scala 3.3.x LTS and later versions. The core module is available for both Scala JVM and Scala.js.
 
 ::: warning Why not use code generation?
 Let's address the elephant in the room: why not use code generation like everyone else? Check the [FAQ](/faq#why-not-using-code-generation) for a detailed answer.
@@ -80,6 +80,16 @@ val codec: ProtobufCodec[Person] = Schema[Person].derive(ProtobufDeriver)
 ```
 
 That codec can now be used to `encode`, `decode`, and `render` the `Person` case class!
+
+::: tip Supported types
+Proteus derivation supports the following types:
+- Primitive types: `String`, `Int`, `Long`, `Float`, `Double`, `Boolean`
+- Collections: `List`, `Vector`, `Set`, `Map` (anything supported by zio-blocks)
+- Others: `Option`, `Array[Byte]` (mapped to `bytes` in Protobuf)
+- Case classes, sealed traits, enums
+- Recursive types
+- Opaque types
+:::
 
 ## Where to go next?
 
