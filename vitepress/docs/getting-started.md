@@ -1,4 +1,4 @@
-# Getting Started
+# Getting started
 
 **Proteus** is a **[Scala](https://www.scala-lang.org/) open source library** for working with **[Protobuf](https://protobuf.dev/)** and **[gRPC](https://grpc.io/)**.
 

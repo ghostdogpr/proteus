@@ -1,4 +1,4 @@
-# gRPC Services
+# gRPC services
 
 Proteus allows you to define RPCs and gRPC services in Scala using your own types, relying on `ProtobufCodec` to encode and decode the messages.
 
