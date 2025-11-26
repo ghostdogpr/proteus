@@ -11,3 +11,15 @@ That led to a few issues as the project grew:
 - **Increased compile time**: compiling the thousands of generated files takes time and tends to [slow down IDEs](https://github.com/scalameta/metals/issues/7443) as well. Chimney transformations in large quantities also significantly increase the compile time.
 - **Boilerplate**: the transformation code, even using Chimney, is a lot of boilerplate. It became tedious for us to add new types to our schemas. We also have different Protobuf schemas for different purposes (API, internal, etc.) and had to transform each of these to the same Scala types.
 - **Inconsistency**: while migrating to Proteus, we found out that the way we were writing .proto files was very inconsistent. Developers were using different conventions and styles for naming things, handling optional fields, etc.
+
+## Won't it break backward compatibility whenever I change Scala code?
+
+It is true that changes in Scala code will change the resulting Protobuf schema, potentially breaking backward compatibility.
+
+To deal with this, make sure to always [generate `.proto` files](/proto-file-generation) and commit them to your repository, enforcing that they are always up to date thanks to a CI check. That way, you can detect when your changes break compatibility. When they do, you can then use the [customization features](/customization) to ensure that the parts of the schema that need to stay the same are not affected by the changes.
+
+## How about performance?
+
+It is hard to compete with the speed of code generation, which creates custom encoders and decoders for every single type without the need for generic code. A fairer comparison is to compare Proteus with the combination of code generation and transformations between the generated types and the idiomatic Scala types.
+
+We have a benchmark project that compares the performance of Proteus with ScalaPB and Chimney for various payload sizes. You can find it [here](https://github.com/ghostdogpr/proteus/tree/main/benchmarks). The bottom line is that Proteus is up to 2x slower for small payloads (which is still extremely fast) and about the same speed for large payloads.
