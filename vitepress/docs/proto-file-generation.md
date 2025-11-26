@@ -39,7 +39,7 @@ There is also `renderToFile` to write the dependency directly to a file (in this
 
 Dependencies can also depend on other dependencies.
 ```scala
-val common   = Dependency("common", "com.example").add[Address]
+val common = Dependency("common", "com.example").add[Address]
 
 val entitiesWithDependency = entities.dependsOn(common)
 println(entitiesWithDependency.render(Nil))
@@ -64,7 +64,7 @@ You can call `findConflicts` to get the list of conflicts without throwing an er
 
 ## Services
 
-Very similarly, you can render entire gRPC services. Services can also have dependencies via `dependsOn`.
+Similarly, you can render entire gRPC services. Services can also have dependencies via `dependsOn`.
 
 ```scala
 import proteus.*
@@ -75,7 +75,7 @@ given ProtobufDeriver = ProtobufDeriver // your deriver instance
 case class HelloRequest(name: String) derives Schema, ProtobufCodec
 case class HelloResponse(message: String) derives Schema, ProtobufCodec
 
-val helloRpc     = Rpc.unary[HelloRequest, HelloResponse]("Hello")
+val helloRpc = Rpc.unary[HelloRequest, HelloResponse]("Hello")
 val helloService = Service("examples", "Greeter").rpc(helloRpc)
 println(helloService.render(Nil))
 // syntax = "proto3";
