@@ -4,7 +4,6 @@ export default defineConfig({
   base: '/proteus/',
   title: "Proteus",
   description: "Protobuf library for Scala",
-
   head: [['link', { rel: 'icon', href: '/proteus/favicon.png' }]],
 
   themeConfig: {
