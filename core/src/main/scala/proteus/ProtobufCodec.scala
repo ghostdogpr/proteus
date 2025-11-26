@@ -13,6 +13,8 @@ import zio.blocks.schema.binding.RegisterOffset.RegisterOffset
 
 import proteus.ProtobufCodec.*
 import proteus.ProtobufCodec.MessageField.*
+import proteus.ProtoIR.{CompilationUnit, TopLevelOption}
+import proteus.ProtoIR.Statement.TopLevelStatement
 import proteus.internal.*
 
 /**
@@ -64,6 +66,12 @@ sealed trait ProtobufCodec[A] {
       case _                   =>
         Transform(from, to, this)
     }
+
+  /**
+    * Renders the codec to a .proto file as a string.
+    */
+  def render(packageName: Option[String] = None, options: List[TopLevelOption] = List.empty): String =
+    Renderer.render(CompilationUnit(packageName, toProtoIR(this).map(TopLevelStatement(_)), options))
 
   private def decode(input: CodedInputStream): A =
     withRegisters { registers =>
