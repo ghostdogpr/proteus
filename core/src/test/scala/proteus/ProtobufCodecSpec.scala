@@ -842,6 +842,32 @@ object ProtobufCodecSpec extends ZIOSpecDefault {
           assert(results.map(_._2))(equalTo(testCases)) &&
           assert(results.forall(_._3))(isTrue)
       }
+    ),
+    suite("Derivation Validation")(
+      test("derivation fails when repeated contains optional") {
+        case class WithOptionalList(items: List[Option[Int]]) derives Schema
+
+        val result = Try {
+          Schema[WithOptionalList].derive(deriver)
+        }
+
+        assert(result.isFailure)(isTrue) &&
+          assert(result.failed.get.getMessage)(
+            containsString("Unsupported usage of optional inside List")
+          )
+      },
+      test("derivation fails when list contains list") {
+        case class WithDoublyNestedList(items: List[List[String]]) derives Schema
+
+        val result = Try {
+          Schema[WithDoublyNestedList].derive(deriver)
+        }
+
+        assert(result.isFailure)(isTrue) &&
+          assert(result.failed.get.getMessage)(
+            containsString("Unsupported usage of repeated inside List")
+          )
+      }
     )
   )
 }
