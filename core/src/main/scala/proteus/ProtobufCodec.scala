@@ -680,11 +680,19 @@ object ProtobufCodec {
     result
   }
 
-  private def isOptional[A](using codec: ProtobufCodec[A]): Boolean =
+  private[proteus] def isOptional[A](using codec: ProtobufCodec[A]): Boolean =
     codec match {
       case c: Transform[_, _] => isOptional(using c.codec)
       case _: Optional[_]     => true
       case _                  => false
+    }
+
+  private[proteus] def isRepeated[A](using codec: ProtobufCodec[A]): Boolean =
+    codec match {
+      case c: Transform[_, _]      => isRepeated(using c.codec)
+      case _: Repeated[_, _]       => true
+      case _: RepeatedMap[_, _, _] => true
+      case _                       => false
     }
 
   /**
