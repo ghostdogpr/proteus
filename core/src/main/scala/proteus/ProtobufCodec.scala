@@ -80,9 +80,13 @@ sealed trait ProtobufCodec[A] {
 
   private[proteus] def makeNested: ProtobufCodec[A] =
     this match {
-      case message: Message[_]        => message.copy(nested = true)
+      case message: Message[_]        => message.copy(nested = if (message.nested.isEmpty) Some(true) else message.nested)
       case Transform(from, to, codec) => Transform(from, to, codec.makeNested)
-      case RecursiveMessage(thunk)    => RecursiveMessage(() => thunk().copy(nested = true))
+      case RecursiveMessage(thunk)    =>
+        RecursiveMessage { () =>
+          val m = thunk()
+          m.copy(nested = if (m.nested.isEmpty) Some(true) else m.nested)
+        }
       case Optional(codec)            => Optional(codec.makeNested)
       case _                          => this
     }
@@ -296,7 +300,7 @@ object ProtobufCodec {
     usedRegisters: RegisterOffset,
     reserved: Set[Int],
     inline: Boolean,
-    nested: Boolean,
+    nested: Option[Boolean],
     comment: Option[String] = None
   ) extends ProtobufCodec[A] {
 
@@ -345,7 +349,7 @@ object ProtobufCodec {
       def findNested[A](codec: ProtobufCodec[A], goDeep: Boolean = false): List[ProtoIR.MessageElement] =
         codec match {
           case c: Message[_]           =>
-            if (c.nested) List(ProtoIR.MessageElement.NestedMessageElement(c.toProtoIR))
+            if (c.nested.getOrElse(false)) List(ProtoIR.MessageElement.NestedMessageElement(c.toProtoIR))
             else if (goDeep) c.simpleFields.collect(field => findNested(field.codec)).flatten.distinct
             else Nil
           case c: Enum[_]              => if (c.nested) List(ProtoIR.MessageElement.NestedEnumElement(c.toProtoIR)) else Nil
@@ -708,7 +712,7 @@ object ProtobufCodec {
           else {
             if (!c.name.isEmpty) {
               visited.add(c): Unit
-              if (c.nested) c.simpleFields.map(_.codec).flatMap(findTopLevelDefs)
+              if (c.nested.getOrElse(false)) c.simpleFields.map(_.codec).flatMap(findTopLevelDefs)
               else ProtoIR.TopLevelDef.MessageDef(c.toProtoIR) :: c.simpleFields.map(_.codec).flatMap(findTopLevelDefs)
             } else c.simpleFields.map(_.codec).flatMap(findTopLevelDefs)
           }

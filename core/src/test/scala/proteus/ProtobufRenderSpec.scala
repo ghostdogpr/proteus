@@ -1135,6 +1135,47 @@ message Contact {
         assertTrue(standardRendered == expectedStandard) &&
           assertTrue(nestedRendered == expectedNested)
       },
+      test("NestedOneOf flag creates nested messages for enum variants except when unnested modifier is used") {
+        enum Contact derives Schema {
+          case Email(address: String)
+          case Phone(number: String, country: String)
+        }
+        object Contact              {
+          given Schema[Email] = Schema.derived
+          given Schema[Phone] = Schema.derived
+        }
+        case class ContactMessage(contact: Contact) derives Schema
+
+        val nestedCodec    = Schema[ContactMessage].derive(deriverWithNestedOneOf.modifier[Contact.Email](unnested))
+        val nestedRendered = renderCodec(nestedCodec)
+
+        val expectedNested = """syntax = "proto3";
+
+package test;
+
+message ContactMessage {
+    Contact contact = 1;
+}
+
+message Contact {
+    message Phone {
+        string number = 1;
+        string country = 2;
+    }
+    
+    oneof value {
+        Email email = 1;
+        Phone phone = 2;
+    }
+}
+
+message Email {
+    string address = 1;
+}
+"""
+
+        assertTrue(nestedRendered == expectedNested)
+      },
       test("AutoPrefixEnums flag adds type name as prefix to enum members") {
         enum Status derives Schema { case Active, Inactive, Pending }
         case class StatusMessage(status: Status) derives Schema

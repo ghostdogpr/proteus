@@ -114,7 +114,7 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
           .map { fieldsWithInstances =>
             val reservedIndexes    = getReservedIndexes(modifiers).toSet
             val allReservedIndexes = reservedIndexes ++ getReservedIndexes(fieldsWithInstances.flatMap(_.term.modifiers)).toSet
-            val nested             = modifiers.collectFirst { case Modifier.config(`nestedModifier`, _) => true }.getOrElse(false)
+            val nested             = modifiers.collectFirst { case Modifier.config(`nestedModifier`, value) => value.toBooleanOption }.flatten
             val builder            = Array.newBuilder[ProtobufCodec.MessageField[?]]
             var id                 = 0
 
@@ -244,7 +244,7 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
       D.instance(filteredCases.find(c => c.name == unitSome.name).get.value.asRecord.get.fields.head.value.metadata)
         .map(ProtobufCodec.Optional(_).asInstanceOf[ProtobufCodec[A]])
     else if (isEnum(filteredCases, modifiers)) {
-      val nested             = modifiers.collectFirst { case Modifier.config(`nestedModifier`, _) => true }.getOrElse(false)
+      val nested             = modifiers.collectFirst { case Modifier.config(`nestedModifier`, "true") => true }.getOrElse(false)
       val reservedIndexes    = getReservedIndexes(modifiers).toSet
       val allReservedIndexes = reservedIndexes ++ filteredCases.flatMap(c => getReservedIndexes(c.modifiers).toSet)
       val builder            = List.newBuilder[ProtobufCodec.EnumValue[A]]
@@ -266,7 +266,7 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
       }
       Lazy(ProtobufCodec.Enum(getTypeName(typeName, modifiers), builder.result(), reservedIndexes.toList, nested = nested, getComment(modifiers)))
     } else {
-      val nested        = modifiers.collectFirst { case Modifier.config(`nestedModifier`, _) => true }.getOrElse(false)
+      val nested        = modifiers.collectFirst { case Modifier.config(`nestedModifier`, value) => value.toBooleanOption }.flatten
       val inlineOneOf   = modifiers.collectFirst { case Modifier.config(`oneOfModifier`, value) => value.contains("inline") }.getOrElse(false)
       val nestedOneOf   = modifiers
         .collectFirst { case Modifier.config(`oneOfModifier`, value) => value.contains("nested") }
@@ -395,7 +395,7 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
               offset,
               Set.empty,
               inline = false,
-              nested = false,
+              nested = None,
               comment = None
             ),
             mapBinding.constructor,
@@ -415,7 +415,7 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
                 offset,
                 Set.empty,
                 inline = false,
-                nested = true,
+                nested = Some(true),
                 comment = None
               ),
               SeqConstructor.listConstructor,

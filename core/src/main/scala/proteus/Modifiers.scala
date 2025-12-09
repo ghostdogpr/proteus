@@ -20,6 +20,11 @@ object Modifiers {
   val nested: Modifier.Reflect = Modifier.config(nestedModifier, "true")
 
   /**
+    * A modifier to force a type to be defined at the root level.
+    */
+  val unnested: Modifier.Reflect = Modifier.config(nestedModifier, "false")
+
+  /**
     * A modifier to force a type to be encoded as a oneOf.
     * Sum types with no fields are encoded as enums by default and this modifier can be used to force them to be encoded as a oneOf instead.
     */
