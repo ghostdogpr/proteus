@@ -190,9 +190,12 @@ object ProtobufCodec {
       comment: Option[String] = None
     ) extends MessageField[A] {
       private[proteus] def toProtoWriter(registers: Registers, offset: RegisterOffset, nextOffset: RegisterOffset): ProtobufWriter = {
-        val res   = getFromRegister(registers, offset, register).asInstanceOf[A]
-        val field = cases(discriminator.discriminate(res))
-        ProtobufCodec.toProtoWriter(field.codec, res.asInstanceOf[field.codec.Focus], field.id, registers, nextOffset, alwaysEncode = true)
+        val res = getFromRegister(registers, offset, register).asInstanceOf[A]
+        if (res == null) null
+        else {
+          val field = cases(discriminator.discriminate(res))
+          ProtobufCodec.toProtoWriter(field.codec, res.asInstanceOf[field.codec.Focus], field.id, registers, nextOffset, alwaysEncode = true)
+        }
       }
 
       /**
