@@ -779,6 +779,21 @@ object ProtobufCodecSpec extends ZIOSpecDefault {
         val decoded  = codec.decode(encoded)
 
         assert(decoded)(equalTo(original))
+      },
+      test("message with variant recursive type") {
+        sealed trait A derives Schema
+        object A {
+          case class B(test: C)    extends A derives Schema
+          case class C(value: Int) extends A derives Schema
+        }
+        case class MessageWithA(a: A) derives Schema
+        val codec = Schema[MessageWithA].derive(deriver)
+
+        val original = MessageWithA(A.B(A.C(1)))
+        val encoded  = codec.encode(original)
+        val decoded  = codec.decode(encoded)
+
+        assert(decoded)(equalTo(original))
       }
     ),
     suite("Transform")(

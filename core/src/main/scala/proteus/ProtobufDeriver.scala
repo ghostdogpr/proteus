@@ -265,63 +265,77 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
         builder += ProtobufCodec.EnumValue(enumName, fieldIndex, a, getComment(c.modifiers))
       }
       Lazy(ProtobufCodec.Enum(getTypeName(typeName, modifiers), builder.result(), reservedIndexes.toList, nested = nested, getComment(modifiers)))
-    } else {
-      val nested        = modifiers.collectFirst { case Modifier.config(`nestedModifier`, value) => value.toBooleanOption }.flatten
-      val inlineOneOf   = modifiers.collectFirst { case Modifier.config(`oneOfModifier`, value) => value.contains("inline") }.getOrElse(false)
-      val nestedOneOf   = modifiers
-        .collectFirst { case Modifier.config(`oneOfModifier`, value) => value.contains("nested") }
-        .getOrElse(flags.contains(DerivationFlag.NestedOneOf))
-      val discriminator = binding.asInstanceOf[Binding.Variant[A]].discriminator
-      Lazy.collectAll(filteredCases.map(c => D.instance(c.value.metadata).map(TermInstance(c, _))).toVector).map { casesWithInstances =>
-        val reservedIndexes    = getReservedIndexes(modifiers).toSet
-        val allReservedIndexes = reservedIndexes ++ getReservedIndexes(casesWithInstances.flatMap(_.term.modifiers)).toSet
-        val builder            = Array.newBuilder[ProtobufCodec.MessageField[?]]
-        var id                 = 1
-        val register           = Register.Object(0)
-        builder += OneOfField(
-          "value",
-          casesWithInstances.zipWithIndex.map { case (c, index) =>
-            val fieldId = getReservedIndex(c.term.modifiers) match {
-              case Some(reservedIndex) => reservedIndex
-              case None                =>
-                while (allReservedIndexes.contains(id)) id += 1
-                val current = id
-                id += 1
-                current
-            }
-            val item    = SimpleField(
-              getFieldName(c.term.name, c.term.modifiers),
-              fieldId,
-              if (nestedOneOf) c.instance.makeNested else c.instance,
+    } else
+      Lazy {
+        val visited   = visitedCache.get
+        val recursive = recursiveCache.get
+        if (visited.containsKey(typeName)) {
+          recursive.put(typeName, ())
+          Lazy(ProtobufCodec.RecursiveMessage(() => instanceCache.get(typeName).asInstanceOf[ProtobufCodec.Message[A]]))
+        } else {
+          visited.put(typeName, ())
+
+          val nested        = modifiers.collectFirst { case Modifier.config(`nestedModifier`, value) => value.toBooleanOption }.flatten
+          val inlineOneOf   = modifiers.collectFirst { case Modifier.config(`oneOfModifier`, value) => value.contains("inline") }.getOrElse(false)
+          val nestedOneOf   = modifiers
+            .collectFirst { case Modifier.config(`oneOfModifier`, value) => value.contains("nested") }
+            .getOrElse(flags.contains(DerivationFlag.NestedOneOf))
+          val discriminator = binding.asInstanceOf[Binding.Variant[A]].discriminator
+          Lazy.collectAll(filteredCases.map(c => D.instance(c.value.metadata).map(TermInstance(c, _))).toVector).map { casesWithInstances =>
+            val reservedIndexes    = getReservedIndexes(modifiers).toSet
+            val allReservedIndexes = reservedIndexes ++ getReservedIndexes(casesWithInstances.flatMap(_.term.modifiers)).toSet
+            val builder            = Array.newBuilder[ProtobufCodec.MessageField[?]]
+            var id                 = 1
+            val register           = Register.Object(0)
+            builder += OneOfField(
+              "value",
+              casesWithInstances.zipWithIndex.map { case (c, index) =>
+                val fieldId = getReservedIndex(c.term.modifiers) match {
+                  case Some(reservedIndex) => reservedIndex
+                  case None                =>
+                    while (allReservedIndexes.contains(id)) id += 1
+                    val current = id
+                    id += 1
+                    current
+                }
+                val item    = SimpleField(
+                  getFieldName(c.term.name, c.term.modifiers),
+                  fieldId,
+                  if (nestedOneOf) c.instance.makeNested else c.instance,
+                  register.asInstanceOf[Register[Any]],
+                  null,
+                  getComment(c.term.modifiers)
+                )
+                item
+              }.toArray,
               register.asInstanceOf[Register[Any]],
-              null,
-              getComment(c.term.modifiers)
+              discriminator,
+              getComment(modifiers)
             )
-            item
-          }.toArray,
-          register.asInstanceOf[Register[Any]],
-          discriminator,
-          getComment(modifiers)
-        )
-        ProtobufCodec.Message(
-          getTypeName(typeName, modifiers),
-          builder.result(),
-          new Constructor[A]   {
-            def usedRegisters: RegisterOffset                           = register.usedRegisters
-            def construct(in: Registers, baseOffset: RegisterOffset): A = register.get(in, baseOffset).asInstanceOf[A]
-          },
-          new Deconstructor[A] {
-            def usedRegisters: RegisterOffset                                         = register.usedRegisters
-            def deconstruct(registers: Registers, offset: RegisterOffset, a: A): Unit = register.set(registers, offset, a.asInstanceOf[AnyRef])
-          },
-          register.usedRegisters,
-          reservedIndexes,
-          inline = inlineOneOf,
-          nested = nested,
-          comment = getComment(modifiers)
-        )
-      }
-    }
+            val codec              = ProtobufCodec.Message(
+              getTypeName(typeName, modifiers),
+              builder.result(),
+              new Constructor[A]   {
+                def usedRegisters: RegisterOffset                           = register.usedRegisters
+                def construct(in: Registers, baseOffset: RegisterOffset): A = register.get(in, baseOffset).asInstanceOf[A]
+              },
+              new Deconstructor[A] {
+                def usedRegisters: RegisterOffset                                         = register.usedRegisters
+                def deconstruct(registers: Registers, offset: RegisterOffset, a: A): Unit = register.set(registers, offset, a.asInstanceOf[AnyRef])
+              },
+              register.usedRegisters,
+              reservedIndexes,
+              inline = inlineOneOf,
+              nested = nested,
+              comment = getComment(modifiers)
+            )
+
+            visited.remove(typeName)
+            if (recursive.containsKey(typeName)) instanceCache.put(typeName, codec.asInstanceOf[ProtobufCodec.Message[Any]]): Unit
+            codec
+          }
+        }
+      }.flatten
   }
 
   def deriveSequence[F[_, _], C[_], A](
