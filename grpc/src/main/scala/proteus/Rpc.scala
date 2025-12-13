@@ -43,8 +43,8 @@ sealed trait Rpc[Req, Resp] { self =>
   lazy val toProtoIR: ProtoIR.Rpc =
     ProtoIR.Rpc(
       name = name,
-      request = ProtoIR.RpcMessage(ProtoIR.Fqn(None, requestCodec.getName.getOrElse(""))),
-      response = ProtoIR.RpcMessage(ProtoIR.Fqn(None, responseCodec.getName.getOrElse(""))),
+      request = ProtoIR.RpcMessage(ProtoIR.Fqn(None, requestCodec.getName)),
+      response = ProtoIR.RpcMessage(ProtoIR.Fqn(None, responseCodec.getName)),
       streamingRequest = self match {
         case _: Rpc.ClientStreaming[?, ?] | _: Rpc.BidiStreaming[?, ?] => true
         case _                                                         => false

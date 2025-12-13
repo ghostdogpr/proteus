@@ -5,6 +5,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 import scala.collection.immutable.HashMap
 import scala.collection.mutable
+import scala.util.control.NonFatal
 
 import com.google.protobuf.{CodedInputStream, CodedOutputStream}
 import zio.blocks.schema.{Optional as _, *}
@@ -29,12 +30,14 @@ sealed trait ProtobufCodec[A] {
     * @param value the value to encode.
     */
   def encode(value: A): Array[Byte] =
-    withRegisters { registers =>
-      val writer = toProtoWriter(this, value, -1, registers, RegisterOffset.Zero, alwaysEncode = true)
-      val bytes  = new Array[Byte](internal.ProtobufWriter.innerSize(writer))
-      val output = CodedOutputStream.newInstance(bytes)
-      internal.ProtobufWriter.write(writer)(using output)
-      bytes
+    wrapEncode(getName, prependOnExisting = false) {
+      withRegisters { registers =>
+        val writer = toProtoWriter(this, value, -1, registers, RegisterOffset.Zero, alwaysEncode = true)
+        val bytes  = new Array[Byte](internal.ProtobufWriter.innerSize(writer))
+        val output = CodedOutputStream.newInstance(bytes)
+        internal.ProtobufWriter.write(writer)(using output)
+        bytes
+      }
     }
 
   /**
@@ -74,8 +77,10 @@ sealed trait ProtobufCodec[A] {
     Renderer.render(CompilationUnit(packageName, toProtoIR(this).map(TopLevelStatement(_)), options))
 
   private def decode(input: CodedInputStream): A =
-    withRegisters { registers =>
-      read(registers, RegisterOffset.Zero, this)(using input)
+    wrapDecode(getName, prependOnExisting = false) {
+      withRegisters { registers =>
+        read(registers, RegisterOffset.Zero, this)(using input)
+      }
     }
 
   private[proteus] def makeNested: ProtobufCodec[A] =
@@ -91,13 +96,14 @@ sealed trait ProtobufCodec[A] {
       case _                          => this
     }
 
-  private[proteus] def getName: Option[String] =
+  private[proteus] def getName: String =
     this match {
-      case message: Message[_]     => Some(message.name)
+      case message: Message[_]     => message.name
+      case e: Enum[_]              => e.name
       case Transform(_, _, codec)  => codec.getName
-      case RecursiveMessage(thunk) => Some(thunk().name)
+      case RecursiveMessage(thunk) => thunk().name
       case Optional(codec)         => codec.getName
-      case _                       => None
+      case _                       => ""
     }
 }
 
@@ -130,6 +136,40 @@ object ProtobufCodec {
   }
 
   /**
+    * Wraps encode failures with path enrichment.
+    *
+    * `segment` is by-name to ensure we allocate the string only on the exceptional path.
+    */
+  private[proteus] inline def wrapEncode[A](inline segment: => String, prependOnExisting: Boolean = true)(inline thunk: => A): A =
+    try thunk
+    catch {
+      case e: ProtobufEncodeFailure =>
+        if (prependOnExisting) e.prepend(segment)
+        throw e
+      case NonFatal(e)              =>
+        val pe = ProtobufEncodeFailure.from(e)
+        pe.prepend(segment)
+        throw pe
+    }
+
+  /**
+    * Wraps decode failures with path enrichment.
+    *
+    * `segment` is by-name to ensure we allocate the string only on the exceptional path.
+    */
+  private[proteus] inline def wrapDecode[A](inline segment: => String, prependOnExisting: Boolean = true)(inline thunk: => A): A =
+    try thunk
+    catch {
+      case e: ProtobufDecodeFailure =>
+        if (prependOnExisting) e.prepend(segment)
+        throw e
+      case NonFatal(e)              =>
+        val pe = ProtobufDecodeFailure.from(e)
+        pe.prepend(segment)
+        throw pe
+    }
+
+  /**
     * Represents a field of a message. It can be a simple field, a one-of field, or an excluded field.
     */
   sealed trait MessageField[A] {
@@ -156,7 +196,9 @@ object ProtobufCodec {
     ) extends MessageField[A] {
       private[proteus] def toProtoWriter(registers: Registers, offset: RegisterOffset, nextOffset: RegisterOffset): ProtobufWriter = {
         val res = getFromRegister(registers, offset, register).asInstanceOf[A]
-        ProtobufCodec.toProtoWriter(codec, res, id, registers, nextOffset, alwaysEncode = false)
+        wrapEncode(s"$name#$id") {
+          ProtobufCodec.toProtoWriter(codec, res, id, registers, nextOffset, alwaysEncode = false)
+        }
       }
 
       /**
@@ -193,8 +235,12 @@ object ProtobufCodec {
         val res = getFromRegister(registers, offset, register).asInstanceOf[A]
         if (res == null) null
         else {
-          val field = cases(discriminator.discriminate(res))
-          ProtobufCodec.toProtoWriter(field.codec, res.asInstanceOf[field.codec.Focus], field.id, registers, nextOffset, alwaysEncode = true)
+          wrapEncode(name) {
+            val field = cases(discriminator.discriminate(res))
+            wrapEncode(s"${field.name}#${field.id}") {
+              ProtobufCodec.toProtoWriter(field.codec, res.asInstanceOf[field.codec.Focus], field.id, registers, nextOffset, alwaysEncode = true)
+            }
+          }
         }
       }
 
@@ -326,22 +372,23 @@ object ProtobufCodec {
     })
     private[proteus] val mayUseBuilder: Boolean = simpleFields.exists(_.mayUseBuilder)
 
-    private[proteus] def toProtoWriter(a: A, id: Int, registers: Registers, offset: RegisterOffset): ProtobufWriter.Message = {
-      deconstructor.deconstruct(registers, offset, a)
-      val nextOffset = RegisterOffset.add(offset, usedRegisters)
-      val builder    = List.newBuilder[ProtobufWriter]
-      var i          = 0
-      var size       = 0
-      while (i < fields.length) {
-        val res = fields(i).toProtoWriter(registers, offset, nextOffset)
-        if (res ne null) {
-          builder += res
-          size += ProtobufWriter.fullSize(res)
+    private[proteus] def toProtoWriter(a: A, id: Int, registers: Registers, offset: RegisterOffset): ProtobufWriter.Message =
+      wrapEncode(name) {
+        deconstructor.deconstruct(registers, offset, a)
+        val nextOffset = RegisterOffset.add(offset, usedRegisters)
+        val builder    = List.newBuilder[ProtobufWriter]
+        var i          = 0
+        var size       = 0
+        while (i < fields.length) {
+          val res = fields(i).toProtoWriter(registers, offset, nextOffset)
+          if (res ne null) {
+            builder += res
+            size += ProtobufWriter.fullSize(res)
+          }
+          i += 1
         }
-        i += 1
+        internal.ProtobufWriter.Message(id, builder.result(), size)
       }
-      internal.ProtobufWriter.Message(id, builder.result(), size)
-    }
 
     /**
       * Converts the message to its protobuf IR representation.
@@ -565,69 +612,72 @@ object ProtobufCodec {
     }
   }
 
-  private def handleMessage[A](m: Message[A], registers: Registers, offset: RegisterOffset)(using input: CodedInputStream): A = {
-    val visited    = new Array[Boolean](m.fields.length)
-    val nextOffset = RegisterOffset.add(offset, m.constructor.usedRegisters)
+  private def handleMessage[A](m: Message[A], registers: Registers, offset: RegisterOffset)(using input: CodedInputStream): A =
+    wrapDecode(m.name) {
+      val visited    = new Array[Boolean](m.fields.length)
+      val nextOffset = RegisterOffset.add(offset, m.constructor.usedRegisters)
 
-    def handleRepeated[C[_], E](r: Repeated[C, E], field: IndexedField, tag: Int): C[E] = {
-      val register = field.field.register
-      val builder  =
-        if (!visited(field.index)) {
-          val builder = r.constructor.newObjectBuilder[E]()
-          setToRegister(registers, offset, register, builder)
-          builder
-        } else getFromRegister(registers, offset, register).asInstanceOf[r.constructor.ObjectBuilder[E]]
-      r.constructor.addObject(builder, loop(r.element, field, tag))
-      null.asInstanceOf[C[E]]
-    }
-
-    def handleRepeatedMap[M[_, _], K, V](r: RepeatedMap[M, K, V], field: IndexedField): M[K, V] = {
-      val register = field.field.register
-      val builder  =
-        if (!visited(field.index)) {
-          val builder = r.constructor.newObjectBuilder[K, V]()
-          setToRegister(registers, offset, register, builder)
-          builder
-        } else getFromRegister(registers, offset, register).asInstanceOf[r.constructor.ObjectBuilder[K, V]]
-      val (k, v)   = withLimit(handleMessage(r.element, registers, nextOffset))
-      r.constructor.addObject(builder, k, v)
-      null.asInstanceOf[M[K, V]]
-    }
-
-    def loop[A](codec: ProtobufCodec[A], field: IndexedField, tag: Int): A =
-      codec match {
-        case c: Message[_]           => withLimit(handleMessage(c, registers, nextOffset))
-        case c: Primitive[_]         => handlePrimitive(c)
-        case c: Enum[_]              => c.valuesByIndex(input.readEnum())
-        case c: Transform[_, _]      =>
-          val res = loop(c.codec, field, tag)
-          if (res == null) null.asInstanceOf[A] else c.from(res)
-        case c: Optional[_]          => Some(loop(c.codec, field, tag))
-        case c: Repeated[c, e]       =>
-          if (c.packed && (tag & 0x7) == 2) handlePackedRepeated(c)
-          else handleRepeated(c, field, tag)
-        case c: RepeatedMap[m, k, v] => handleRepeatedMap(c, field)
-        case Bytes                   => input.readByteArray()
-        case c: RecursiveMessage[_]  => withLimit(handleMessage(c.codec, registers, nextOffset))
+      def handleRepeated[C[_], E](r: Repeated[C, E], field: IndexedField, tag: Int): C[E] = {
+        val register = field.field.register
+        val builder  =
+          if (!visited(field.index)) {
+            val builder = r.constructor.newObjectBuilder[E]()
+            setToRegister(registers, offset, register, builder)
+            builder
+          } else getFromRegister(registers, offset, register).asInstanceOf[r.constructor.ObjectBuilder[E]]
+        r.constructor.addObject(builder, loop(r.element, field, tag))
+        null.asInstanceOf[C[E]]
       }
 
-    var done = false
-    while (!done) {
-      val tag = input.readTag()
-      if (tag == 0) done = true
-      else {
-        val fieldId = tag >>> 3
-        val field   = m.fieldMap(fieldId)
-        if (field ne null) {
-          val value = loop(field.field.codec, field, tag)
-          visited(field.index) = true
-          if (value != null) setToRegister(registers, offset, field.field.register, value)
-        } else input.skipField(tag): Unit
+      def handleRepeatedMap[M[_, _], K, V](r: RepeatedMap[M, K, V], field: IndexedField): M[K, V] = {
+        val register = field.field.register
+        val builder  =
+          if (!visited(field.index)) {
+            val builder = r.constructor.newObjectBuilder[K, V]()
+            setToRegister(registers, offset, register, builder)
+            builder
+          } else getFromRegister(registers, offset, register).asInstanceOf[r.constructor.ObjectBuilder[K, V]]
+        val (k, v)   = withLimit(handleMessage(r.element, registers, nextOffset))
+        r.constructor.addObject(builder, k, v)
+        null.asInstanceOf[M[K, V]]
       }
+
+      def loop[A](codec: ProtobufCodec[A], field: IndexedField, tag: Int): A =
+        codec match {
+          case c: Message[_]           => withLimit(handleMessage(c, registers, nextOffset))
+          case c: Primitive[_]         => handlePrimitive(c)
+          case c: Enum[_]              => c.valuesByIndex(input.readEnum())
+          case c: Transform[_, _]      =>
+            val res = loop(c.codec, field, tag)
+            if (res == null) null.asInstanceOf[A] else c.from(res)
+          case c: Optional[_]          => Some(loop(c.codec, field, tag))
+          case c: Repeated[c, e]       =>
+            if (c.packed && (tag & 0x7) == 2) handlePackedRepeated(c)
+            else handleRepeated(c, field, tag)
+          case c: RepeatedMap[m, k, v] => handleRepeatedMap(c, field)
+          case Bytes                   => input.readByteArray()
+          case c: RecursiveMessage[_]  => withLimit(handleMessage(c.codec, registers, nextOffset))
+        }
+
+      var done = false
+      while (!done) {
+        val tag = input.readTag()
+        if (tag == 0) done = true
+        else {
+          val fieldId = tag >>> 3
+          val field   = m.fieldMap(fieldId)
+          if (field ne null) {
+            val value = wrapDecode(s"${field.field.name}#$fieldId") {
+              loop(field.field.codec, field, tag)
+            }
+            visited(field.index) = true
+            if (value != null) setToRegister(registers, offset, field.field.register, value)
+          } else input.skipField(tag): Unit
+        }
+      }
+      setDefaults(m, registers, offset, visited)
+      m.constructor.construct(registers, offset)
     }
-    setDefaults(m, registers, offset, visited)
-    m.constructor.construct(registers, offset)
-  }
 
   private def handlePrimitive[A](p: Primitive[A])(using input: CodedInputStream): A =
     p.primitiveType match {

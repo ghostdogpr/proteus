@@ -759,6 +759,86 @@ object ProtobufCodecSpec extends ZIOSpecDefault {
 
         assert(decoded)(isLeft)
       },
+      test("root decode transform failure is wrapped (path-aware, single exception)") {
+        case class Inner(x: Int) derives Schema
+
+        val base: ProtobufCodec[Inner] = Schema[Inner].derive(deriver)
+        val throwing: ProtobufCodec[Inner] =
+          base.transform(
+            inner => if (inner.x == 13) throw new RuntimeException("boom") else inner,
+            identity
+          )
+
+        val bytes = base.encode(Inner(13))
+        val err   = Try(throwing.decode(bytes)).failed.get
+
+        assertTrue(err.isInstanceOf[ProtobufDecodeFailure]) &&
+        assertTrue(err.getCause != null) &&
+        assertTrue(!err.getCause.isInstanceOf[ProtobufDecodeFailure]) &&
+        assertTrue(err.getMessage.contains("Inner")) &&
+        assertTrue(err.getCause.getMessage == "boom")
+      },
+      test("root encode transform failure is wrapped (path-aware, single exception)") {
+        case class Inner(x: Int) derives Schema
+
+        val base: ProtobufCodec[Inner] = Schema[Inner].derive(deriver)
+        val throwing: ProtobufCodec[Inner] =
+          base.transform(
+            identity,
+            inner => if (inner.x == 13) throw new RuntimeException("boom") else inner
+          )
+
+        val err = Try(throwing.encode(Inner(13))).failed.get
+
+        assertTrue(err.isInstanceOf[ProtobufEncodeFailure]) &&
+        assertTrue(err.getCause != null) &&
+        assertTrue(!err.getCause.isInstanceOf[ProtobufEncodeFailure]) &&
+        assertTrue(err.getMessage.contains("Inner")) &&
+        assertTrue(err.getCause.getMessage == "boom")
+      },
+      test("decode failure includes a single enrichable path-aware exception") {
+        case class Inner(x: Int) derives Schema
+        case class Outer(inner: Inner) derives Schema
+
+        val baseIntCodec: ProtobufCodec[Int] = Schema[Int].derive(deriver)
+        val throwingIntCodec: ProtobufCodec[Int] =
+          baseIntCodec.transform(
+            i => if (i == 13) throw new RuntimeException("boom") else i,
+            identity
+          )
+
+        val codec = Schema[Outer].derive(deriver.instance[Int](throwingIntCodec))
+        val bytes = codec.encode(Outer(Inner(13)))
+
+        val err = Try(codec.decode(bytes)).failed.get
+
+        assertTrue(err.isInstanceOf[ProtobufDecodeFailure]) &&
+        assertTrue(err.getCause != null) &&
+        assertTrue(!err.getCause.isInstanceOf[ProtobufDecodeFailure]) &&
+        assertTrue(err.getMessage.contains("Outer > inner#1 > Inner > x#1")) &&
+        assertTrue(err.getCause.getMessage == "boom")
+      },
+      test("encode failure includes a single enrichable path-aware exception") {
+        case class Inner(x: Int) derives Schema
+        case class Outer(inner: Inner) derives Schema
+
+        val baseIntCodec: ProtobufCodec[Int] = Schema[Int].derive(deriver)
+        val throwingIntCodec: ProtobufCodec[Int] =
+          baseIntCodec.transform(
+            identity,
+            i => if (i == 13) throw new RuntimeException("boom") else i
+          )
+
+        val codec = Schema[Outer].derive(deriver.instance[Int](throwingIntCodec))
+
+        val err = Try(codec.encode(Outer(Inner(13)))).failed.get
+
+        assertTrue(err.isInstanceOf[ProtobufEncodeFailure]) &&
+        assertTrue(err.getCause != null) &&
+        assertTrue(!err.getCause.isInstanceOf[ProtobufEncodeFailure]) &&
+        assertTrue(err.getMessage.contains("Outer > inner#1 > Inner > x#1")) &&
+        assertTrue(err.getCause.getMessage == "boom")
+      },
       test("empty byte array decode returns defaults") {
         case class TestMessage(id: Int, name: String, active: Boolean) derives Schema
         val codec = Schema[TestMessage].derive(deriver)
