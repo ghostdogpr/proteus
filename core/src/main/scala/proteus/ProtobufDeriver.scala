@@ -40,7 +40,7 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
   /**
     * Adds a custom modifier for a term (case class field or enum member) of the given type.
     *
-    * @param termName the name of the term to apply the modifier to (there will be a compile time error if the term does not exist)
+    * @param termName the name of the term to apply the modifier to (there will be a compile error if the term does not exist)
     * @param modifier the modifier to apply.
     */
   inline def modifier[B: Schema](termName: String, modifier: Modifier.Term): ProtobufDeriver = {

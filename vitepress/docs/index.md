@@ -20,7 +20,7 @@ features:
   - title: Code-First
     details: Generate Protobuf codecs directly from your Scala code. No code generation or sbt plugin required.
   - title: Schema Generation
-    details: Generate .proto files at compile time to efficiently track changes. Various customizations are available.
+    details: Generate .proto files to document your schema and efficiently track changes. Various customizations are available.
   - title: Declarative gRPC Services
     details: Define gRPC services in Scala. Generate clients and servers from them using direct style, Future, ZIO, or fs2 backends.
 ---
