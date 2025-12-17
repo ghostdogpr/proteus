@@ -85,17 +85,11 @@ private[proteus] object ProtobufWriter {
       case f: ProtobufWriter.Bytes           => f.write
     }
 
-  def innerSize(writer: ProtobufWriter): Int =
+  def rootSize(writer: ProtobufWriter): Int =
     writer match {
-      case f: ProtobufWriter.Message         => f.innerSize
-      case f: ProtobufWriter.Repeated        => f.innerSize
-      case f: ProtobufWriter.IntPrimitive    => f.innerSize
-      case f: ProtobufWriter.LongPrimitive   => f.innerSize
-      case f: ProtobufWriter.StringPrimitive => f.innerSize
-      case f: ProtobufWriter.BoolPrimitive   => f.innerSize
-      case f: ProtobufWriter.DoublePrimitive => f.innerSize
-      case f: ProtobufWriter.FloatPrimitive  => f.innerSize
-      case f: ProtobufWriter.Bytes           => f.innerSize
+      case f: ProtobufWriter.Message      => f.innerSize
+      case f: ProtobufWriter.IntPrimitive => f.innerSize
+      case _                              => throw new Exception(s"Invalid root writer: $writer")
     }
 
   def fullSize(writer: ProtobufWriter): Int =

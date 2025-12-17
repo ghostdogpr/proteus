@@ -34,7 +34,7 @@ sealed trait ProtobufCodec[A] {
     wrapEncode(getName, prependOnExisting = false) {
       withRegisters { registers =>
         val writer = toProtoWriter(this, value, -1, registers, RegisterOffset.Zero, alwaysEncode = true)
-        val bytes  = new Array[Byte](internal.ProtobufWriter.innerSize(writer))
+        val bytes  = new Array[Byte](internal.ProtobufWriter.rootSize(writer))
         val output = CodedOutputStream.newInstance(bytes)
         internal.ProtobufWriter.write(writer)(using output)
         bytes
