@@ -67,15 +67,15 @@ object JsonSpec extends ZIOSpecDefault {
     ),
     suite("Enum Types")(
       test("toJson serializes enum") {
-        enum Status derives Schema, ProtobufCodec { case Active, Inactive, Pending }
-        case class StatusMessage(status: Status) derives Schema, ProtobufCodec
+        enum Status derives ProtobufCodec { case Active, Inactive, Pending }
+        case class StatusMessage(status: Status) derives ProtobufCodec
         val instance = StatusMessage(Status.Active)
         val result   = instance.asJson.noSpaces
         assertTrue(result == """{"status":"ACTIVE"}""")
       },
       test("toJson serializes enum with different values") {
-        enum Priority derives Schema, ProtobufCodec { case Low, Medium, High }
-        case class PriorityMessage(priority: Priority) derives Schema, ProtobufCodec
+        enum Priority derives ProtobufCodec { case Low, Medium, High }
+        case class PriorityMessage(priority: Priority) derives ProtobufCodec
 
         val low    = PriorityMessage(Priority.Low)
         val medium = PriorityMessage(Priority.Medium)
@@ -91,7 +91,7 @@ object JsonSpec extends ZIOSpecDefault {
       },
       test("toJson serializes enum with prefix modifier") {
         enum Status derives Schema, ProtobufCodec { case Active, Inactive }
-        case class StatusMessage(status: Status) derives Schema, ProtobufCodec
+        case class StatusMessage(status: Status) derives ProtobufCodec
         given ProtobufDeriver = ProtobufDeriver.modifier[Status](enumPrefix("USER"))
         val instance          = StatusMessage(Status.Active)
         val result            = instance.asJson.noSpaces
@@ -400,8 +400,8 @@ object JsonSpec extends ZIOSpecDefault {
         assertTrue(result == """{"identifier":123,"label":"TEST"}""")
       },
       test("custom encoder for enum changes representation") {
-        enum Status derives Schema, ProtobufCodec { case Active, Inactive, Pending }
-        case class StatusMessage(status: Status) derives Schema, ProtobufCodec
+        enum Status derives ProtobufCodec { case Active, Inactive, Pending }
+        case class StatusMessage(status: Status) derives ProtobufCodec
 
         val customEncoder: Encoder[Status] = (status: Status) => Json.fromInt(status.ordinal + 1000)
 

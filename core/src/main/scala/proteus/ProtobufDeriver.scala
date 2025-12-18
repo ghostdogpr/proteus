@@ -54,7 +54,7 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
           error("Case " + constValue[termName.type] + " does not exist in sealed trait or enum " + constValue[m.MirroredLabel] + ".")
         }
     }
-    copy(modifiers = modifiers :+ ModifierTermOverride(Schema[B].reflect.typeName, termName, modifier))
+    copy(modifiers = modifiers :+ ModifierTermOverrideByType(Schema[B].reflect.typeName, termName, modifier))
   }
 
   /**
