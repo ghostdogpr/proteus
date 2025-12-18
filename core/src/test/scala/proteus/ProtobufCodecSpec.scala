@@ -121,8 +121,7 @@ object ProtobufCodecSpec extends ZIOSpecDefault {
         val variants = List(
           ContactInfo.Email("test@example.com"),
           ContactInfo.Phone("555-0123"),
-          ContactInfo.Social("twitter", "@testuser"),
-          null
+          ContactInfo.Social("twitter", "@testuser")
         )
 
         val results = variants.map { contact =>
