@@ -8,4 +8,4 @@ It also provides a **declarative way to define gRPC services** in Scala, a bit l
 
 It is available for Scala 3.3.x LTS and later versions. The core module is available for both Scala JVM and Scala.js.
 
-### Consult the [Documentation](https://ghostdogpr.github.io/proteus/docs/) to learn how to use Caliban.
+### Consult the [Documentation](https://ghostdogpr.github.io/proteus/docs/) to learn how to use Proteus.
