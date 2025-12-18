@@ -574,16 +574,11 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
         val registers = Registers(constructor.usedRegisters)
         fields.foreach {
           case field: SimpleField[?]   =>
-            val defaultValue = getDefaultValue(using field.codec)
-            setToRegister(registers, RegisterOffset.Zero, field.register, defaultValue)
-          case oneOf: OneOfField[?]    =>
-            oneOf.cases.headOption.foreach { field =>
-              val defaultValue = getDefaultValue(using field.codec)
-              setToRegister(registers, RegisterOffset.Zero, field.register, defaultValue)
-            }
+            setToRegister(registers, RegisterOffset.Zero, field.register, field.defaultValue)
+          case field: OneOfField[?]    =>
+            setToRegister(registers, RegisterOffset.Zero, field.register, field.defaultValue)
           case field: ExcludedField[?] =>
-            val defaultValue = field.defaultValue
-            setToRegister(registers, RegisterOffset.Zero, field.register, defaultValue)
+            setToRegister(registers, RegisterOffset.Zero, field.register, field.defaultValue)
         }
         constructor.construct(registers, RegisterOffset.Zero)
       case ProtobufCodec.Optional(_)                                       =>
