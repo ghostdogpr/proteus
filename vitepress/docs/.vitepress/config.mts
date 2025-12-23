@@ -10,6 +10,7 @@ export default defineConfig({
     nav: [
       { text: 'Home', link: '/' },
       { text: 'Documentation', link: '/getting-started' },
+      { text: 'Guides', link: '/migrating-to-proteus' },
       { text: 'FAQ', link: '/faq' },
     ],
 
@@ -24,6 +25,12 @@ export default defineConfig({
           { text: 'gRPC services', link: '/grpc-services' },
           { text: 'Proto file generation', link: '/proto-file-generation' },
           { text: 'JSON support', link: '/json-support' },
+        ]
+      },
+      {
+        text: 'Guides',
+        items: [
+          { text: 'Migrating to Proteus', link: '/migrating-to-proteus' },
         ]
       },
       {

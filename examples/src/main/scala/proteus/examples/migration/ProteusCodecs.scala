@@ -1,33 +1,36 @@
 package proteus.examples.migration
 
-import java.time.{Duration, Instant, OffsetDateTime, ZoneOffset}
+import java.time.*
 
 import zio.blocks.schema.*
 
 import proteus.*
 import proteus.Modifiers.*
+import proteus.ProtobufDeriver.DerivationFlag.*
 
 given Schema[Movie]         = Schema.derived[Movie]
 given Schema[ReleaseStatus] = Schema.derived[ReleaseStatus].defaultValue(ReleaseStatus.Unreleased(None))
 
-val deriver =
+given ProtobufDeriver =
   ProtobufDeriver
-    .enable(ProtobufDeriver.DerivationFlag.AutoPrefixEnums)
-    .enable(ProtobufDeriver.DerivationFlag.NestedOneOf)
+    .enable(AutoPrefixEnums)
+    .enable(NestedOneOf)
     .instance(timeCodec)
     .instance(durationCodec)
     .modifier[Movie](reserved(2))
     .modifier[Movie]("title", reserved(4))
 
 lazy val timeCodec: ProtobufCodec[OffsetDateTime] =
-  Schema[Long]
-    .derive(deriver)
+  ProtobufCodec
+    .derived[Long]
     .transform[OffsetDateTime](
       millis => OffsetDateTime.ofInstant(Instant.ofEpochMilli(millis), ZoneOffset.UTC),
       _.toInstant().toEpochMilli().toLong
     )
 
 lazy val durationCodec: ProtobufCodec[Duration] =
-  Schema[Int].derive(deriver).transform[Duration](Duration.ofMillis, _.toMillis.toInt)
+  ProtobufCodec
+    .derived[Int]
+    .transform[Duration](Duration.ofMillis, _.toMillis.toInt)
 
-given ProtobufCodec[Movie] = Schema[Movie].derive(deriver)
+given ProtobufCodec[Movie] = ProtobufCodec.derived[Movie]
