@@ -181,7 +181,7 @@ message MapMessage {
     message Inner {
         string value = 1;
     }
-    
+
     int32 id = 1;
     map<string, Inner> data = 2;
 }
@@ -203,7 +203,7 @@ message MapMessage {
         KeyMessage key = 1;
         int32 value = 2;
     }
-    
+
     int32 id = 1;
     repeated KeyMessageIntEntry data = 2;
 }
@@ -228,7 +228,7 @@ message MapWithOptionalValue {
         int32 key = 1;
         optional int32 value = 2;
     }
-    
+
     repeated IntOptionIntEntry map = 1;
 }
 """
@@ -250,7 +250,7 @@ message MessageWithNested {
     message NestedData {
         string value = 1;
     }
-    
+
     int32 id = 1;
     NestedData data = 2;
 }
@@ -382,12 +382,12 @@ message NestedContact {
     message Email {
         string address = 1;
     }
-    
+
     message Phone {
         string number = 1;
         string country = 2;
     }
-    
+
     oneof value {
         Email email = 1;
         Phone phone = 2;
@@ -452,11 +452,11 @@ message NestedContact {
     message Email {
         string address = 1;
     }
-    
+
     message Phone {
         string number = 1;
     }
-    
+
     oneof value {
         Email email = 1;
         Phone phone = 2;
@@ -478,7 +478,7 @@ package test;
 
 message ReservedMessage {
     reserved 2, 4, 6;
-    
+
     int32 id = 1;
     string name = 3;
     string value = 5;
@@ -1125,12 +1125,12 @@ message Contact {
     message Email {
         string address = 1;
     }
-    
+
     message Phone {
         string number = 1;
         string country = 2;
     }
-    
+
     oneof value {
         Email email = 1;
         Phone phone = 2;
@@ -1168,7 +1168,7 @@ message Contact {
         string number = 1;
         string country = 2;
     }
-    
+
     oneof value {
         Email email = 1;
         Phone phone = 2;

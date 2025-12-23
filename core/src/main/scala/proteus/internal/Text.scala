@@ -41,11 +41,10 @@ private[proteus] object Text {
   def indent(texts: List[Text]): Text.Indent = Text.Indent(many(texts))
 
   def toLines(text: Text): List[String] =
-
     text match {
       case Line(string) => List(string)
       case Many(texts)  => texts.flatMap(toLines)
-      case Indent(text) => toLines(text).map("    " + _)
+      case Indent(text) => toLines(text).map(line => if (line.isEmpty) "" else "    " + line)
       case NewLine      => List("")
     }
 
