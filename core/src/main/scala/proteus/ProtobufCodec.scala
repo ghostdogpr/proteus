@@ -1,7 +1,6 @@
 package proteus
 
 import java.io.*
-import java.util.concurrent.atomic.AtomicBoolean
 
 import scala.collection.immutable.HashMap
 import scala.collection.mutable
@@ -129,16 +128,20 @@ object ProtobufCodec {
     schema.derive(deriver)
   }
 
-  private val pool = new ThreadLocal[(Registers, AtomicBoolean)] {
-    override def initialValue(): (Registers, AtomicBoolean) = (Registers(RegisterOffset.Zero), new AtomicBoolean(false))
+  private class RegistersHolder(val registers: Registers, var inUse: Boolean)
+
+  private val pool = new ThreadLocal[RegistersHolder] {
+    override def initialValue(): RegistersHolder = new RegistersHolder(Registers(RegisterOffset.Zero), false)
   }
 
   private[proteus] inline def withRegisters[A](f: Registers => A): A = {
-    val (registers, running) = pool.get()
-    if (running.compareAndSet(false, true))
-      try f(registers)
-      finally running.set(false)
-    else f(Registers(RegisterOffset.Zero))
+    val holder = pool.get()
+    if (holder.inUse) f(Registers(RegisterOffset.Zero))
+    else
+      try {
+        holder.inUse = true
+        f(holder.registers)
+      } finally holder.inUse = false
   }
 
   /**
