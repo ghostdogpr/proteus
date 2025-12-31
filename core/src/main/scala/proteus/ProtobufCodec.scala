@@ -182,7 +182,6 @@ object ProtobufCodec {
     * Represents a field of a message. It can be a simple field, a one-of field, or an excluded field.
     */
   sealed trait MessageField[A] {
-    private[proteus] def toProtoWriter(registers: Registers, offset: RegisterOffset, nextOffset: RegisterOffset): ProtobufWriter
 
     /**
       * Converts the message field to its protobuf IR representation.
@@ -279,7 +278,6 @@ object ProtobufCodec {
       * Represents an excluded field of a message.
       */
     final case class ExcludedField[A](register: Register[Any], defaultValue: A) extends MessageField[A] {
-      private[proteus] def toProtoWriter(registers: Registers, offset: RegisterOffset, nextOffset: RegisterOffset): ProtobufWriter = null
 
       /**
         * Converts the message field to its protobuf IR representation.
@@ -390,7 +388,11 @@ object ProtobufCodec {
         var i          = 0
         var size       = 0
         while (i < fields.length) {
-          val res = fields(i).toProtoWriter(registers, offset, nextOffset)
+          val res = fields(i) match {
+            case field: SimpleField[?]   => field.toProtoWriter(registers, offset, nextOffset)
+            case field: OneOfField[?]    => field.toProtoWriter(registers, offset, nextOffset)
+            case field: ExcludedField[?] => null
+          }
           if (res ne null) {
             builder += res
             size += ProtobufWriter.fullSize(res)
