@@ -641,25 +641,25 @@ object ProtobufCodec {
       val nextOffset = RegisterOffset.add(offset, m.constructor.usedRegisters)
 
       def handleRepeated[C[_], E](r: Repeated[C, E], field: IndexedField, tag: Int): C[E] = {
-        val register = field.field.register
+        val register = field.field.register.asInstanceOf[Register.Object[_ <: AnyRef]]
         val builder  =
           if (!visited(field.index)) {
             val builder = r.constructor.newObjectBuilder[E]()
-            setToRegister(registers, offset, register, builder)
+            register.set(registers, offset, builder.asInstanceOf[register.Boxed])
             builder
-          } else getFromRegister(registers, offset, register).asInstanceOf[r.constructor.ObjectBuilder[E]]
+          } else register.get(registers, offset).asInstanceOf[r.constructor.ObjectBuilder[E]]
         r.constructor.addObject(builder, loop(r.element, field, tag))
         null.asInstanceOf[C[E]]
       }
 
       def handleRepeatedMap[M[_, _], K, V](r: RepeatedMap[M, K, V], field: IndexedField): M[K, V] = {
-        val register = field.field.register
+        val register = field.field.register.asInstanceOf[Register.Object[_ <: AnyRef]]
         val builder  =
           if (!visited(field.index)) {
             val builder = r.constructor.newObjectBuilder[K, V]()
-            setToRegister(registers, offset, register, builder)
+            register.set(registers, offset, builder.asInstanceOf[register.Boxed])
             builder
-          } else getFromRegister(registers, offset, register).asInstanceOf[r.constructor.ObjectBuilder[K, V]]
+          } else register.get(registers, offset).asInstanceOf[r.constructor.ObjectBuilder[K, V]]
         val (k, v)   = withLimit(handleMessage(r.element, registers, nextOffset))
         r.constructor.addObject(builder, k, v)
         null.asInstanceOf[M[K, V]]
