@@ -399,6 +399,16 @@ object ProtobufCodecSpec extends ZIOSpecDefault {
 
         assert(decoded)(equalTo(original))
       },
+      test("message with Array[Int]") {
+        case class NumberMessage(name: String, numbers: Array[Int]) derives Schema
+        val codec = Schema[NumberMessage].derive(deriver)
+
+        val original = NumberMessage("test", Array(1, 2, 3, 4, 5))
+        val encoded  = codec.encode(original)
+        val decoded  = codec.decode(encoded)
+
+        assert(decoded.numbers)(equalTo(original.numbers))
+      },
       test("message with empty List[Int]") {
         case class EmptyListMessage(name: String, numbers: List[Int]) derives Schema
         val codec = Schema[EmptyListMessage].derive(deriver)
