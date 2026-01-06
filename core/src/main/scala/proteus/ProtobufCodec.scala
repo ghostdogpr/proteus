@@ -33,9 +33,14 @@ sealed trait ProtobufCodec[A] {
     wrapEncode(getName, prependOnExisting = false) {
       withRegisters { registers =>
         val writer = toProtoWriter(this, value, -1, registers, RegisterOffset.Zero, alwaysEncode = true)
-        val bytes  = new Array[Byte](internal.ProtobufWriter.rootSize(writer))
+        val size   = writer match {
+          case f: ProtobufWriter.Message      => f.innerSize
+          case f: ProtobufWriter.IntPrimitive => f.size
+          case _                              => throw new Exception(s"Invalid root writer: $writer")
+        }
+        val bytes  = new Array[Byte](size)
         val output = CodedOutputStream.newInstance(bytes)
-        internal.ProtobufWriter.write(writer)(using output)
+        writer.write(using output)
         bytes
       }
     }
@@ -395,7 +400,7 @@ object ProtobufCodec {
           }
           if (res ne null) {
             builder += res
-            size += ProtobufWriter.fullSize(res)
+            size += res.size
           }
           i += 1
         }
@@ -495,7 +500,7 @@ object ProtobufCodec {
           val res = makeProtoWriter(it.next)
           if (res ne null) {
             builder += res
-            size += ProtobufWriter.fullSize(res)
+            size += res.size
           }
         }
         internal.ProtobufWriter.Repeated(builder.result(), id, packed, size)
@@ -527,7 +532,7 @@ object ProtobufCodec {
           val res = element.toProtoWriter((deconstructor.getKey(kv), deconstructor.getValue(kv)), id, registers, offset)
           if (res ne null) {
             builder += res
-            size += res.fullSize
+            size += res.size
           }
         }
         internal.ProtobufWriter.Repeated(builder.result(), id, packed = false, size)
