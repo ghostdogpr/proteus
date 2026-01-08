@@ -799,14 +799,14 @@ object ProtobufCodec {
     codec match {
       case c: Primitive[_]         => c.computeSize(a, id, alwaysEncode)
       case c: Message[_]           => c.computeSize(a, id, registers, offset, cache)
-      case c: Repeated[c, e]       => c.computeSize(a, id, registers, offset, cache)
-      case c: RepeatedMap[c, k, v] => c.computeSize(a, id, registers, offset, cache)
-      case c: Enum[_]              => c.computeSize(a, id, alwaysEncode)
       case c: Transform[_, _]      =>
         val v = c.to(a)
         if (v.isInstanceOf[AnyRef]) cache.recordValue(v.asInstanceOf[AnyRef]) else cache.recordValue(null.asInstanceOf[AnyRef])
         computeSize(c.codec, v, id, registers, offset, alwaysEncode, cache)
+      case c: Enum[_]              => c.computeSize(a, id, alwaysEncode)
       case c: Optional[_]          => c.computeSize(a, id, registers, offset, cache)
+      case c: Repeated[c, e]       => c.computeSize(a, id, registers, offset, cache)
+      case c: RepeatedMap[c, k, v] => c.computeSize(a, id, registers, offset, cache)
       case c: Bytes.type           => c.computeSize(a, id, alwaysEncode)
       case c: RecursiveMessage[_]  => c.codec.computeSize(a, id, registers, offset, cache)
     }
@@ -847,14 +847,14 @@ object ProtobufCodec {
     codec match {
       case c: Primitive[_]         => c.write(a, id, alwaysEncode)
       case c: Message[_]           => c.write(a, id, registers, offset, cache)
-      case c: Repeated[c, e]       => c.write(a, id, registers, offset, cache)
-      case c: RepeatedMap[c, k, v] => c.write(a, id, registers, offset, cache)
-      case c: Enum[_]              => c.write(a, id, alwaysEncode)
       case c: Transform[_, _]      =>
         val v = cache.nextValue()
         if (v != null) write(c.codec, v.asInstanceOf[c.codec.Focus], id, registers, offset, alwaysEncode, cache)
         else write(c.codec, c.to(a), id, registers, offset, alwaysEncode, cache)
+      case c: Enum[_]              => c.write(a, id, alwaysEncode)
       case c: Optional[_]          => c.write(a, id, registers, offset, cache)
+      case c: Repeated[c, e]       => c.write(a, id, registers, offset, cache)
+      case c: RepeatedMap[c, k, v] => c.write(a, id, registers, offset, cache)
       case c: Bytes.type           => c.write(a, id, alwaysEncode)
       case c: RecursiveMessage[_]  => c.codec.write(a, id, registers, offset, cache)
     }
@@ -935,10 +935,10 @@ object ProtobufCodec {
         codec match {
           case c: Message[_]           => withLimit(handleMessage(c, registers, nextOffset))
           case c: Primitive[_]         => handlePrimitive(c)
-          case c: Enum[_]              => c.valuesByIndex(input.readEnum())
           case c: Transform[_, _]      =>
             val res = loop(c.codec, field, tag)
             if (res == null) null.asInstanceOf[A] else c.from(res)
+          case c: Enum[_]              => c.valuesByIndex(input.readEnum())
           case c: Optional[_]          => Some(loop(c.codec, field, tag))
           case c: Repeated[c, e]       =>
             if (c.packed && (tag & 0x7) == 2) handlePackedRepeated(c)
@@ -991,8 +991,8 @@ object ProtobufCodec {
             case _: PrimitiveType.Float   => () => input.readFloat()
             case _                        => throw new Exception(s"Unsupported packed primitive type: $c")
           }
-        case c: Enum[_]         => () => c.valuesByIndex(input.readEnum())
         case c: Transform[_, _] => () => c.from(loop(c.codec)())
+        case c: Enum[_]         => () => c.valuesByIndex(input.readEnum())
         case _                  => throw new Exception(s"Invalid packed type: $codec")
       }
 
