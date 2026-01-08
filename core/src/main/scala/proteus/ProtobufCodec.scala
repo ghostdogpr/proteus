@@ -835,7 +835,7 @@ object ProtobufCodec {
       case c: Enum[_]              => ProtoIR.Type.EnumRefType(c.name)
       case c: Repeated[_, _]       => ProtoIR.Type.ListType(toProtoType(c.element))
       case c: RepeatedMap[_, _, _] =>
-        ProtoIR.Type.MapType(toProtoType(c.element.simpleFields(0).codec), toProtoType(c.element.simpleFields(1).codec))
+        ProtoIR.Type.MapType(toProtoType(c.element.simpleFields.head.codec), toProtoType(c.element.simpleFields(1).codec))
       case Bytes                   => ProtoIR.Type.Bytes
     }
 }
