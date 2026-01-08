@@ -758,7 +758,7 @@ object ProtobufCodec {
       case c: Primitive[_] =>
         c.computeSizeFromRegisters(register, id, registers, offset, alwaysEncode)
       case _               =>
-        val res = getFromRegister(registers, offset, register).asInstanceOf[A]
+        val res = getFromRegister(registers, offset, register)
         computeSize(codec, res, id, registers, alwaysEncode, cache)
     }
 
@@ -800,11 +800,11 @@ object ProtobufCodec {
         val v = cache.nextValue()
         if (v != null) write(c.codec, v.asInstanceOf[c.codec.Focus], id, registers, alwaysEncode, cache)
         else {
-          val res = getFromRegister(registers, offset, register).asInstanceOf[A]
+          val res = getFromRegister(registers, offset, register)
           write(c.codec, c.to(res), id, registers, alwaysEncode, cache)
         }
       case _                  =>
-        val res = getFromRegister(registers, offset, register).asInstanceOf[A]
+        val res = getFromRegister(registers, offset, register)
         write(codec, res, id, registers, alwaysEncode, cache)
     }
 
