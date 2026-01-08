@@ -2,17 +2,16 @@ package proteus
 package internal
 
 /**
-  * A cache for storing computed sizes during the first pass of encoding.
-  * Sizes use a FIFO queue (both passes traverse in same order).
+  * A cache for storing computed sizes and values during the first pass of encoding.
   */
-final private[proteus] class SizeCache {
+final private[proteus] class Cache {
   private var sizes: Array[Int] = new Array[Int](32)
   private var currentIndex: Int = 0
 
-  /**
-    * Records a size during the size computation pass.
-    */
-  def record(size: Int): Unit = {
+  private var values: Array[AnyRef] = new Array[AnyRef](32)
+  private var valueIndex: Int       = 0
+
+  def recordSize(size: Int): Unit = {
     if (currentIndex >= sizes.length) {
       sizes = java.util.Arrays.copyOf(sizes, sizes.length * 2)
     }
@@ -20,10 +19,15 @@ final private[proteus] class SizeCache {
     currentIndex += 1
   }
 
-  /**
-    * Reserves a slot for a size and returns the index.
-    */
-  def reserve(): Int = {
+  def recordValue(value: AnyRef): Unit = {
+    if (valueIndex >= values.length) {
+      values = java.util.Arrays.copyOf(values, values.length * 2)
+    }
+    values(valueIndex) = value
+    valueIndex += 1
+  }
+
+  def reserveSize(): Int = {
     if (currentIndex >= sizes.length) {
       sizes = java.util.Arrays.copyOf(sizes, sizes.length * 2)
     }
@@ -32,24 +36,23 @@ final private[proteus] class SizeCache {
     index
   }
 
-  /**
-    * Fills a reserved slot with the actual size.
-    */
-  def fill(index: Int, size: Int): Unit =
+  def fillSize(index: Int, size: Int): Unit =
     sizes(index) = size
 
-  /**
-    * Retrieves the next size during the write pass (FIFO order).
-    */
-  def next(): Int = {
+  def nextSize(): Int = {
     val size = sizes(currentIndex)
     currentIndex += 1
     size
   }
 
-  /**
-    * Resets the current index between passes. Called after size computation, before writing.
-    */
-  def reset(): Unit =
+  def nextValue(): Object = {
+    val value = values(valueIndex)
+    valueIndex += 1
+    value
+  }
+
+  def reset(): Unit = {
     currentIndex = 0
+    valueIndex = 0
+  }
 }

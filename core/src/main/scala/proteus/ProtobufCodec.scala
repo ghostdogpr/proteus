@@ -32,7 +32,7 @@ sealed trait ProtobufCodec[A] {
   def encode(value: A): Array[Byte] =
     wrapEncode(getName, prependOnExisting = false) {
       withRegisters { registers =>
-        val cache  = new SizeCache()
+        val cache  = new Cache()
         val size   = computeSize(this, value, -1, registers, RegisterOffset.Zero, alwaysEncode = true, cache)
         val bytes  = new Array[Byte](size)
         val output = CodedOutputStream.newInstance(bytes)
@@ -275,6 +275,47 @@ object ProtobufCodec {
     * Represents a primitive type supported by protobuf.
     */
   final case class Primitive[A](primitiveType: PrimitiveType[A]) extends ProtobufCodec[A] {
+    private[proteus] def computeSizeFromRegisters(
+      register: Register[A],
+      id: Int,
+      registers: Registers,
+      offset: RegisterOffset,
+      alwaysEncode: Boolean
+    ): Int =
+      primitiveType match {
+        case _: PrimitiveType.Int     =>
+          val value = register.asInstanceOf[Register.Int].get(registers, offset)
+          if (value == 0 && !alwaysEncode) 0
+          else if (id == -1) CodedOutputStream.computeInt32SizeNoTag(value)
+          else CodedOutputStream.computeInt32Size(id, value)
+        case _: PrimitiveType.Long    =>
+          val value = register.asInstanceOf[Register.Long].get(registers, offset)
+          if (value == 0L && !alwaysEncode) 0
+          else if (id == -1) CodedOutputStream.computeInt64SizeNoTag(value)
+          else CodedOutputStream.computeInt64Size(id, value)
+        case _: PrimitiveType.Boolean =>
+          val value = register.asInstanceOf[Register.Boolean].get(registers, offset)
+          if (!value && !alwaysEncode) 0
+          else if (id == -1) CodedOutputStream.computeBoolSizeNoTag(value)
+          else CodedOutputStream.computeBoolSize(id, value)
+        case _: PrimitiveType.String  =>
+          val value = register.asInstanceOf[Register.Object[String]].get(registers, offset)
+          if (value == "" && !alwaysEncode) 0
+          else if (id == -1) CodedOutputStream.computeStringSizeNoTag(value)
+          else CodedOutputStream.computeStringSize(id, value)
+        case _: PrimitiveType.Double  =>
+          val value = register.asInstanceOf[Register.Double].get(registers, offset)
+          if (value == 0d && !alwaysEncode) 0
+          else if (id == -1) CodedOutputStream.computeDoubleSizeNoTag(value)
+          else CodedOutputStream.computeDoubleSize(id, value)
+        case _: PrimitiveType.Float   =>
+          val value = register.asInstanceOf[Register.Float].get(registers, offset)
+          if (value == 0f && !alwaysEncode) 0
+          else if (id == -1) CodedOutputStream.computeFloatSizeNoTag(value)
+          else CodedOutputStream.computeFloatSize(id, value)
+        case _                        => throw new Exception(s"Unsupported primitive type: $primitiveType")
+      }
+
     private[proteus] def computeSize(a: A, id: Int, alwaysEncode: Boolean): Int =
       primitiveType match {
         case _: PrimitiveType.Int     =>
@@ -307,6 +348,43 @@ object ProtobufCodec {
           if (value == 0f && !alwaysEncode) 0
           else if (id == -1) CodedOutputStream.computeFloatSizeNoTag(value)
           else CodedOutputStream.computeFloatSize(id, value)
+        case _                        => throw new Exception(s"Unsupported primitive type: $primitiveType")
+      }
+
+    private[proteus] def writeFromRegisters(register: Register[A], id: Int, registers: Registers, offset: RegisterOffset, alwaysEncode: Boolean)(
+      using output: CodedOutputStream
+    ): Unit =
+      primitiveType match {
+        case _: PrimitiveType.Int     =>
+          val value = register.asInstanceOf[Register.Int].get(registers, offset)
+          if (value != 0 || alwaysEncode) {
+            if (id == -1) output.writeInt32NoTag(value) else output.writeInt32(id, value)
+          }
+        case _: PrimitiveType.Long    =>
+          val value = register.asInstanceOf[Register.Long].get(registers, offset)
+          if (value != 0L || alwaysEncode) {
+            if (id == -1) output.writeInt64NoTag(value) else output.writeInt64(id, value)
+          }
+        case _: PrimitiveType.Boolean =>
+          val value = register.asInstanceOf[Register.Boolean].get(registers, offset)
+          if (value || alwaysEncode) {
+            if (id == -1) output.writeBoolNoTag(value) else output.writeBool(id, value)
+          }
+        case _: PrimitiveType.String  =>
+          val value = register.asInstanceOf[Register.Object[String]].get(registers, offset)
+          if (value != "" || alwaysEncode) {
+            if (id == -1) output.writeStringNoTag(value) else output.writeString(id, value)
+          }
+        case _: PrimitiveType.Double  =>
+          val value = register.asInstanceOf[Register.Double].get(registers, offset)
+          if (value != 0d || alwaysEncode) {
+            if (id == -1) output.writeDoubleNoTag(value) else output.writeDouble(id, value)
+          }
+        case _: PrimitiveType.Float   =>
+          val value = register.asInstanceOf[Register.Float].get(registers, offset)
+          if (value != 0f || alwaysEncode) {
+            if (id == -1) output.writeFloatNoTag(value) else output.writeFloat(id, value)
+          }
         case _                        => throw new Exception(s"Unsupported primitive type: $primitiveType")
       }
 
@@ -420,19 +498,27 @@ object ProtobufCodec {
     })
     private[proteus] val mayUseBuilder: Boolean = simpleFields.exists(_.mayUseBuilder)
 
-    private[proteus] def computeSize(a: A, id: Int, registers: Registers, offset: RegisterOffset, cache: SizeCache): Int =
+    private[proteus] def computeSize(a: A, id: Int, registers: Registers, offset: RegisterOffset, cache: Cache): Int =
       wrapEncode(name) {
         deconstructor.deconstruct(registers, offset, a)
         val nextOffset = offset + usedRegisters
-        val cacheSlot  = if (id != -1) cache.reserve() else -1
+        val cacheSlot  = if (id != -1) cache.reserveSize() else -1
         var i          = 0
         var innerSize  = 0
         while (i < fields.length) {
           val fieldSize = fields(i) match {
             case field: SimpleField[?]   =>
-              val res = getFromRegister(registers, offset, field.register).asInstanceOf[field.codec.Focus]
               wrapEncode(s"${field.name}#${field.id}") {
-                ProtobufCodec.computeSize(field.codec, res, field.id, registers, nextOffset, alwaysEncode = false, cache)
+                ProtobufCodec.computeSizeFromRegisters(
+                  field.codec,
+                  field.register.asInstanceOf[Register[field.codec.Focus]],
+                  field.id,
+                  registers,
+                  offset,
+                  nextOffset,
+                  alwaysEncode = false,
+                  cache
+                )
               }
             case field: OneOfField[a]    =>
               val res = getFromRegister(registers, offset, field.register).asInstanceOf[a]
@@ -461,17 +547,17 @@ object ProtobufCodec {
         if (id == -1) {
           innerSize
         } else {
-          cache.fill(cacheSlot, innerSize)
+          cache.fillSize(cacheSlot, innerSize)
           CodedOutputStream.computeUInt32Size(id, innerSize) + innerSize
         }
       }
 
-    private[proteus] def write(a: A, id: Int, registers: Registers, offset: RegisterOffset, cache: SizeCache)(using output: CodedOutputStream): Unit =
+    private[proteus] def write(a: A, id: Int, registers: Registers, offset: RegisterOffset, cache: Cache)(using output: CodedOutputStream): Unit =
       wrapEncode(name) {
         deconstructor.deconstruct(registers, offset, a)
         val nextOffset = offset + usedRegisters
         if (id != -1) {
-          val innerSize = cache.next()
+          val innerSize = cache.nextSize()
           output.writeTag(id, 2)
           output.writeUInt32NoTag(innerSize)
         }
@@ -479,9 +565,17 @@ object ProtobufCodec {
         while (i < fields.length) {
           fields(i) match {
             case field: SimpleField[?]   =>
-              val res = getFromRegister(registers, offset, field.register).asInstanceOf[field.codec.Focus]
               wrapEncode(s"${field.name}#${field.id}") {
-                ProtobufCodec.write(field.codec, res, field.id, registers, nextOffset, alwaysEncode = false, cache)
+                ProtobufCodec.writeFromRegisters(
+                  field.codec,
+                  field.register.asInstanceOf[Register[field.codec.Focus]],
+                  field.id,
+                  registers,
+                  offset,
+                  nextOffset,
+                  alwaysEncode = false,
+                  cache
+                )
               }
             case field: OneOfField[a]    =>
               val res = getFromRegister(registers, offset, field.register).asInstanceOf[a]
@@ -552,7 +646,7 @@ object ProtobufCodec {
     deconstructor: SeqDeconstructor[C],
     packed: Boolean
   ) extends ProtobufCodec[C[E]] {
-    private[proteus] def computeSize(a: C[E], id: Int, registers: Registers, offset: RegisterOffset, cache: SizeCache): Int = {
+    private[proteus] def computeSize(a: C[E], id: Int, registers: Registers, offset: RegisterOffset, cache: Cache): Int = {
       val it = deconstructor.deconstruct(a)
       if (it.isEmpty) 0
       else {
@@ -561,7 +655,7 @@ object ProtobufCodec {
         while (it.hasNext)
           innerSize += ProtobufCodec.computeSize(element, it.next, effectiveId, registers, offset, alwaysEncode = true, cache)
         if (packed) {
-          cache.record(innerSize)
+          cache.recordSize(innerSize)
           CodedOutputStream.computeUInt32Size(id, innerSize) + innerSize
         } else {
           innerSize
@@ -569,14 +663,14 @@ object ProtobufCodec {
       }
     }
 
-    private[proteus] def write(a: C[E], id: Int, registers: Registers, offset: RegisterOffset, cache: SizeCache)(
+    private[proteus] def write(a: C[E], id: Int, registers: Registers, offset: RegisterOffset, cache: Cache)(
       using output: CodedOutputStream
     ): Unit = {
       val it = deconstructor.deconstruct(a)
       if (!it.isEmpty) {
         val effectiveId = if (packed) -1 else id
         if (packed) {
-          val innerSize = cache.next()
+          val innerSize = cache.nextSize()
           output.writeTag(id, 2)
           output.writeUInt32NoTag(innerSize)
         }
@@ -594,27 +688,29 @@ object ProtobufCodec {
     constructor: MapConstructor[C],
     deconstructor: MapDeconstructor[C]
   ) extends ProtobufCodec[C[K, V]] {
-    private[proteus] def computeSize(a: C[K, V], id: Int, registers: Registers, offset: RegisterOffset, cache: SizeCache): Int = {
+    private[proteus] def computeSize(a: C[K, V], id: Int, registers: Registers, offset: RegisterOffset, cache: Cache): Int = {
       val it = deconstructor.deconstruct(a)
       if (it.isEmpty) 0
       else {
         var size = 0
         while (it.hasNext) {
-          val kv = it.next
-          size += element.computeSize((deconstructor.getKey(kv), deconstructor.getValue(kv)), id, registers, offset, cache)
+          val kv    = it.next
+          val tuple = if (kv.isInstanceOf[Tuple2[?, ?]]) kv.asInstanceOf[(K, V)] else (deconstructor.getKey(kv), deconstructor.getValue(kv))
+          size += element.computeSize(tuple, id, registers, offset, cache)
         }
         size
       }
     }
 
-    private[proteus] def write(a: C[K, V], id: Int, registers: Registers, offset: RegisterOffset, cache: SizeCache)(
+    private[proteus] def write(a: C[K, V], id: Int, registers: Registers, offset: RegisterOffset, cache: Cache)(
       using output: CodedOutputStream
     ): Unit = {
       val it = deconstructor.deconstruct(a)
       if (!it.isEmpty) {
         while (it.hasNext) {
-          val kv = it.next
-          element.write((deconstructor.getKey(kv), deconstructor.getValue(kv)), id, registers, offset, cache)
+          val kv    = it.next
+          val tuple = if (kv.isInstanceOf[Tuple2[?, ?]]) kv.asInstanceOf[(K, V)] else (deconstructor.getKey(kv), deconstructor.getValue(kv))
+          element.write(tuple, id, registers, offset, cache)
         }
       }
     }
@@ -649,13 +745,13 @@ object ProtobufCodec {
     * Represents an optional type.
     */
   final case class Optional[A](codec: ProtobufCodec[A]) extends ProtobufCodec[Option[A]] {
-    private[proteus] def computeSize(a: Option[A], id: Int, registers: Registers, offset: RegisterOffset, cache: SizeCache): Int =
+    private[proteus] def computeSize(a: Option[A], id: Int, registers: Registers, offset: RegisterOffset, cache: Cache): Int =
       a match {
         case None        => 0
         case Some(value) => ProtobufCodec.computeSize(codec, value, id, registers, offset, alwaysEncode = true, cache)
       }
 
-    private[proteus] def write(a: Option[A], id: Int, registers: Registers, offset: RegisterOffset, cache: SizeCache)(
+    private[proteus] def write(a: Option[A], id: Int, registers: Registers, offset: RegisterOffset, cache: Cache)(
       using output: CodedOutputStream
     ): Unit =
       a match {
@@ -664,6 +760,23 @@ object ProtobufCodec {
       }
   }
 
+  private[proteus] def computeSizeFromRegisters[A](
+    codec: ProtobufCodec[A],
+    register: Register[A],
+    id: Int,
+    registers: Registers,
+    offset: RegisterOffset,
+    nextOffset: RegisterOffset,
+    alwaysEncode: Boolean,
+    cache: Cache
+  ): Int =
+    codec match {
+      case c: Primitive[_] => c.computeSizeFromRegisters(register, id, registers, offset, alwaysEncode)
+      case _               =>
+        val res = getFromRegister(registers, offset, register).asInstanceOf[A]
+        computeSize(codec, res, id, registers, nextOffset, alwaysEncode, cache)
+    }
+
   private[proteus] def computeSize[A](
     codec: ProtobufCodec[A],
     a: A,
@@ -671,7 +784,7 @@ object ProtobufCodec {
     registers: Registers,
     offset: RegisterOffset,
     alwaysEncode: Boolean,
-    cache: SizeCache
+    cache: Cache
   ): Int =
     codec match {
       case c: Primitive[_]         => c.computeSize(a, id, alwaysEncode)
@@ -679,10 +792,37 @@ object ProtobufCodec {
       case c: Repeated[c, e]       => c.computeSize(a, id, registers, offset, cache)
       case c: RepeatedMap[c, k, v] => c.computeSize(a, id, registers, offset, cache)
       case c: Enum[_]              => c.computeSize(a, id, alwaysEncode)
-      case c: Transform[_, _]      => computeSize(c.codec, c.to(a), id, registers, offset, alwaysEncode, cache)
+      case c: Transform[_, _]      =>
+        val v = c.to(a)
+        if (v.isInstanceOf[AnyRef]) cache.recordValue(v.asInstanceOf[AnyRef]) else cache.recordValue(null.asInstanceOf[AnyRef])
+        computeSize(c.codec, v, id, registers, offset, alwaysEncode, cache)
       case c: Optional[_]          => c.computeSize(a, id, registers, offset, cache)
       case c: Bytes.type           => c.computeSize(a, id, alwaysEncode)
       case c: RecursiveMessage[_]  => c.codec.computeSize(a, id, registers, offset, cache)
+    }
+
+  private[proteus] def writeFromRegisters[A](
+    codec: ProtobufCodec[A],
+    register: Register[A],
+    id: Int,
+    registers: Registers,
+    offset: RegisterOffset,
+    nextOffset: RegisterOffset,
+    alwaysEncode: Boolean,
+    cache: Cache
+  )(using output: CodedOutputStream): Unit =
+    codec match {
+      case c: Primitive[_]    => c.writeFromRegisters(register, id, registers, offset, alwaysEncode)
+      case c: Transform[_, _] =>
+        val v = cache.nextValue()
+        if (v != null) write(c.codec, v.asInstanceOf[c.codec.Focus], id, registers, nextOffset, alwaysEncode, cache)
+        else {
+          val res = getFromRegister(registers, offset, register).asInstanceOf[A]
+          write(c.codec, c.to(res), id, registers, nextOffset, alwaysEncode, cache)
+        }
+      case _                  =>
+        val res = getFromRegister(registers, offset, register).asInstanceOf[A]
+        write(codec, res, id, registers, nextOffset, alwaysEncode, cache)
     }
 
   private[proteus] def write[A](
@@ -692,7 +832,7 @@ object ProtobufCodec {
     registers: Registers,
     offset: RegisterOffset,
     alwaysEncode: Boolean,
-    cache: SizeCache
+    cache: Cache
   )(using output: CodedOutputStream): Unit =
     codec match {
       case c: Primitive[_]         => c.write(a, id, alwaysEncode)
@@ -700,7 +840,10 @@ object ProtobufCodec {
       case c: Repeated[c, e]       => c.write(a, id, registers, offset, cache)
       case c: RepeatedMap[c, k, v] => c.write(a, id, registers, offset, cache)
       case c: Enum[_]              => c.write(a, id, alwaysEncode)
-      case c: Transform[_, _]      => write(c.codec, c.to(a), id, registers, offset, alwaysEncode, cache)
+      case c: Transform[_, _]      =>
+        val v = cache.nextValue()
+        if (v != null) write(c.codec, v.asInstanceOf[c.codec.Focus], id, registers, offset, alwaysEncode, cache)
+        else write(c.codec, c.to(a), id, registers, offset, alwaysEncode, cache)
       case c: Optional[_]          => c.write(a, id, registers, offset, cache)
       case c: Bytes.type           => c.write(a, id, alwaysEncode)
       case c: RecursiveMessage[_]  => c.codec.write(a, id, registers, offset, cache)
