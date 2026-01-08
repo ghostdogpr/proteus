@@ -2,6 +2,7 @@ package proteus
 
 import java.io.*
 
+import scala.annotation.tailrec
 import scala.collection.immutable.HashMap
 import scala.collection.mutable
 import scala.compiletime.*
@@ -29,7 +30,7 @@ sealed trait ProtobufCodec[A] {
     *
     * @param value the value to encode.
     */
-  def encode(value: A): Array[Byte] =
+  final def encode(value: A): Array[Byte] =
     wrapEncode(getName, prependOnExisting = false) {
       withRegisters { registers =>
         val writer = toProtoWriter(this, value, -1, registers, RegisterOffset.Zero, alwaysEncode = true)
@@ -50,7 +51,7 @@ sealed trait ProtobufCodec[A] {
     *
     * @param bytes the protobuf binary representation to decode.
     */
-  def decode(bytes: Array[Byte]): A =
+  final def decode(bytes: Array[Byte]): A =
     decode(CodedInputStream.newInstance(bytes))
 
   /**
@@ -58,7 +59,7 @@ sealed trait ProtobufCodec[A] {
     *
     * @param inputStream the input stream to decode.
     */
-  def decode(inputStream: InputStream): A =
+  final def decode(inputStream: InputStream): A =
     decode(CodedInputStream.newInstance(inputStream))
 
   /**
@@ -67,7 +68,7 @@ sealed trait ProtobufCodec[A] {
     * @param from the function to transform from `A` to `B`.
     * @param to the function to transform from `B` to `A`.
     */
-  def transform[B](from: A => B, to: B => A): ProtobufCodec[B] =
+  final def transform[B](from: A => B, to: B => A): ProtobufCodec[B] =
     this match {
       case c: Transform[a0, A] =>
         Transform[a0, B](a => from(c.from(a)), b => c.to(to(b)), c.codec)
@@ -78,7 +79,7 @@ sealed trait ProtobufCodec[A] {
   /**
     * Renders the codec to a .proto file as a string.
     */
-  def render(packageName: Option[String] = None, options: List[TopLevelOption] = List.empty): String =
+  final def render(packageName: Option[String] = None, options: List[TopLevelOption] = List.empty): String =
     Renderer.render(CompilationUnit(packageName, toProtoIR(this).map(TopLevelStatement(_)), options))
 
   private def decode(input: CodedInputStream): A =
@@ -88,7 +89,7 @@ sealed trait ProtobufCodec[A] {
       }
     }
 
-  private[proteus] def makeNested: ProtobufCodec[A] =
+  final private[proteus] def makeNested: ProtobufCodec[A] =
     this match {
       case message: Message[_]        => message.copy(nested = if (message.nested.isEmpty) Some(true) else message.nested)
       case Transform(from, to, codec) => Transform(from, to, codec.makeNested)
@@ -101,7 +102,8 @@ sealed trait ProtobufCodec[A] {
       case _                          => this
     }
 
-  private[proteus] def getName: String =
+  @tailrec
+  final private[proteus] def getName: String =
     this match {
       case message: Message[_]     => message.name
       case e: Enum[_]              => e.name
@@ -783,7 +785,7 @@ object ProtobufCodec {
   /**
     * Converts the given codec to its protobuf IR representation.
     */
-  def toProtoIR(codec: ProtobufCodec[?]): List[ProtoIR.TopLevelDef] = {
+  final def toProtoIR(codec: ProtobufCodec[?]): List[ProtoIR.TopLevelDef] = {
     val visited = new mutable.HashSet[ProtobufCodec[?]]()
 
     def findTopLevelDefs[A](codec: ProtobufCodec[A]): List[ProtoIR.TopLevelDef] =
