@@ -1,15 +1,20 @@
 package proteus
 package internal
 
+import zio.blocks.schema.binding.RegisterOffset
+import zio.blocks.schema.binding.RegisterOffset.RegisterOffset
+
 /**
   * A cache for storing computed sizes and values during the first pass of encoding.
   */
-final private[proteus] class Cache {
+final private[proteus] class WriterCache {
   private var sizes: Array[Int] = new Array[Int](32)
   private var currentIndex: Int = 0
 
   private var values: Array[AnyRef] = new Array[AnyRef](32)
   private var valueIndex: Int       = 0
+
+  private var offset: RegisterOffset = RegisterOffset.Zero
 
   def recordSize(size: Int): Unit = {
     if (currentIndex >= sizes.length) {
@@ -51,8 +56,14 @@ final private[proteus] class Cache {
     value
   }
 
+  def addOffset(offset: RegisterOffset): Unit =
+    this.offset = this.offset + offset
+
+  def getOffset(): RegisterOffset = offset
+
   def reset(): Unit = {
     currentIndex = 0
     valueIndex = 0
+    offset = RegisterOffset.Zero
   }
 }
