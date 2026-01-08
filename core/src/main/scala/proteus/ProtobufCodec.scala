@@ -353,13 +353,7 @@ object ProtobufCodec {
         case _                        => throw new Exception(s"Unsupported primitive type: $primitiveType")
       }
 
-    private[proteus] def writeFromRegisters(
-      register: Register[A],
-      id: Int,
-      registers: Registers,
-      offset: RegisterOffset,
-      alwaysEncode: Boolean
-    )(
+    private[proteus] def writeFromRegisters(register: Register[A], id: Int, registers: Registers, offset: RegisterOffset, alwaysEncode: Boolean)(
       using output: CodedOutputStream
     ): Unit =
       primitiveType match {
@@ -559,9 +553,7 @@ object ProtobufCodec {
         }
       }
 
-    private[proteus] def write(id: Int, registers: Registers, cache: WriterCache)(
-      using output: CodedOutputStream
-    ): Unit =
+    private[proteus] def write(id: Int, registers: Registers, cache: WriterCache)(using output: CodedOutputStream): Unit =
       wrapEncode(name) {
         val offset = cache.getOffset()
         cache.addOffset(usedRegisters)
@@ -647,12 +639,8 @@ object ProtobufCodec {
   /**
     * Represents a repeated type.
     */
-  final case class Repeated[C[_], E](
-    element: ProtobufCodec[E],
-    constructor: SeqConstructor[C],
-    deconstructor: SeqDeconstructor[C],
-    packed: Boolean
-  ) extends ProtobufCodec[C[E]] {
+  final case class Repeated[C[_], E](element: ProtobufCodec[E], constructor: SeqConstructor[C], deconstructor: SeqDeconstructor[C], packed: Boolean)
+    extends ProtobufCodec[C[E]] {
     private[proteus] def computeSize(a: C[E], id: Int, registers: Registers, cache: WriterCache): Int = {
       val it = deconstructor.deconstruct(a)
       if (it.isEmpty) 0
@@ -670,9 +658,7 @@ object ProtobufCodec {
       }
     }
 
-    private[proteus] def write(a: C[E], id: Int, registers: Registers, cache: WriterCache)(
-      using output: CodedOutputStream
-    ): Unit = {
+    private[proteus] def write(a: C[E], id: Int, registers: Registers, cache: WriterCache)(using output: CodedOutputStream): Unit = {
       val it = deconstructor.deconstruct(a)
       if (!it.isEmpty) {
         val effectiveId = if (packed) -1 else id
@@ -690,11 +676,8 @@ object ProtobufCodec {
   /**
     * Represents a map type.
     */
-  final case class RepeatedMap[C[_, _], K, V](
-    element: Message[(K, V)],
-    constructor: MapConstructor[C],
-    deconstructor: MapDeconstructor[C]
-  ) extends ProtobufCodec[C[K, V]] {
+  final case class RepeatedMap[C[_, _], K, V](element: Message[(K, V)], constructor: MapConstructor[C], deconstructor: MapDeconstructor[C])
+    extends ProtobufCodec[C[K, V]] {
     private[proteus] def computeSize(a: C[K, V], id: Int, registers: Registers, cache: WriterCache): Int = {
       val it = deconstructor.deconstruct(a)
       if (it.isEmpty) 0
@@ -755,9 +738,7 @@ object ProtobufCodec {
         case Some(value) => ProtobufCodec.computeSize(codec, value, id, registers, alwaysEncode = true, cache)
       }
 
-    private[proteus] def write(a: Option[A], id: Int, registers: Registers, cache: WriterCache)(
-      using output: CodedOutputStream
-    ): Unit =
+    private[proteus] def write(a: Option[A], id: Int, registers: Registers, cache: WriterCache)(using output: CodedOutputStream): Unit =
       a match {
         case None        => ()
         case Some(value) => ProtobufCodec.write(codec, value, id, registers, alwaysEncode = true, cache)
@@ -827,14 +808,9 @@ object ProtobufCodec {
         write(codec, res, id, registers, alwaysEncode, cache)
     }
 
-  final private[proteus] def write[A](
-    codec: ProtobufCodec[A],
-    a: A,
-    id: Int,
-    registers: Registers,
-    alwaysEncode: Boolean,
-    cache: WriterCache
-  )(using output: CodedOutputStream): Unit =
+  final private[proteus] def write[A](codec: ProtobufCodec[A], a: A, id: Int, registers: Registers, alwaysEncode: Boolean, cache: WriterCache)(
+    using output: CodedOutputStream
+  ): Unit =
     codec match {
       case c: Primitive[_]         => c.write(a, id, alwaysEncode)
       case c: Message[_]           => c.write(id, registers, cache)
