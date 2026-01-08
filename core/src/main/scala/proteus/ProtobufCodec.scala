@@ -685,7 +685,7 @@ object ProtobufCodec {
         var size = 0
         while (it.hasNext) {
           val kv    = it.next
-          val tuple = if (kv.isInstanceOf[Tuple2[?, ?]]) kv.asInstanceOf[(K, V)] else (deconstructor.getKey(kv), deconstructor.getValue(kv))
+          val tuple = if (kv.isInstanceOf[(?, ?)]) kv.asInstanceOf[(K, V)] else (deconstructor.getKey(kv), deconstructor.getValue(kv))
           size += element.computeSize(tuple, id, registers, cache)
         }
         size
