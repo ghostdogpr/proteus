@@ -460,7 +460,7 @@ object ProtobufCodec {
     def toProtoIR: ProtoIR.Enum =
       ProtoIR.Enum(
         name,
-        values.sortBy(_.index).map(v => ProtoIR.EnumValue(v.name, v.index, v.comment)).toList,
+        values.sortBy(_.index).map(v => ProtoIR.EnumValue(v.name, v.index, v.comment)),
         reserved = reserved.sorted.map(ProtoIR.Reserved.Number(_)),
         comment = comment
       )
@@ -685,7 +685,7 @@ object ProtobufCodec {
         var size = 0
         while (it.hasNext) {
           val kv    = it.next
-          val tuple = if (kv.isInstanceOf[Tuple2[?, ?]]) kv.asInstanceOf[(K, V)] else (deconstructor.getKey(kv), deconstructor.getValue(kv))
+          val tuple = if (kv.isInstanceOf[(?, ?)]) kv.asInstanceOf[(K, V)] else (deconstructor.getKey(kv), deconstructor.getValue(kv))
           size += element.computeSize(tuple, id, registers, cache)
         }
         size
@@ -758,7 +758,7 @@ object ProtobufCodec {
       case c: Primitive[_] =>
         c.computeSizeFromRegisters(register, id, registers, offset, alwaysEncode)
       case _               =>
-        val res = getFromRegister(registers, offset, register).asInstanceOf[A]
+        val res = getFromRegister(registers, offset, register)
         computeSize(codec, res, id, registers, alwaysEncode, cache)
     }
 
@@ -800,11 +800,11 @@ object ProtobufCodec {
         val v = cache.nextValue()
         if (v != null) write(c.codec, v.asInstanceOf[c.codec.Focus], id, registers, alwaysEncode, cache)
         else {
-          val res = getFromRegister(registers, offset, register).asInstanceOf[A]
+          val res = getFromRegister(registers, offset, register)
           write(c.codec, c.to(res), id, registers, alwaysEncode, cache)
         }
       case _                  =>
-        val res = getFromRegister(registers, offset, register).asInstanceOf[A]
+        val res = getFromRegister(registers, offset, register)
         write(codec, res, id, registers, alwaysEncode, cache)
     }
 
