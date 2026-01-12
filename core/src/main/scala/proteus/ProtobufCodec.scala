@@ -798,11 +798,7 @@ object ProtobufCodec {
       case c: Primitive[_]    => c.writeFromRegisters(register, id, registers, offset, alwaysEncode)
       case c: Transform[_, _] =>
         val v = cache.nextValue()
-        if (v != null) write(c.codec, v.asInstanceOf[c.codec.Focus], id, registers, alwaysEncode, cache)
-        else {
-          val res = getFromRegister(registers, offset, register)
-          write(c.codec, c.to(res), id, registers, alwaysEncode, cache)
-        }
+        write(c.codec, v.asInstanceOf[c.codec.Focus], id, registers, alwaysEncode, cache)
       case _                  =>
         val res = getFromRegister(registers, offset, register)
         write(codec, res, id, registers, alwaysEncode, cache)
@@ -844,13 +840,13 @@ object ProtobufCodec {
             def loop[A](codec: ProtobufCodec[A]): A =
               codec match {
                 case c: Repeated[_, _]         =>
-                  val v = getFromRegister(registers, offset, field.register)
+                  val v = field.register.asInstanceOf[Register.Object[_ <: AnyRef]].get(registers, offset)
                   // we need this check to do nothing in case it was packed
                   if (v.isInstanceOf[scala.collection.mutable.Builder[?, ?]])
                     c.constructor.resultObject(v.asInstanceOf[c.constructor.ObjectBuilder[Any]]).asInstanceOf[A]
                   else null.asInstanceOf[A]
                 case c: RepeatedMap[_, _, _]   =>
-                  val v = getFromRegister(registers, offset, field.register)
+                  val v = field.register.asInstanceOf[Register.Object[_ <: AnyRef]].get(registers, offset)
                   c.constructor.resultObject(v.asInstanceOf[c.constructor.ObjectBuilder[Any, Any]]).asInstanceOf[A]
                 case Transform(from, _, codec) =>
                   val res = loop(codec)
