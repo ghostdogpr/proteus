@@ -775,7 +775,7 @@ object ProtobufCodec {
       case c: Message[_]           => c.computeSize(a, id, registers, cache)
       case c: Transform[_, _]      =>
         val v = c.to(a)
-        if (v.isInstanceOf[AnyRef]) cache.recordValue(v.asInstanceOf[AnyRef]) else cache.recordValue(null.asInstanceOf[AnyRef])
+        cache.recordValue(v.asInstanceOf[AnyRef])
         computeSize(c.codec, v, id, registers, alwaysEncode, cache)
       case c: Enum[_]              => c.computeSize(a, id, alwaysEncode)
       case c: Optional[_]          => c.computeSize(a, id, registers, cache)
@@ -816,8 +816,7 @@ object ProtobufCodec {
       case c: Message[_]           => c.write(id, registers, cache)
       case c: Transform[_, _]      =>
         val v = cache.nextValue()
-        if (v != null) write(c.codec, v.asInstanceOf[c.codec.Focus], id, registers, alwaysEncode, cache)
-        else write(c.codec, c.to(a), id, registers, alwaysEncode, cache)
+        write(c.codec, v.asInstanceOf[c.codec.Focus], id, registers, alwaysEncode, cache)
       case c: Enum[_]              => c.write(a, id, alwaysEncode)
       case c: Optional[_]          => c.write(a, id, registers, cache)
       case c: Repeated[c, e]       => c.write(a, id, registers, cache)
