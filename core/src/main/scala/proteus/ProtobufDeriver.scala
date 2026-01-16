@@ -176,10 +176,11 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
                     id += 1
                     while (allReservedIndexes.contains(id)) id += 1
                     val valueId = id
+                    val empty   = Empty()
                     builder += OneOfField(
                       getFieldName(field.term.name, field.term.modifiers),
                       Array(
-                        SimpleField(s"no_$name", emptyId, Empty.emptyCodec.transform(_ => None, _ => Empty()), register, None, None),
+                        SimpleField(s"no_$name", emptyId, Empty.emptyCodec.transform(_ => None, _ => empty), register, None, None),
                         SimpleField(s"${name}_value", valueId, codec.transform(Some(_), _.get), register, null, None)
                       ),
                       register,
