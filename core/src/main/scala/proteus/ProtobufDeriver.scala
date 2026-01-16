@@ -470,7 +470,7 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
                 val listBuilder   = List.newBuilder[(K, V)]
                 while (it.hasNext) {
                   val kv = it.next()
-                  listBuilder += ((deconstructor.getKey(kv), deconstructor.getValue(kv)))
+                  listBuilder += deconstructor.getKeyValue(kv)
                 }
                 listBuilder.result()
               }
