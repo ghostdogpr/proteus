@@ -616,7 +616,7 @@ object ProtobufCodec {
           case c: Transform[_, _]      => findNested(c.codec, goDeep)
           case c: Optional[_]          => findNested(c.codec, goDeep)
           case c: Repeated[_, _]       => findNested(c.element, goDeep)
-          case c: RepeatedMap[_, _, _] => findNested(c.element, goDeep = true)
+          case c: RepeatedMap[_, _, _] => if (c.mapInProto) findNested(c.element, goDeep = true) else findNested(c.element, goDeep)
           case c: RecursiveMessage[_]  => findNested(c.codec)
           case _                       => Nil
         }
@@ -676,8 +676,12 @@ object ProtobufCodec {
   /**
     * Represents a map type.
     */
-  final case class RepeatedMap[C[_, _], K, V](element: Message[(K, V)], constructor: MapConstructor[C], deconstructor: MapDeconstructor[C])
-    extends ProtobufCodec[C[K, V]] {
+  final case class RepeatedMap[C[_, _], K, V](
+    element: Message[(K, V)],
+    constructor: MapConstructor[C],
+    deconstructor: MapDeconstructor[C],
+    mapInProto: Boolean
+  ) extends ProtobufCodec[C[K, V]] {
     private[proteus] def computeSize(a: C[K, V], id: Int, registers: Registers, cache: WriterCache): Int = {
       val it = deconstructor.deconstruct(a)
       if (it.isEmpty) 0
@@ -1057,7 +1061,8 @@ object ProtobufCodec {
       case c: Enum[_]              => ProtoIR.Type.EnumRefType(c.name)
       case c: Repeated[_, _]       => ProtoIR.Type.ListType(toProtoType(c.element))
       case c: RepeatedMap[_, _, _] =>
-        ProtoIR.Type.MapType(toProtoType(c.element.simpleFields.head.codec), toProtoType(c.element.simpleFields(1).codec))
+        if (c.mapInProto) ProtoIR.Type.MapType(toProtoType(c.element.simpleFields.head.codec), toProtoType(c.element.simpleFields(1).codec))
+        else ProtoIR.Type.ListType(toProtoType(c.element))
       case Bytes                   => ProtoIR.Type.Bytes
     }
 }

@@ -412,69 +412,26 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
     }
     D.instance(key.metadata).flatMap { keyInstance =>
       D.instance(value.metadata).map { valueInstance =>
-        if (isValidKeyType(keyInstance) && isValidValueTypeForMap(valueInstance))
-          ProtobufCodec.RepeatedMap[M, K, V](
-            ProtobufCodec.Message(
-              "",
-              Array(
-                SimpleField("key", 1, keyInstance, keyRegister, getDefaultValue(key).getOrElse(getDefaultValue(using keyInstance)), None),
-                SimpleField("value", 2, valueInstance, valueRegister, getDefaultValue(value).getOrElse(getDefaultValue(using valueInstance)), None)
-              ),
-              constructor,
-              deconstructor,
-              offset,
-              Set.empty,
-              inline = false,
-              nested = None,
-              comment = None
+        val mapInProto = isValidKeyType(keyInstance) && isValidValueTypeForMap(valueInstance)
+        ProtobufCodec.RepeatedMap[M, K, V](
+          ProtobufCodec.Message(
+            if (mapInProto) "" else s"${getTypeName(key.typeName, Nil)}${getTypeName(value.typeName, Nil)}Entry",
+            Array(
+              SimpleField("key", 1, keyInstance, keyRegister, getDefaultValue(key).getOrElse(getDefaultValue(using keyInstance)), None),
+              SimpleField("value", 2, valueInstance, valueRegister, getDefaultValue(value).getOrElse(getDefaultValue(using valueInstance)), None)
             ),
-            mapBinding.constructor,
-            mapBinding.deconstructor
-          )
-        else
-          ProtobufCodec
-            .Repeated[List, (K, V)](
-              ProtobufCodec.Message(
-                s"${getTypeName(key.typeName, Nil)}${getTypeName(value.typeName, Nil)}Entry",
-                Array(
-                  SimpleField("key", 1, keyInstance, keyRegister, getDefaultValue(key).getOrElse(getDefaultValue(using keyInstance)), None),
-                  SimpleField("value", 2, valueInstance, valueRegister, getDefaultValue(value).getOrElse(getDefaultValue(using valueInstance)), None)
-                ),
-                constructor,
-                deconstructor,
-                offset,
-                Set.empty,
-                inline = false,
-                nested = Some(true),
-                comment = None
-              ),
-              SeqConstructor.listConstructor,
-              SeqDeconstructor.listDeconstructor,
-              packed = false
-            )
-            .transform[M[K, V]](
-              list => {
-                val constructor = mapBinding.constructor
-                val builder     = constructor.newObjectBuilder[K, V]()
-                var remaining   = list
-                while (remaining ne Nil) {
-                  val (k, v) = remaining.head
-                  constructor.addObject(builder, k, v)
-                  remaining = remaining.tail
-                }
-                constructor.resultObject(builder)
-              },
-              map => {
-                val deconstructor = mapBinding.deconstructor
-                val it            = deconstructor.deconstruct(map)
-                val listBuilder   = List.newBuilder[(K, V)]
-                while (it.hasNext) {
-                  val kv = it.next()
-                  listBuilder += deconstructor.getKeyValue(kv)
-                }
-                listBuilder.result()
-              }
-            )
+            constructor,
+            deconstructor,
+            offset,
+            Set.empty,
+            inline = false,
+            nested = if (mapInProto) None else Some(true),
+            comment = None
+          ),
+          mapBinding.constructor,
+          mapBinding.deconstructor,
+          mapInProto
+        )
       }
     }
   }
@@ -600,7 +557,7 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
         None.asInstanceOf[A]
       case c: ProtobufCodec.Enum[A]                                        =>
         c.valuesByIndex(0)
-      case ProtobufCodec.RepeatedMap(_, constructor, _)                    =>
+      case ProtobufCodec.RepeatedMap(_, constructor, _, _)                 =>
         constructor.emptyObject.asInstanceOf[A]
       case ProtobufCodec.Repeated(_, constructor, _, _)                    =>
         constructor.emptyObject.asInstanceOf[A]
