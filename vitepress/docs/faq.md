@@ -22,4 +22,6 @@ To deal with this, make sure to always [generate `.proto` files](/proto-file-gen
 
 It is hard to compete with the speed of code generation, which creates custom encoders and decoders for every single type without the need for generic code. A fairer comparison is to compare Proteus with the combination of code generation and transformations between the generated types and the idiomatic Scala types.
 
-We have a benchmark project that compares the performance of Proteus with ScalaPB and Chimney for various payload sizes. You can find it [here](https://github.com/ghostdogpr/proteus/tree/main/benchmarks). The bottom line is that Proteus is up to 2x slower for small payloads (which is still extremely fast) and about the same speed for large payloads. Proteus allocates less memory for all payload sizes.
+We have a benchmark project that compares the performance of Proteus with ScalaPB and Chimney for various payload sizes. You can find it [here](https://github.com/ghostdogpr/proteus/tree/main/benchmarks). The bottom line is that Proteus is up to 1.5x slower for small payloads (which is still extremely fast) and about the same speed for large payloads. Proteus allocates quite a lot less memory for all payload sizes.
+
+If you compare it with alternative binary serialization libraries, Proteus is between 1.5 and 2x faster than [upickle](https://github.com/com-lihaoyi/upickle) and [borer](https://github.com/sirthias/borer), with less memory allocations as well.
