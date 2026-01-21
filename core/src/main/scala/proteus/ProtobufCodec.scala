@@ -34,7 +34,7 @@ sealed trait ProtobufCodec[A] {
     wrapEncode(getName, prependOnExisting = false) {
       withRegisters { registers =>
         val cache  = new WriterCache()
-        val size   = computeSize(this, value, -1, registers, alwaysEncode = true, cache)
+        val size   = computeRootSize(this, value, registers, cache)
         val bytes  = new Array[Byte](size)
         val output = CodedOutputStream.newInstance(bytes)
         cache.reset()
@@ -973,6 +973,18 @@ object ProtobufCodec {
     }
     r.constructor.resultObject(builder)
   }
+
+  private def computeRootSize[A](codec: ProtobufCodec[A], a: A, registers: Registers, cache: WriterCache): Int =
+    codec match {
+      case c: Message[_]          => c.computeSize(a, -1, registers, cache)
+      case c: RecursiveMessage[_] => c.codec.computeSize(a, -1, registers, cache)
+      case c: Transform[_, _]     =>
+        val v = c.to(a)
+        cache.recordValue(v.asInstanceOf[AnyRef])
+        computeRootSize(c.codec, v, registers, cache)
+      case c: Enum[_]             => c.computeSize(a, -1, alwaysEncode = true)
+      case _                      => throw new Exception(s"Invalid root codec: $codec")
+    }
 
   private def read[A](registers: Registers, offset: RegisterOffset, codec: ProtobufCodec[A])(using input: CodedInputStream): A = {
     def loop[A](codec: ProtobufCodec[A], offset: RegisterOffset): A =
