@@ -134,13 +134,15 @@ object ProtobufCodec {
 
   private class RegistersHolder(val registers: Registers, var inUse: Boolean)
 
+  private val initialRegisterOffset = RegisterOffset(objects = 64, ints = 64)
+
   private val pool = new ThreadLocal[RegistersHolder] {
-    override def initialValue(): RegistersHolder = new RegistersHolder(Registers(RegisterOffset.Zero), false)
+    override def initialValue(): RegistersHolder = new RegistersHolder(Registers(initialRegisterOffset), false)
   }
 
   private[proteus] inline def withRegisters[A](inline f: Registers => A): A = {
     val holder = pool.get()
-    if (holder.inUse) f(Registers(RegisterOffset.Zero))
+    if (holder.inUse) f(Registers(initialRegisterOffset))
     else
       try {
         holder.inUse = true
