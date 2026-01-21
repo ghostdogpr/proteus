@@ -1,153 +1,19 @@
 package proteus
 
 import java.time.*
-import java.util.concurrent.TimeUnit
 
-import io.bullet.borer.{Cbor, Codec}
+import io.bullet.borer.Codec
 import io.bullet.borer.derivation.MapBasedCodecs.*
 import io.scalaland.chimney.{PartialTransformer, Transformer}
 import io.scalaland.chimney.dsl.*
 import io.scalaland.chimney.partial
 import io.scalaland.chimney.protobufs.*
-import org.openjdk.jmh.annotations.*
-import org.openjdk.jmh.infra.Blackhole
 import test.test as scalapb
 import upickle.default.*
 import zio.blocks.schema.*
 import zio.blocks.schema.json.JsonBinaryCodecDeriver
 
-import proteus.ProtobufCodecBenchmark.*
-
-@OutputTimeUnit(TimeUnit.MILLISECONDS)
-@State(Scope.Benchmark)
-@Warmup(iterations = 5, time = 1, timeUnit = TimeUnit.SECONDS)
-@Measurement(iterations = 10, time = 1, timeUnit = TimeUnit.SECONDS)
-@Fork(1)
-class SimpleBenchmark {
-  @Benchmark
-  def proteus(bh: Blackhole): Unit = {
-    val encoded = proteusCodec.encode(simpleData)
-    bh.consume(proteusCodec.decode(encoded))
-  }
-
-  @Benchmark
-  def scalapb_chimney(bh: Blackhole): Unit = {
-    val encoded = domainToScalaPB(simpleData).toByteArray
-    bh.consume(scalaPBToDomain(scalapb.A.parseFrom(encoded)))
-  }
-
-  @Benchmark
-  def zio_blocks_json(bh: Blackhole): Unit = {
-    val encoded = jsonCodec.encode(simpleData)
-    bh.consume(jsonCodec.decode(encoded))
-  }
-
-  @Benchmark
-  def zio_schema_protobuf(bh: Blackhole): Unit = {
-    val encoded = zioSchemaCodec.encode(simpleData)
-    bh.consume(zioSchemaCodec.decode(encoded))
-  }
-
-  @Benchmark
-  def upickle(bh: Blackhole): Unit = {
-    val encoded = writeBinary(simpleData)
-    bh.consume(readBinary[A](encoded))
-  }
-
-  @Benchmark
-  def borer(bh: Blackhole): Unit = {
-    val encoded = Cbor.encode(simpleData).toByteArray
-    bh.consume(Cbor.decode(encoded).to[A].value)
-  }
-}
-
-@OutputTimeUnit(TimeUnit.MILLISECONDS)
-@State(Scope.Benchmark)
-@Warmup(iterations = 5, time = 1, timeUnit = TimeUnit.SECONDS)
-@Measurement(iterations = 10, time = 1, timeUnit = TimeUnit.SECONDS)
-@Fork(1)
-class ComplexBenchmark {
-  @Benchmark
-  def proteus(bh: Blackhole): Unit = {
-    val encoded = proteusCodec.encode(complexData)
-    bh.consume(proteusCodec.decode(encoded))
-  }
-
-  @Benchmark
-  def scalapb_chimney(bh: Blackhole): Unit = {
-    val encoded = domainToScalaPB(complexData).toByteArray
-    bh.consume(scalaPBToDomain(scalapb.A.parseFrom(encoded)))
-  }
-
-  @Benchmark
-  def zio_blocks_json(bh: Blackhole): Unit = {
-    val encoded = jsonCodec.encode(complexData)
-    bh.consume(jsonCodec.decode(encoded))
-  }
-
-  @Benchmark
-  def zio_schema_protobuf(bh: Blackhole): Unit = {
-    val encoded = zioSchemaCodec.encode(complexData)
-    bh.consume(zioSchemaCodec.decode(encoded))
-  }
-
-  @Benchmark
-  def upickle(bh: Blackhole): Unit = {
-    val encoded = writeBinary(complexData)
-    bh.consume(readBinary[A](encoded))
-  }
-
-  @Benchmark
-  def borer(bh: Blackhole): Unit = {
-    val encoded = Cbor.encode(complexData).toByteArray
-    bh.consume(Cbor.decode(encoded).to[A].value)
-  }
-}
-
-@OutputTimeUnit(TimeUnit.MILLISECONDS)
-@State(Scope.Benchmark)
-@Warmup(iterations = 5, time = 1, timeUnit = TimeUnit.SECONDS)
-@Measurement(iterations = 10, time = 1, timeUnit = TimeUnit.SECONDS)
-@Fork(1)
-class LargeBenchmark {
-  @Benchmark
-  def proteus(bh: Blackhole): Unit = {
-    val encoded = proteusCodec.encode(largeData)
-    bh.consume(proteusCodec.decode(encoded))
-  }
-
-  @Benchmark
-  def scalapb_chimney(bh: Blackhole): Unit = {
-    val encoded = domainToScalaPB(largeData).toByteArray
-    bh.consume(scalaPBToDomain(scalapb.A.parseFrom(encoded)))
-  }
-
-  @Benchmark
-  def zio_blocks_json(bh: Blackhole): Unit = {
-    val encoded = jsonCodec.encode(largeData)
-    bh.consume(jsonCodec.decode(encoded))
-  }
-
-  @Benchmark
-  def zio_schema_protobuf(bh: Blackhole): Unit = {
-    val encoded = zioSchemaCodec.encode(largeData)
-    bh.consume(zioSchemaCodec.decode(encoded))
-  }
-
-  @Benchmark
-  def upickle(bh: Blackhole): Unit = {
-    val encoded = writeBinary(largeData)
-    bh.consume(readBinary[A](encoded))
-  }
-
-  @Benchmark
-  def borer(bh: Blackhole): Unit = {
-    val encoded = Cbor.encode(largeData).toByteArray
-    bh.consume(Cbor.decode(encoded).to[A].value)
-  }
-}
-
-object ProtobufCodecBenchmark {
+object Data {
 
   type DateTime = OffsetDateTime
 
@@ -293,7 +159,8 @@ object ProtobufCodecBenchmark {
 }
 
 @main
-def runTest =
+def runTest = {
+  import Data.*
   while (true) {
     val data    = largeData
     val encoded = proteusCodec.encode(data)
@@ -301,3 +168,4 @@ def runTest =
     // val encoded2 = domainToScalaPB(data).toByteArray
     // val decoded2 = scalaPBToDomain(scalapb.A.parseFrom(encoded2))
   }
+}
