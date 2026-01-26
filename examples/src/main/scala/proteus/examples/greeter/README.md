@@ -12,8 +12,8 @@ sbt "examples/runMain proteus.examples.greeter.GreeterExample"
 
 **Messages & Service** (`Greeter.scala`):
 ```scala
-case class HelloRequest(name: String) derives Schema
-case class HelloReply(message: String) derives Schema
+case class HelloRequest(name: String) derives ProtobufCodec
+case class HelloReply(message: String) derives ProtobufCodec
 
 val sayHelloRpc = Rpc.unary[HelloRequest, HelloReply]("SayHello")
 

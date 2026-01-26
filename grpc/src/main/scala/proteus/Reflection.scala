@@ -5,42 +5,40 @@ import zio.blocks.schema.Schema
 import proteus.Modifiers.*
 import proteus.Modifiers.OneOfFlag.*
 
-case class ServerReflectionRequest(host: String, messageRequest: MessageRequest) derives Schema, ProtobufCodec
+case class ServerReflectionRequest(host: String, messageRequest: MessageRequest) derives ProtobufCodec
 case class ServerReflectionResponse(validHost: String, originalRequest: ServerReflectionRequest, messageResponse: MessageResponse)
-  derives Schema,
-    ProtobufCodec
+  derives ProtobufCodec
 
-sealed trait MessageRequest derives Schema
+sealed trait MessageRequest
 object MessageRequest {
   case class FileByFileName(value: String) extends MessageRequest
   object FileByFileName       {
-    given Schema[FileByFileName] = Schema.derived[FileByFileName].wrapTotal(FileByFileName(_), _.value)
+    given Schema[FileByFileName] = Schema[String].transform(FileByFileName(_), _.value)
   }
   case class FileContainingSymbol(value: String) extends MessageRequest
   object FileContainingSymbol {
-    given Schema[FileContainingSymbol] = Schema.derived[FileContainingSymbol].wrapTotal(FileContainingSymbol(_), _.value)
+    given Schema[FileContainingSymbol] = Schema[String].transform(FileContainingSymbol(_), _.value)
   }
-  case class FileContainingExtension(containingType: String, extensionNumber: Int) extends MessageRequest derives Schema
+  case class FileContainingExtension(containingType: String, extensionNumber: Int) extends MessageRequest
   case class AllExtensionNumbersOfType(value: String) extends MessageRequest
   object AllExtensionNumbersOfType {
-    given Schema[AllExtensionNumbersOfType] =
-      Schema.derived[AllExtensionNumbersOfType].wrapTotal[String](AllExtensionNumbersOfType(_), _.value)
+    given Schema[AllExtensionNumbersOfType] = Schema[String].transform(AllExtensionNumbersOfType(_), _.value)
   }
   case class ListServices(value: String) extends MessageRequest
   object ListServices              {
-    given Schema[ListServices] = Schema.derived[ListServices].wrapTotal[String](ListServices(_), _.value)
+    given Schema[ListServices] = Schema[String].transform(ListServices(_), _.value)
   }
 }
 
-sealed trait MessageResponse derives Schema
+sealed trait MessageResponse
 object MessageResponse {
   case class FileDescriptorResponse(fileDescriptorProto: Array[Byte])                      extends MessageResponse
-  case class AllExtensionNumbersResponse(baseTypeName: String, extensionNumber: List[Int]) extends MessageResponse derives Schema
-  case class ListServicesResponse(service: List[ServiceResponse])                          extends MessageResponse derives Schema
+  case class AllExtensionNumbersResponse(baseTypeName: String, extensionNumber: List[Int]) extends MessageResponse
+  case class ListServicesResponse(service: List[ServiceResponse])                          extends MessageResponse
   case class ErrorResponse(errorCode: Int, errorMessage: String)                           extends MessageResponse
 }
 
-case class ServiceResponse(name: String) derives Schema
+case class ServiceResponse(name: String)
 
 given ProtobufDeriver = ProtobufDeriver
   .modifier[ServerReflectionRequest](reserved(2))

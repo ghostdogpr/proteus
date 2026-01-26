@@ -26,14 +26,14 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
   /**
     * Adds a custom codec instance for the given type.
     */
-  def instance[B: Schema](instance: => ProtobufCodec[B]): ProtobufDeriver =
-    copy(instances = instances :+ InstanceOverrideByType(Schema[B].reflect.typeName, Lazy(instance)))
+  def instance[B: TypeName](instance: => ProtobufCodec[B]): ProtobufDeriver =
+    copy(instances = instances :+ InstanceOverrideByType(summon[TypeName[B]], Lazy(instance)))
 
   /**
     * Adds a custom modifier for the given type.
     */
-  def modifier[B: Schema](modifier: Modifier.Reflect): ProtobufDeriver =
-    copy(modifiers = modifiers :+ ModifierReflectOverrideByType(Schema[B].reflect.typeName, modifier))
+  def modifier[B: TypeName](modifier: Modifier.Reflect): ProtobufDeriver =
+    copy(modifiers = modifiers :+ ModifierReflectOverrideByType(summon[TypeName[B]], modifier))
 
   /**
     * Adds a custom modifier for a term (case class field or enum member) of the given type.
@@ -41,7 +41,7 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
     * @param termName the name of the term to apply the modifier to (there will be a compile error if the term does not exist)
     * @param modifier the modifier to apply.
     */
-  inline def modifier[B: Schema](termName: String, modifier: Modifier.Term): ProtobufDeriver = {
+  inline def modifier[B: TypeName](termName: String, modifier: Modifier.Term): ProtobufDeriver = {
     inline summonInline[Mirror.Of[B]] match {
       case m: Mirror.ProductOf[B] =>
         inline if (!constValue[proteus.Tuple.Contains[m.MirroredElemLabels, termName.type]]) {
@@ -52,7 +52,7 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
           error("Case " + constValue[termName.type] + " does not exist in sealed trait or enum " + constValue[m.MirroredLabel] + ".")
         }
     }
-    copy(modifiers = modifiers :+ ModifierTermOverrideByType(Schema[B].reflect.typeName, termName, modifier))
+    copy(modifiers = modifiers :+ ModifierTermOverrideByType(summon[TypeName[B]], termName, modifier))
   }
 
   /**

@@ -10,7 +10,7 @@ There are several ways to customize the generated schema:
 
 Let's imagine you have the following case class:
 ```scala
-case class Order(items: Map[String, Int]) derives Schema
+case class Order(items: Map[String, Int])
 ```
 It will generate the following Protobuf schema:
 ```proto
@@ -72,11 +72,10 @@ Now everywhere you use `deriver` (rather than the default `ProtobufDeriver`), yo
 ## Modifiers
 Creating a custom codec is useful, but it is boilerplate, and we want to avoid it when possible.
 For that reason, Proteus provides **modifiers** that allow you to easily change the generated schema for common use cases without having to touch the Scala types.
-Note that you need an instance of `Schema` for a type to apply a modifier to it.
 
 Let's see a simple example. We have this case class:
 ```scala
-case class Person(name: String, age: Int) derives Schema
+case class Person(name: String, age: Int)
 ```
 But we want it to be named "User" in the Protobuf schema. There is no need to create a case class `User` for such a simple use case. Instead, you can apply a modifier to the deriver like this:
 ```scala
