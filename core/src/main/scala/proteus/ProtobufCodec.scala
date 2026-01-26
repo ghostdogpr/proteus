@@ -844,7 +844,9 @@ object ProtobufCodec {
       if (!visited(i)) {
         // set default values for not visited fields
         m.fields(i) match {
-          case field: SimpleField[?]   => setToRegister(registers, offset, field.register, field.defaultValue)
+          case field: SimpleField[?]   =>
+            if (field.defaultValue != null) setToRegister(registers, offset, field.register, field.defaultValue)
+            else throw new Exception(s"Field ${field.name} in message ${m.name} is absent and has no default value")
           case field: OneOfField[?]    =>
             if (field.defaultValue != null) setToRegister(registers, offset, field.register, field.defaultValue)
             else throw new Exception(s"OneOf field ${field.name} in message ${m.name} is absent and has no default value")
