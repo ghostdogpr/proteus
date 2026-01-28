@@ -79,7 +79,7 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
     override def initialValue: java.util.IdentityHashMap[TypeName[?], Unit] = new java.util.IdentityHashMap[TypeName[?], Unit]
   }
 
-  def derivePrimitive[F[_, _], A](
+  def derivePrimitive[A](
     primitiveType: PrimitiveType[A],
     typeName: TypeName[A],
     binding: Binding[BindingType.Primitive, A],
@@ -116,7 +116,8 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
             val builder            = Array.newBuilder[ProtobufCodec.MessageField[?]]
             var id                 = 0
 
-            def getField[A](index: Int, field: TermInstance[F, A]): Unit =
+            def getField[A](index: Int, field: TermInstance[F, A]): Unit = {
+              val defaultValue = field.term.value.getDefaultValue.getOrElse(getDefaultValue(using field.instance))
               if (!field.term.modifiers.exists { case Modifier.config(`excludedModifier`, _) => true; case _ => false }) {
                 val name     = getFieldName(field.term.name, field.term.modifiers)
                 val register = registers(index)
@@ -146,11 +147,10 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
                       new Discriminator[A] {
                         def discriminate(a: A): Int = o.discriminator.discriminate(to(a).asInstanceOf[inner])
                       },
-                      try from(o.defaultValue.asInstanceOf[t.Origin])
-                      catch { case _: Exception => null.asInstanceOf[A] },
+                      defaultValue,
                       o.comment
                     )
-                  case ProtobufCodec.Message(_, Array(o: OneOfField[?]), _, _, _, _, true, _, _)                                            =>
+                  case ProtobufCodec.Message(_, Array(o: OneOfField[a]), _, _, _, _, true, _, _)                                            =>
                     val idIterator = getReservedIndexes(field.term.modifiers).iterator
                     builder += OneOfField(
                       name,
@@ -166,7 +166,7 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
                       },
                       register,
                       o.discriminator,
-                      o.defaultValue,
+                      defaultValue.asInstanceOf[a],
                       o.comment
                     )
                   case ProtobufCodec.Optional(codec) if flags.contains(DerivationFlag.OptionalAsOneOf)                                      =>
@@ -201,17 +201,11 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
                         while (allReservedIndexes.contains(id)) id += 1
                         id
                     }
-                    builder += SimpleField(
-                      name,
-                      fieldId,
-                      instance,
-                      register,
-                      getDefaultValue(field.term.value).getOrElse(getDefaultValue(using field.instance)),
-                      getComment(field.term.modifiers)
-                    )
+                    builder += SimpleField(name, fieldId, instance, register, defaultValue, getComment(field.term.modifiers))
                 }
               } else
-                builder += ExcludedField(registers(index), getDefaultValue(field.term.value).getOrElse(getDefaultValue(using field.instance)))
+                builder += ExcludedField(registers(index), defaultValue)
+            }
 
             var idx   = 0
             val len   = fields.length
@@ -325,7 +319,7 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
               }.toArray,
               register.asInstanceOf[Register[Any]],
               discriminator,
-              variant.defaultValue.fold(null.asInstanceOf[A])(_()),
+              null.asInstanceOf[A],
               getComment(modifiers)
             )
             val codec              = ProtobufCodec.Message(
@@ -417,8 +411,8 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
           ProtobufCodec.Message(
             if (mapInProto) "" else s"${getTypeName(key.typeName, Nil)}${getTypeName(value.typeName, Nil)}Entry",
             Array(
-              SimpleField("key", 1, keyInstance, keyRegister, getDefaultValue(key).getOrElse(getDefaultValue(using keyInstance)), None),
-              SimpleField("value", 2, valueInstance, valueRegister, getDefaultValue(value).getOrElse(getDefaultValue(using valueInstance)), None)
+              SimpleField("key", 1, keyInstance, keyRegister, key.getDefaultValue.getOrElse(getDefaultValue(using keyInstance)), None),
+              SimpleField("value", 2, valueInstance, valueRegister, value.getDefaultValue.getOrElse(getDefaultValue(using valueInstance)), None)
             ),
             constructor,
             deconstructor,
@@ -523,12 +517,9 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
 
   private def innerSchema[F[_, _], A](schema: Reflect[F, A]): Reflect[F, A] =
     schema match {
-      case Reflect.Deferred(value) => innerSchema(value())
-      case _                       => schema
+      case Reflect.Deferred(value, _, _) => innerSchema(value())
+      case _                             => schema
     }
-
-  private def getDefaultValue[F[_, _], A](reflect: Reflect[F, A])(using F: HasBinding[F]): Option[A] =
-    reflect.binding.defaultValue.map(_())
 
   private def getDefaultValue[A](using codec: ProtobufCodec[A]): A =
     codec match {
