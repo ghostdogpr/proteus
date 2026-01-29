@@ -79,21 +79,25 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
     override def initialValue: java.util.IdentityHashMap[TypeName[?], Unit] = new java.util.IdentityHashMap[TypeName[?], Unit]
   }
 
-  def derivePrimitive[A](
+  override def derivePrimitive[A](
     primitiveType: PrimitiveType[A],
     typeName: TypeName[A],
     binding: Binding[BindingType.Primitive, A],
     doc: Doc,
-    modifiers: Seq[Modifier.Reflect]
+    modifiers: Seq[Modifier.Reflect],
+    defaultValue: Option[A],
+    examples: Seq[A]
   ): Lazy[ProtobufCodec[A]] =
     Lazy(ProtobufCodec.Primitive(primitiveType))
 
-  def deriveRecord[F[_, _], A](
+  override def deriveRecord[F[_, _], A](
     fields: IndexedSeq[Term[F, A, ?]],
     typeName: TypeName[A],
     binding: Binding[BindingType.Record, A],
     doc: Doc,
-    modifiers: Seq[Modifier.Reflect]
+    modifiers: Seq[Modifier.Reflect],
+    defaultValue: Option[A],
+    examples: Seq[A]
   )(implicit F: HasBinding[F], D: HasInstance[F]): Lazy[ProtobufCodec[A]] =
     Lazy {
       val visited   = visitedCache.get
@@ -116,8 +120,7 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
             val builder            = Array.newBuilder[ProtobufCodec.MessageField[?]]
             var id                 = 0
 
-            def getField[A](index: Int, field: TermInstance[F, A]): Unit = {
-              val defaultValue = field.term.value.getDefaultValue.getOrElse(getDefaultValue(using field.instance))
+            def getField[A](index: Int, field: TermInstance[F, A]): Unit =
               if (!field.term.modifiers.exists { case Modifier.config(`excludedModifier`, _) => true; case _ => false }) {
                 val name     = getFieldName(field.term.name, field.term.modifiers)
                 val register = registers(index)
@@ -147,10 +150,11 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
                       new Discriminator[A] {
                         def discriminate(a: A): Int = o.discriminator.discriminate(to(a).asInstanceOf[inner])
                       },
-                      defaultValue,
+                      try from(o.defaultValue.asInstanceOf[t.Origin])
+                      catch { case _: Exception => null.asInstanceOf[A] },
                       o.comment
                     )
-                  case ProtobufCodec.Message(_, Array(o: OneOfField[a]), _, _, _, _, true, _, _)                                            =>
+                  case ProtobufCodec.Message(_, Array(o: OneOfField[?]), _, _, _, _, true, _, _)                                            =>
                     val idIterator = getReservedIndexes(field.term.modifiers).iterator
                     builder += OneOfField(
                       name,
@@ -166,7 +170,7 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
                       },
                       register,
                       o.discriminator,
-                      defaultValue.asInstanceOf[a],
+                      o.defaultValue,
                       o.comment
                     )
                   case ProtobufCodec.Optional(codec) if flags.contains(DerivationFlag.OptionalAsOneOf)                                      =>
@@ -201,11 +205,17 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
                         while (allReservedIndexes.contains(id)) id += 1
                         id
                     }
-                    builder += SimpleField(name, fieldId, instance, register, defaultValue, getComment(field.term.modifiers))
+                    builder += SimpleField(
+                      name,
+                      fieldId,
+                      instance,
+                      register,
+                      field.term.value.getDefaultValue.getOrElse(getDefaultValue(using field.instance)),
+                      getComment(field.term.modifiers)
+                    )
                 }
               } else
-                builder += ExcludedField(registers(index), defaultValue)
-            }
+                builder += ExcludedField(registers(index), field.term.value.getDefaultValue.getOrElse(getDefaultValue(using field.instance)))
 
             var idx   = 0
             val len   = fields.length
@@ -237,12 +247,14 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
       }
     }.flatten
 
-  def deriveVariant[F[_, _], A](
+  override def deriveVariant[F[_, _], A](
     cases: IndexedSeq[Term[F, A, ?]],
     typeName: TypeName[A],
     binding: Binding[BindingType.Variant, A],
     doc: Doc,
-    modifiers: Seq[Modifier.Reflect]
+    modifiers: Seq[Modifier.Reflect],
+    defaultValue: Option[A],
+    examples: Seq[A]
   )(implicit F: HasBinding[F], D: HasInstance[F]): Lazy[ProtobufCodec[A]] = {
     val filteredCases = cases.filterNot(c =>
       c.modifiers.exists { case Modifier.config(`excludedModifier`, _) => true; case _ => false } ||
@@ -319,7 +331,7 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
               }.toArray,
               register.asInstanceOf[Register[Any]],
               discriminator,
-              null.asInstanceOf[A],
+              defaultValue.getOrElse(null.asInstanceOf[A]),
               getComment(modifiers)
             )
             val codec              = ProtobufCodec.Message(
@@ -348,12 +360,14 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
       }.flatten
   }
 
-  def deriveSequence[F[_, _], C[_], A](
+  override def deriveSequence[F[_, _], C[_], A](
     element: Reflect[F, A],
     typeName: TypeName[C[A]],
     binding: Binding[BindingType.Seq[C], C[A]],
     doc: Doc,
-    modifiers: Seq[Modifier.Reflect]
+    modifiers: Seq[Modifier.Reflect],
+    defaultValue: Option[C[A]],
+    examples: Seq[C[A]]
   )(implicit F: HasBinding[F], D: HasInstance[F]): Lazy[ProtobufCodec[C[A]]] = {
     val seqBinding = binding.asInstanceOf[Binding.Seq[C, A]]
     D.instance(element.metadata).map { instance =>
@@ -376,13 +390,15 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
     }
   }
 
-  def deriveMap[F[_, _], M[_, _], K, V](
+  override def deriveMap[F[_, _], M[_, _], K, V](
     key: Reflect[F, K],
     value: Reflect[F, V],
     typeName: TypeName[M[K, V]],
     binding: Binding[BindingType.Map[M], M[K, V]],
     doc: Doc,
-    modifiers: Seq[Modifier.Reflect]
+    modifiers: Seq[Modifier.Reflect],
+    defaultValue: Option[M[K, V]],
+    examples: Seq[M[K, V]]
   )(implicit F: HasBinding[F], D: HasInstance[F]): Lazy[ProtobufCodec[M[K, V]]] = {
     val mapBinding    = binding.asInstanceOf[Binding.Map[M, K, V]]
     val registers     = Reflect.Record.registers(Array(key, value))
@@ -430,18 +446,23 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
     }
   }
 
-  def deriveDynamic[F[_, _]](binding: Binding[BindingType.Dynamic, DynamicValue], doc: Doc, modifiers: Seq[Modifier.Reflect])(
-    implicit F: HasBinding[F],
-    D: HasInstance[F]
-  ): Lazy[ProtobufCodec[DynamicValue]] = Lazy.fail(new Exception("Dynamic is not supported"))
+  override def deriveDynamic[F[_, _]](
+    binding: Binding[BindingType.Dynamic, DynamicValue],
+    doc: Doc,
+    modifiers: Seq[Modifier.Reflect],
+    defaultValue: Option[DynamicValue],
+    examples: Seq[DynamicValue]
+  )(implicit F: HasBinding[F], D: HasInstance[F]): Lazy[ProtobufCodec[DynamicValue]] = Lazy.fail(new Exception("Dynamic is not supported"))
 
-  def deriveWrapper[F[_, _], A, B](
+  override def deriveWrapper[F[_, _], A, B](
     wrapped: Reflect[F, B],
     typeName: TypeName[A],
     wrapperPrimitiveType: Option[PrimitiveType[A]],
     binding: Binding[BindingType.Wrapper[A, B], A],
     doc: Doc,
-    modifiers: Seq[Modifier.Reflect]
+    modifiers: Seq[Modifier.Reflect],
+    defaultValue: Option[A],
+    examples: Seq[A]
   )(implicit F: HasBinding[F], D: HasInstance[F]): Lazy[ProtobufCodec[A]] = {
     val wrapperBinding = binding.asInstanceOf[Binding.Wrapper[A, B]]
     D.instance(wrapped.metadata).map { wrappedCodec =>
