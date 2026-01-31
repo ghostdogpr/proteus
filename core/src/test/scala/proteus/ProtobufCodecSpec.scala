@@ -6,6 +6,7 @@ import scala.util.Try
 
 import zio.blocks.schema.*
 import zio.blocks.schema.binding.Binding
+import zio.blocks.typeid.*
 import zio.test.*
 import zio.test.Assertion.*
 
@@ -162,7 +163,7 @@ object ProtobufCodecSpec extends ZIOSpecDefault {
       test("message with DateTime field") {
         case class TimeMessage(id: Int, timestamp: DateTime) derives Schema
 
-        val codec = Schema[TimeMessage].deriving(deriver).instance(TypeName.offsetDateTime, testDateTimeSchema).derive
+        val codec = Schema[TimeMessage].deriving(deriver).instance(TypeId.offsetDateTime, testDateTimeSchema).derive
 
         val timestamps = List(
           DateTime.min,
@@ -926,7 +927,7 @@ object ProtobufCodecSpec extends ZIOSpecDefault {
 
         val codec = Schema[MessageWithContact]
           .deriving(deriver)
-          .instance(Schema[ContactWrapper].reflect.asRecord.get.typeName, transformedCodec)
+          .instance(TypeId.of[ContactWrapper], transformedCodec)
           .derive
 
         val originalEmail = MessageWithContact(1, ContactWrapper(ContactType.Email("test@example.com")))

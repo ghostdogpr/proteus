@@ -8,6 +8,7 @@ import zio.blocks.schema.binding.*
 import zio.blocks.schema.binding.RegisterOffset.*
 import zio.blocks.schema.binding.SeqConstructor.*
 import zio.blocks.schema.derive.*
+import zio.blocks.typeid.*
 
 import proteus.ProtobufCodec.MessageField.*
 import proteus.ProtobufDeriver.*
@@ -26,14 +27,14 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
   /**
     * Adds a custom codec instance for the given type.
     */
-  def instance[B: TypeName](instance: => ProtobufCodec[B]): ProtobufDeriver =
-    copy(instances = instances :+ InstanceOverrideByType(summon[TypeName[B]], Lazy(instance)))
+  def instance[B: TypeId](instance: => ProtobufCodec[B]): ProtobufDeriver =
+    copy(instances = instances :+ InstanceOverrideByType(summon[TypeId[B]], Lazy(instance)))
 
   /**
     * Adds a custom modifier for the given type.
     */
-  def modifier[B: TypeName](modifier: Modifier.Reflect): ProtobufDeriver =
-    copy(modifiers = modifiers :+ ModifierReflectOverrideByType(summon[TypeName[B]], modifier))
+  def modifier[B: TypeId](modifier: Modifier.Reflect): ProtobufDeriver =
+    copy(modifiers = modifiers :+ ModifierReflectOverrideByType(summon[TypeId[B]], modifier))
 
   /**
     * Adds a custom modifier for a term (case class field or enum member) of the given type.
@@ -41,7 +42,7 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
     * @param termName the name of the term to apply the modifier to (there will be a compile error if the term does not exist)
     * @param modifier the modifier to apply.
     */
-  inline def modifier[B: TypeName](termName: String, modifier: Modifier.Term): ProtobufDeriver = {
+  inline def modifier[B: TypeId](termName: String, modifier: Modifier.Term): ProtobufDeriver = {
     inline summonInline[Mirror.Of[B]] match {
       case m: Mirror.ProductOf[B] =>
         inline if (!constValue[proteus.Tuple.Contains[m.MirroredElemLabels, termName.type]]) {
@@ -52,7 +53,7 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
           error("Case " + constValue[termName.type] + " does not exist in sealed trait or enum " + constValue[m.MirroredLabel] + ".")
         }
     }
-    copy(modifiers = modifiers :+ ModifierTermOverrideByType(summon[TypeName[B]], termName, modifier))
+    copy(modifiers = modifiers :+ ModifierTermOverrideByType(summon[TypeId[B]], termName, modifier))
   }
 
   /**
@@ -71,17 +72,17 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
 
   override def modifierOverrides: IndexedSeq[ModifierOverride] = modifiers
 
-  private val instanceCache  = java.util.concurrent.ConcurrentHashMap[TypeName[?], ProtobufCodec.Message[Any]]()
-  private val visitedCache   = new ThreadLocal[java.util.IdentityHashMap[TypeName[?], Unit]] {
-    override def initialValue: java.util.IdentityHashMap[TypeName[?], Unit] = new java.util.IdentityHashMap[TypeName[?], Unit]
+  private val instanceCache  = java.util.concurrent.ConcurrentHashMap[TypeId[?], ProtobufCodec.Message[Any]]()
+  private val visitedCache   = new ThreadLocal[java.util.IdentityHashMap[TypeId[?], Unit]] {
+    override def initialValue: java.util.IdentityHashMap[TypeId[?], Unit] = new java.util.IdentityHashMap[TypeId[?], Unit]
   }
-  private val recursiveCache = new ThreadLocal[java.util.IdentityHashMap[TypeName[?], Unit]] {
-    override def initialValue: java.util.IdentityHashMap[TypeName[?], Unit] = new java.util.IdentityHashMap[TypeName[?], Unit]
+  private val recursiveCache = new ThreadLocal[java.util.IdentityHashMap[TypeId[?], Unit]] {
+    override def initialValue: java.util.IdentityHashMap[TypeId[?], Unit] = new java.util.IdentityHashMap[TypeId[?], Unit]
   }
 
   override def derivePrimitive[A](
     primitiveType: PrimitiveType[A],
-    typeName: TypeName[A],
+    typeId: TypeId[A],
     binding: Binding[BindingType.Primitive, A],
     doc: Doc,
     modifiers: Seq[Modifier.Reflect],
@@ -92,7 +93,7 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
 
   override def deriveRecord[F[_, _], A](
     fields: IndexedSeq[Term[F, A, ?]],
-    typeName: TypeName[A],
+    typeId: TypeId[A],
     binding: Binding[BindingType.Record, A],
     doc: Doc,
     modifiers: Seq[Modifier.Reflect],
@@ -102,11 +103,11 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
     Lazy {
       val visited   = visitedCache.get
       val recursive = recursiveCache.get
-      if (visited.containsKey(typeName)) {
-        recursive.put(typeName, ())
-        Lazy(ProtobufCodec.RecursiveMessage(() => instanceCache.get(typeName).asInstanceOf[ProtobufCodec.Message[A]]))
+      if (visited.containsKey(typeId)) {
+        recursive.put(typeId, ())
+        Lazy(ProtobufCodec.RecursiveMessage(() => instanceCache.get(typeId).asInstanceOf[ProtobufCodec.Message[A]]))
       } else {
-        visited.put(typeName, ())
+        visited.put(typeId, ())
         val recordBinding = binding.asInstanceOf[Binding.Record[A]]
         val registers     = Reflect.Record.registers(fields.map(_.value).toArray)
         val offset        = Reflect.Record.usedRegisters(registers)
@@ -224,12 +225,12 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
                 getField(idx, fieldsWithInstances(idx))
               catch {
                 case e: Exception =>
-                  throw new Exception(s"Error deriving field ${fieldsWithInstances(idx).term.name} of type ${typeName.name}", e)
+                  throw new Exception(s"Error deriving field ${fieldsWithInstances(idx).term.name} of type ${typeId.name}", e)
               }
               idx += 1
             }
             val codec = ProtobufCodec.Message(
-              getTypeName(typeName, modifiers),
+              getTypeName(typeId, modifiers),
               builder.result(),
               recordBinding.constructor,
               recordBinding.deconstructor,
@@ -240,8 +241,8 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
               comment = getComment(modifiers)
             )
 
-            visited.remove(typeName)
-            if (recursive.containsKey(typeName)) instanceCache.put(typeName, codec.asInstanceOf[ProtobufCodec.Message[Any]]): Unit
+            visited.remove(typeId)
+            if (recursive.containsKey(typeId)) instanceCache.put(typeId, codec.asInstanceOf[ProtobufCodec.Message[Any]]): Unit
             codec
           }
       }
@@ -249,7 +250,7 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
 
   override def deriveVariant[F[_, _], A](
     cases: IndexedSeq[Term[F, A, ?]],
-    typeName: TypeName[A],
+    typeId: TypeId[A],
     binding: Binding[BindingType.Variant, A],
     doc: Doc,
     modifiers: Seq[Modifier.Reflect],
@@ -260,8 +261,8 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
       c.modifiers.exists { case Modifier.config(`excludedModifier`, _) => true; case _ => false } ||
         c.value.modifiers.exists { case Modifier.config(`excludedModifier`, _) => true; case _ => false }
     )
-    if (typeName.name == unitOption.name && typeName.namespace == unitOption.namespace)
-      D.instance(filteredCases.find(c => c.name == unitSome.name).get.value.asRecord.get.fields.head.value.metadata)
+    if (typeId.isOption)
+      D.instance(filteredCases.find(c => c.name == "Some").get.value.asRecord.get.fields.head.value.metadata)
         .map(ProtobufCodec.Optional(_).asInstanceOf[ProtobufCodec[A]])
     else if (isEnum(filteredCases, modifiers)) {
       val nested             = modifiers.collectFirst { case Modifier.config(`nestedModifier`, "true") => true }.getOrElse(false)
@@ -279,21 +280,21 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
             current
         }
         val a          = constructEnumCase(c).asInstanceOf[A]
-        val prefix     = getEnumPrefix(modifiers, flags, typeName)
-        val suffix     = getEnumSuffix(modifiers, flags, typeName)
+        val prefix     = getEnumPrefix(modifiers, flags, typeId)
+        val suffix     = getEnumSuffix(modifiers, flags, typeId)
         val enumName   = getEnumMemberName(c.name, c.modifiers, prefix, suffix)
         builder += ProtobufCodec.EnumValue(enumName, fieldIndex, a, getComment(c.modifiers))
       }
-      Lazy(ProtobufCodec.Enum(getTypeName(typeName, modifiers), builder.result(), reservedIndexes.toList, nested = nested, getComment(modifiers)))
+      Lazy(ProtobufCodec.Enum(getTypeName(typeId, modifiers), builder.result(), reservedIndexes.toList, nested = nested, getComment(modifiers)))
     } else
       Lazy {
         val visited   = visitedCache.get
         val recursive = recursiveCache.get
-        if (visited.containsKey(typeName)) {
-          recursive.put(typeName, ())
-          Lazy(ProtobufCodec.RecursiveMessage(() => instanceCache.get(typeName).asInstanceOf[ProtobufCodec.Message[A]]))
+        if (visited.containsKey(typeId)) {
+          recursive.put(typeId, ())
+          Lazy(ProtobufCodec.RecursiveMessage(() => instanceCache.get(typeId).asInstanceOf[ProtobufCodec.Message[A]]))
         } else {
-          visited.put(typeName, ())
+          visited.put(typeId, ())
 
           val nested        = modifiers.collectFirst { case Modifier.config(`nestedModifier`, value) => value.toBooleanOption }.flatten
           val inlineOneOf   = modifiers.collectFirst { case Modifier.config(`oneOfModifier`, value) => value.contains("inline") }.getOrElse(false)
@@ -335,7 +336,7 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
               getComment(modifiers)
             )
             val codec              = ProtobufCodec.Message(
-              getTypeName(typeName, modifiers),
+              getTypeName(typeId, modifiers),
               builder.result(),
               new Constructor[A]   {
                 def usedRegisters: RegisterOffset                           = register.usedRegisters
@@ -352,8 +353,8 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
               comment = getComment(modifiers)
             )
 
-            visited.remove(typeName)
-            if (recursive.containsKey(typeName)) instanceCache.put(typeName, codec.asInstanceOf[ProtobufCodec.Message[Any]]): Unit
+            visited.remove(typeId)
+            if (recursive.containsKey(typeId)) instanceCache.put(typeId, codec.asInstanceOf[ProtobufCodec.Message[Any]]): Unit
             codec
           }
         }
@@ -362,7 +363,7 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
 
   override def deriveSequence[F[_, _], C[_], A](
     element: Reflect[F, A],
-    typeName: TypeName[C[A]],
+    typeId: TypeId[C[A]],
     binding: Binding[BindingType.Seq[C], C[A]],
     doc: Doc,
     modifiers: Seq[Modifier.Reflect],
@@ -382,9 +383,9 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
       if (isByteArray) ProtobufCodec.Bytes.asInstanceOf[ProtobufCodec[C[A]]]
       else {
         if (ProtobufCodec.isOptional(using instance))
-          throw new Exception(s"Unsupported usage of optional inside repeated type $typeName")
+          throw new Exception(s"Unsupported usage of optional inside repeated type $typeId")
         if (ProtobufCodec.isRepeated(using instance))
-          throw new Exception(s"Unsupported usage of repeated inside repeated type $typeName")
+          throw new Exception(s"Unsupported usage of repeated inside repeated type $typeId")
         ProtobufCodec.Repeated[C, A](instance, seqBinding.constructor, seqBinding.deconstructor, isPacked(instance))
       }
     }
@@ -393,7 +394,7 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
   override def deriveMap[F[_, _], M[_, _], K, V](
     key: Reflect[F, K],
     value: Reflect[F, V],
-    typeName: TypeName[M[K, V]],
+    typeId: TypeId[M[K, V]],
     binding: Binding[BindingType.Map[M], M[K, V]],
     doc: Doc,
     modifiers: Seq[Modifier.Reflect],
@@ -425,7 +426,7 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
         val mapInProto = isValidKeyType(keyInstance) && isValidValueTypeForMap(valueInstance)
         ProtobufCodec.RepeatedMap[M, K, V](
           ProtobufCodec.Message(
-            if (mapInProto) "" else s"${getTypeName(key.typeName, Nil)}${getTypeName(value.typeName, Nil)}Entry",
+            if (mapInProto) "" else s"${getTypeName(key.typeId, Nil)}${getTypeName(value.typeId, Nil)}Entry",
             Array(
               SimpleField("key", 1, keyInstance, keyRegister, key.getDefaultValue.getOrElse(getDefaultValue(using keyInstance)), None),
               SimpleField("value", 2, valueInstance, valueRegister, value.getDefaultValue.getOrElse(getDefaultValue(using valueInstance)), None)
@@ -456,7 +457,7 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
 
   override def deriveWrapper[F[_, _], A, B](
     wrapped: Reflect[F, B],
-    typeName: TypeName[A],
+    typeId: TypeId[A],
     wrapperPrimitiveType: Option[PrimitiveType[A]],
     binding: Binding[BindingType.Wrapper[A, B], A],
     doc: Doc,
@@ -470,7 +471,7 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
         (b: B) =>
           wrapperBinding.wrap(b) match {
             case Right(a)    => a
-            case Left(error) => throw new Exception(s"Wrapper conversion failed for type ${typeName.name} (value: $b): $error")
+            case Left(error) => throw new Exception(s"Wrapper conversion failed for type ${typeId.name} (value: $b): $error")
           },
         (a: A) => wrapperBinding.unwrap(a)
       )
@@ -490,10 +491,10 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
       case _                                => false
     }
 
-  private def getTypeName(typeName: TypeName[?], modifiers: Seq[Modifier]): String =
+  private def getTypeName(typeId: TypeId[?], modifiers: Seq[Modifier]): String =
     modifiers
       .collectFirst { case Modifier.config(`renameModifier`, newName) => newName }
-      .getOrElse(s"${typeName.name}${typeName.params.map(getTypeName(_, Nil)).mkString}")
+      .getOrElse(s"${typeId.name}${typeId.typeArgs.collect { case TypeRepr.Ref(id) => getTypeName(id, Nil) }.mkString}")
 
   private def getFieldName(fieldName: String, modifiers: Seq[Modifier]): String =
     modifiers
@@ -515,15 +516,15 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
   private def getReservedIndex(modifiers: Seq[Modifier]): Option[Int] =
     modifiers.collectFirst { case Modifier.config(`reservedModifier`, value) => value.toIntOption }.flatten
 
-  private def getEnumPrefix(modifiers: Seq[Modifier], flags: Set[DerivationFlag], typeName: TypeName[?]): String =
+  private def getEnumPrefix(modifiers: Seq[Modifier], flags: Set[DerivationFlag], typeId: TypeId[?]): String =
     modifiers
       .collectFirst { case Modifier.config(`enumPrefixModifier`, prefix) => prefix }
-      .getOrElse(if (flags.contains(DerivationFlag.AutoPrefixEnums)) typeNameToUpperSnakeCase(getTypeName(typeName, modifiers)) else "")
+      .getOrElse(if (flags.contains(DerivationFlag.AutoPrefixEnums)) typeNameToUpperSnakeCase(getTypeName(typeId, modifiers)) else "")
 
-  private def getEnumSuffix(modifiers: Seq[Modifier], flags: Set[DerivationFlag], typeName: TypeName[?]): String =
+  private def getEnumSuffix(modifiers: Seq[Modifier], flags: Set[DerivationFlag], typeId: TypeId[?]): String =
     modifiers
       .collectFirst { case Modifier.config(`enumSuffixModifier`, suffix) => suffix }
-      .getOrElse(if (flags.contains(DerivationFlag.AutoSuffixEnums)) typeNameToUpperSnakeCase(getTypeName(typeName, modifiers)) else "")
+      .getOrElse(if (flags.contains(DerivationFlag.AutoSuffixEnums)) typeNameToUpperSnakeCase(getTypeName(typeId, modifiers)) else "")
 
   private def getComment(modifiers: Seq[Modifier]): Option[String] =
     modifiers.collectFirst { case Modifier.config(`commentModifier`, value) => value }
@@ -538,8 +539,8 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
 
   private def innerSchema[F[_, _], A](schema: Reflect[F, A]): Reflect[F, A] =
     schema match {
-      case Reflect.Deferred(value, _, _) => innerSchema(value())
-      case _                             => schema
+      case d: Reflect.Deferred[F, A] => innerSchema(d.value)
+      case _                         => schema
     }
 
   private def getDefaultValue[A](using codec: ProtobufCodec[A]): A =
@@ -608,9 +609,6 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
       case ProtobufCodec.Transform(_, _, codec)  => isValidValueTypeForMap(codec)
       case _                                     => true
     }
-
-  private val unitOption = TypeName.option(TypeName.unit)
-  private val unitSome   = TypeName.some(TypeName.unit)
 }
 
 object ProtobufDeriver extends ProtobufDeriver(Set.empty, Vector.empty, Vector.empty) {
