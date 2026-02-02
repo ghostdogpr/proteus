@@ -468,18 +468,7 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
   )(implicit F: HasBinding[F], D: HasInstance[F]): Lazy[ProtobufCodec[A]] = {
     val wrapperBinding = binding.asInstanceOf[Binding.Wrapper[A, B]]
     D.instance(wrapped.metadata).map { wrappedCodec =>
-      wrappedCodec.transform(
-        (b: B) =>
-          wrapperBinding.wrap(b) match {
-            case Right(a)    => a
-            case Left(error) => throw new Exception(s"Wrapper conversion failed for type ${typeId.name} (value: $b): $error")
-          },
-        (a: A) =>
-          wrapperBinding.unwrap(a) match {
-            case Right(b)    => b
-            case Left(error) => throw new Exception(s"Wrapper conversion failed for type ${typeId.name} (value: $a): $error")
-          }
-      )
+      wrappedCodec.transform(wrapperBinding.wrap, wrapperBinding.unwrap)
     }
   }
 
