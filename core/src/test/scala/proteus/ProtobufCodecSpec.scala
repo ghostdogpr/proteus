@@ -441,6 +441,18 @@ object ProtobufCodecSpec extends ZIOSpecDefault {
 
         assert(decoded)(equalTo(original))
       },
+      test("message with List of enums") {
+        enum E {
+          case A, B, C
+        }
+        case class Container(items: List[E]) derives Schema
+        val containerCodec = Schema[Container].derive(deriver)
+
+        val original = Container(List(E.A, E.B, E.C))
+        val encoded  = containerCodec.encode(original)
+        val decoded  = containerCodec.decode(encoded)
+        assert(decoded)(equalTo(original))
+      },
       test("message with transformed List of messages") {
         case class MyList[A](items: List[A])
         given [A: Schema]: Schema[MyList[A]] = Schema[List[A]].transform(MyList[A](_), _.items)
