@@ -6,6 +6,7 @@ import scala.annotation.tailrec
 import scala.collection.immutable.HashMap
 import scala.collection.mutable
 import scala.compiletime.*
+import scala.reflect.ClassTag
 import scala.util.control.NonFatal
 
 import com.google.protobuf.{CodedInputStream, CodedOutputStream}
@@ -652,8 +653,13 @@ object ProtobufCodec {
   /**
     * Represents a repeated type.
     */
-  final case class Repeated[C[_], E](element: ProtobufCodec[E], constructor: SeqConstructor[C], deconstructor: SeqDeconstructor[C], packed: Boolean)
-    extends ProtobufCodec[C[E]] {
+  final case class Repeated[C[_], E](
+    element: ProtobufCodec[E],
+    constructor: SeqConstructor[C],
+    deconstructor: SeqDeconstructor[C],
+    packed: Boolean,
+    elementClassTag: ClassTag[E]
+  ) extends ProtobufCodec[C[E]] {
     private[proteus] def computeSize(a: C[E], id: Int, registers: Registers, cache: WriterCache): Int = {
       val it = deconstructor.deconstruct(a)
       if (it.isEmpty) 0
@@ -862,7 +868,7 @@ object ProtobufCodec {
                   val v = field.register.asInstanceOf[Register.Object[_ <: AnyRef]].get(registers, offset)
                   // we need this check to do nothing in case it was packed
                   if (v.isInstanceOf[scala.collection.mutable.Builder[?, ?]])
-                    c.constructor.resultObject(v.asInstanceOf[c.constructor.ObjectBuilder[Any]]).asInstanceOf[A]
+                    c.constructor.result(v.asInstanceOf[c.constructor.Builder[Any]]).asInstanceOf[A]
                   else null.asInstanceOf[A]
                 case c: RepeatedMap[_, _, _]   =>
                   val v = field.register.asInstanceOf[Register.Object[_ <: AnyRef]].get(registers, offset)
@@ -892,11 +898,11 @@ object ProtobufCodec {
         val register = field.field.register.asInstanceOf[Register.Object[_ <: AnyRef]]
         val builder  =
           if (!visited(field.index)) {
-            val builder = r.constructor.newObjectBuilder[E]()
+            val builder = r.constructor.newBuilder[E]()(using r.elementClassTag)
             register.set(registers, offset, builder.asInstanceOf[register.Boxed])
             builder
-          } else register.get(registers, offset).asInstanceOf[r.constructor.ObjectBuilder[E]]
-        r.constructor.addObject(builder, loop(r.element, field, tag))
+          } else register.get(registers, offset).asInstanceOf[r.constructor.Builder[E]]
+        r.constructor.add(builder, loop(r.element, field, tag))
         null.asInstanceOf[C[E]]
       }
 
@@ -978,13 +984,13 @@ object ProtobufCodec {
         case _                  => throw new Exception(s"Invalid packed type: $codec")
       }
 
-    val builder = r.constructor.newObjectBuilder[E]()
+    val builder = r.constructor.newBuilder[E]()(using r.elementClassTag)
     withLimit {
       val getElement = loop(r.element)
       while (input.getBytesUntilLimit > 0)
-        r.constructor.addObject(builder, getElement())
+        r.constructor.add(builder, getElement())
     }
-    r.constructor.resultObject(builder)
+    r.constructor.result(builder)
   }
 
   private def computeRootSize[A](codec: ProtobufCodec[A], a: A, registers: Registers, cache: WriterCache): Int =

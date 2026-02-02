@@ -2,11 +2,11 @@ package proteus
 
 import scala.compiletime.*
 import scala.deriving.Mirror
+import scala.reflect.ClassTag
 
 import zio.blocks.schema.*
 import zio.blocks.schema.binding.*
 import zio.blocks.schema.binding.RegisterOffset.*
-import zio.blocks.schema.binding.SeqConstructor.*
 import zio.blocks.schema.derive.*
 import zio.blocks.typeid.*
 
@@ -372,13 +372,9 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
   )(implicit F: HasBinding[F], D: HasInstance[F]): Lazy[ProtobufCodec[C[A]]] = {
     val seqBinding = binding.asInstanceOf[Binding.Seq[C, A]]
     D.instance(element.metadata).map { instance =>
-      val isByteArray = seqBinding.constructor match {
-        case _: ArrayConstructor =>
-          instance match {
-            case ProtobufCodec.Primitive(_: PrimitiveType.Byte) => true
-            case _                                              => false
-          }
-        case _                   => false
+      val isByteArray = seqBinding.constructor.empty(element.typeId.classTag) match {
+        case _: Array[Byte] => true
+        case _              => false
       }
       if (isByteArray) ProtobufCodec.Bytes.asInstanceOf[ProtobufCodec[C[A]]]
       else {
@@ -386,7 +382,13 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
           throw new Exception(s"Unsupported usage of optional inside repeated type $typeId")
         if (ProtobufCodec.isRepeated(using instance))
           throw new Exception(s"Unsupported usage of repeated inside repeated type $typeId")
-        ProtobufCodec.Repeated[C, A](instance, seqBinding.constructor, seqBinding.deconstructor, isPacked(instance))
+        ProtobufCodec.Repeated[C, A](
+          instance,
+          seqBinding.constructor,
+          seqBinding.deconstructor,
+          isPacked(instance),
+          element.typeId.classTag.asInstanceOf[ClassTag[A]]
+        )
       }
     }
   }
@@ -458,7 +460,6 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
   override def deriveWrapper[F[_, _], A, B](
     wrapped: Reflect[F, B],
     typeId: TypeId[A],
-    wrapperPrimitiveType: Option[PrimitiveType[A]],
     binding: Binding[BindingType.Wrapper[A, B], A],
     doc: Doc,
     modifiers: Seq[Modifier.Reflect],
@@ -473,7 +474,11 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
             case Right(a)    => a
             case Left(error) => throw new Exception(s"Wrapper conversion failed for type ${typeId.name} (value: $b): $error")
           },
-        (a: A) => wrapperBinding.unwrap(a)
+        (a: A) =>
+          wrapperBinding.unwrap(a) match {
+            case Right(b)    => b
+            case Left(error) => throw new Exception(s"Wrapper conversion failed for type ${typeId.name} (value: $a): $error")
+          }
       )
     }
   }
@@ -572,8 +577,8 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
         c.valuesByIndex(0)
       case ProtobufCodec.RepeatedMap(_, constructor, _, _)                 =>
         constructor.emptyObject.asInstanceOf[A]
-      case ProtobufCodec.Repeated(_, constructor, _, _)                    =>
-        constructor.emptyObject.asInstanceOf[A]
+      case ProtobufCodec.Repeated(_, constructor, _, _, elementClassTag)   =>
+        constructor.empty(elementClassTag)
       case ProtobufCodec.Transform(from, _, codec)                         =>
         try from(getDefaultValue(using codec))
         catch { case _: Exception => null.asInstanceOf[A] }
