@@ -556,8 +556,7 @@ object ProtobufCodec {
                           cache
                         )
                       }
-                    case field: ExcludedField[?]     =>
-                      throw new Exception("Field is excluded and cannot be encoded")
+                    case field: ExcludedField[?]     => 0
                   }
                 }
               }
@@ -614,8 +613,7 @@ object ProtobufCodec {
                           cache
                         )
                       }
-                    case field: ExcludedField[?]     =>
-                      throw new Exception("Field is excluded and cannot be encoded")
+                    case field: ExcludedField[?]     => ()
                   }
                 }
               }
