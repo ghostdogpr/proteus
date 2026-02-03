@@ -733,6 +733,28 @@ object ProtobufCodecSpec extends ZIOSpecDefault {
         val decoded = codec.decode(encoded)
 
         assert(decoded)(equalTo(slackContact))
+      },
+      test("proteus excluded modifier with variant cases and default value") {
+        enum Contact   {
+          case None
+          case Email(address: String)
+          case Phone(number: String) // This will be excluded
+          case Slack(workspace: String)
+        }
+        object Contact {
+          given Schema[Contact] = Schema.derived[Contact].defaultValue(Contact.None)
+        }
+
+        case class ContactMessage(contact: Contact) derives Schema
+
+        val codec = Schema[ContactMessage].derive(deriver.modifier[Contact]("Phone", excluded))
+
+        val slackContact = ContactMessage(Contact.Phone("my-phone"))
+
+        val encoded = codec.encode(slackContact)
+        val decoded = codec.decode(encoded)
+
+        assert(decoded)(equalTo(ContactMessage(Contact.None)))
       }
     ),
     suite("Bytes Primitive")(
