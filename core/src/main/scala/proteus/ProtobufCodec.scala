@@ -244,7 +244,7 @@ object ProtobufCodec {
       */
     final case class OneOfField[A](
       name: String,
-      cases: Array[SimpleField[?]],
+      cases: Array[SimpleField[?] | ExcludedField[?]],
       register: Register[Any],
       discriminator: Discriminator[A],
       defaultValue: A,
@@ -256,16 +256,20 @@ object ProtobufCodec {
         */
       def toProtoIR: ProtoIR.MessageElement.OneOfElement = {
         val fields = cases
-          .map(field =>
-            ProtoIR.Field(
-              toProtoType(field.codec),
-              field.name,
-              field.id,
-              deprecated = false,
-              optional = isOptional(using field.codec),
-              comment = field.comment
-            )
-          )
+          .flatMap {
+            case field: SimpleField[?]   =>
+              Some(
+                ProtoIR.Field(
+                  toProtoType(field.codec),
+                  field.name,
+                  field.id,
+                  deprecated = false,
+                  optional = isOptional(using field.codec),
+                  comment = field.comment
+                )
+              )
+            case field: ExcludedField[?] => None
+          }
           .toList
           .sortBy(_.number)
         ProtoIR.MessageElement.OneOfElement(ProtoIR.OneOf(name, fields, comment))
@@ -499,7 +503,7 @@ object ProtobufCodec {
       */
     val simpleFields: List[SimpleField[?]] = fields.toList.flatMap {
       case f: SimpleField[?]   => List(f)
-      case f: OneOfField[?]    => f.cases.toList
+      case f: OneOfField[?]    => f.cases.toList.collect { case field: SimpleField[?] => field }
       case f: ExcludedField[?] => Nil
     }
 
@@ -508,7 +512,7 @@ object ProtobufCodec {
       */
     val fieldMap: IntDenseMap[IndexedField]     = IntDenseMap.from(fields.zipWithIndex.flatMap {
       case (f: SimpleField[?], idx)   => List(f.id -> IndexedField(f, idx))
-      case (f: OneOfField[?], idx)    => f.cases.map(c => c.id -> IndexedField(c, idx)).toList
+      case (f: OneOfField[?], idx)    => f.cases.collect { case field: SimpleField[?] => field.id -> IndexedField(field, idx) }.toList
       case (f: ExcludedField[?], idx) => Nil
     })
     private[proteus] val mayUseBuilder: Boolean = simpleFields.exists(_.mayUseBuilder)
@@ -540,16 +544,20 @@ object ProtobufCodec {
               if (res == null) 0
               else {
                 wrapEncode(field.name) {
-                  val simpleField = field.cases(field.discriminator.discriminate(res))
-                  wrapEncode(s"${simpleField.name}#${simpleField.id}") {
-                    ProtobufCodec.computeSize(
-                      simpleField.codec,
-                      res.asInstanceOf[simpleField.codec.Focus],
-                      simpleField.id,
-                      registers,
-                      alwaysEncode = true,
-                      cache
-                    )
+                  field.cases(field.discriminator.discriminate(res)) match {
+                    case simpleField: SimpleField[?] =>
+                      wrapEncode(s"${simpleField.name}#${simpleField.id}") {
+                        ProtobufCodec.computeSize(
+                          simpleField.codec,
+                          res.asInstanceOf[simpleField.codec.Focus],
+                          simpleField.id,
+                          registers,
+                          alwaysEncode = true,
+                          cache
+                        )
+                      }
+                    case field: ExcludedField[?]     =>
+                      throw new Exception("Field is excluded and cannot be encoded")
                   }
                 }
               }
@@ -594,16 +602,20 @@ object ProtobufCodec {
               val res = getFromRegister(registers, offset, field.register).asInstanceOf[a]
               if (res != null) {
                 wrapEncode(field.name) {
-                  val simpleField = field.cases(field.discriminator.discriminate(res))
-                  wrapEncode(s"${simpleField.name}#${simpleField.id}") {
-                    ProtobufCodec.write(
-                      simpleField.codec,
-                      res.asInstanceOf[simpleField.codec.Focus],
-                      simpleField.id,
-                      registers,
-                      alwaysEncode = true,
-                      cache
-                    )
+                  field.cases(field.discriminator.discriminate(res)) match {
+                    case simpleField: SimpleField[?] =>
+                      wrapEncode(s"${simpleField.name}#${simpleField.id}") {
+                        ProtobufCodec.write(
+                          simpleField.codec,
+                          res.asInstanceOf[simpleField.codec.Focus],
+                          simpleField.id,
+                          registers,
+                          alwaysEncode = true,
+                          cache
+                        )
+                      }
+                    case field: ExcludedField[?]     =>
+                      throw new Exception("Field is excluded and cannot be encoded")
                   }
                 }
               }

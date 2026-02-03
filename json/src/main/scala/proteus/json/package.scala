@@ -91,10 +91,12 @@ implicit def jsonWriterCodec[A](using codec: ProtobufCodec[A], registry: Registr
                           Some(f.cases(f.discriminator.discriminate(v)))
                         case _: ExcludedField[?] => None
                       }
-                      field.foreach { f =>
-                        builder +=
-                          toCamelCase(f.name) ->
-                            loop(getFromRegister(registers, offset, f.register).asInstanceOf[f.codec.Focus], f.codec, nextOffset)
+                      field.foreach {
+                        case f: SimpleField[?]   =>
+                          builder +=
+                            toCamelCase(f.name) ->
+                              loop(getFromRegister(registers, offset, f.register).asInstanceOf[f.codec.Focus], f.codec, nextOffset)
+                        case f: ExcludedField[?] => ()
                       }
                       i += 1
                     }
