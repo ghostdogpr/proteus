@@ -130,22 +130,24 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
                     val idIterator = getReservedIndexes(field.term.modifiers).iterator
                     builder += OneOfField(
                       name,
-                      o.cases.map { field =>
-                        val caseId =
-                          if (idIterator.hasNext) idIterator.next
-                          else {
-                            id += 1
-                            while (allReservedIndexes.contains(id)) id += 1
-                            id
-                          }
-                        field.copy(
-                          id = caseId,
-                          codec = ProtobufCodec.Transform(from, to, field.codec.asInstanceOf[ProtobufCodec[t.Origin]]),
-                          register = register,
-                          defaultValue =
-                            try from(field.defaultValue.asInstanceOf[t.Origin])
-                            catch { case _: Exception => null.asInstanceOf[A] }
-                        )
+                      o.cases.map {
+                        case field: ExcludedField[?] => field
+                        case field: SimpleField[?]   =>
+                          val caseId =
+                            if (idIterator.hasNext) idIterator.next
+                            else {
+                              id += 1
+                              while (allReservedIndexes.contains(id)) id += 1
+                              id
+                            }
+                          field.copy(
+                            id = caseId,
+                            codec = ProtobufCodec.Transform(from, to, field.codec.asInstanceOf[ProtobufCodec[t.Origin]]),
+                            register = register,
+                            defaultValue =
+                              try from(field.defaultValue.asInstanceOf[t.Origin])
+                              catch { case _: Exception => null.asInstanceOf[A] }
+                          )
                       },
                       register,
                       new Discriminator[A] {
@@ -159,15 +161,17 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
                     val idIterator = getReservedIndexes(field.term.modifiers).iterator
                     builder += OneOfField(
                       name,
-                      o.cases.map { field =>
-                        val caseId =
-                          if (idIterator.hasNext) idIterator.next
-                          else {
-                            id += 1
-                            while (allReservedIndexes.contains(id)) id += 1
-                            id
-                          }
-                        field.copy(id = caseId, register = register)
+                      o.cases.map {
+                        case field: ExcludedField[?] => field
+                        case field: SimpleField[?]   =>
+                          val caseId =
+                            if (idIterator.hasNext) idIterator.next
+                            else {
+                              id += 1
+                              while (allReservedIndexes.contains(id)) id += 1
+                              id
+                            }
+                          field.copy(id = caseId, register = register)
                       },
                       register,
                       o.discriminator,
@@ -257,14 +261,14 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
     defaultValue: Option[A],
     examples: Seq[A]
   )(implicit F: HasBinding[F], D: HasInstance[F]): Lazy[ProtobufCodec[A]] = {
-    val filteredCases = cases.filterNot(c =>
-      c.modifiers.exists { case Modifier.config(`excludedModifier`, _) => true; case _ => false } ||
-        c.value.modifiers.exists { case Modifier.config(`excludedModifier`, _) => true; case _ => false }
-    )
     if (typeId.isOption)
-      D.instance(filteredCases.find(c => c.name == "Some").get.value.asRecord.get.fields.head.value.metadata)
+      D.instance(cases.find(c => c.name == "Some").get.value.asRecord.get.fields.head.value.metadata)
         .map(ProtobufCodec.Optional(_).asInstanceOf[ProtobufCodec[A]])
-    else if (isEnum(filteredCases, modifiers)) {
+    else if (isEnum(cases, modifiers)) {
+      val filteredCases      = cases.filterNot(c =>
+        c.modifiers.exists { case Modifier.config(`excludedModifier`, _) => true; case _ => false } ||
+          c.value.modifiers.exists { case Modifier.config(`excludedModifier`, _) => true; case _ => false }
+      )
       val nested             = modifiers.collectFirst { case Modifier.config(`nestedModifier`, "true") => true }.getOrElse(false)
       val reservedIndexes    = getReservedIndexes(modifiers).toSet
       val allReservedIndexes = reservedIndexes ++ filteredCases.flatMap(c => getReservedIndexes(c.modifiers).toSet)
@@ -303,7 +307,7 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
             .getOrElse(flags.contains(DerivationFlag.NestedOneOf))
           val variant       = binding.asInstanceOf[Binding.Variant[A]]
           val discriminator = variant.discriminator
-          Lazy.collectAll(filteredCases.map(c => D.instance(c.value.metadata).map(TermInstance(c, _))).toVector).map { casesWithInstances =>
+          Lazy.collectAll(cases.map(c => D.instance(c.value.metadata).map(TermInstance(c, _))).toVector).map { casesWithInstances =>
             val reservedIndexes    = getReservedIndexes(modifiers).toSet
             val allReservedIndexes = reservedIndexes ++ getReservedIndexes(casesWithInstances.flatMap(_.term.modifiers)).toSet
             val builder            = Array.newBuilder[ProtobufCodec.MessageField[?]]
@@ -311,25 +315,32 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
             val register           = Register.Object(0)
             builder += OneOfField(
               "value",
-              casesWithInstances.zipWithIndex.map { case (c, index) =>
-                val fieldId = getReservedIndex(c.term.modifiers) match {
-                  case Some(reservedIndex) => reservedIndex
-                  case None                =>
-                    while (allReservedIndexes.contains(id)) id += 1
-                    val current = id
-                    id += 1
-                    current
+              casesWithInstances.zipWithIndex
+                .map[SimpleField[?] | ExcludedField[?]] { case (c, index) =>
+                  val excluded =
+                    c.term.modifiers.exists { case Modifier.config(`excludedModifier`, _) => true; case _ => false } ||
+                      c.term.value.modifiers.exists { case Modifier.config(`excludedModifier`, _) => true; case _ => false }
+                  if (excluded) ExcludedField(register.asInstanceOf[Register[Any]], null.asInstanceOf[A])
+                  else {
+                    val fieldId = getReservedIndex(c.term.modifiers) match {
+                      case Some(reservedIndex) => reservedIndex
+                      case None                =>
+                        while (allReservedIndexes.contains(id)) id += 1
+                        val current = id
+                        id += 1
+                        current
+                    }
+                    SimpleField(
+                      getFieldName(c.term.name, c.term.modifiers),
+                      fieldId,
+                      if (nestedOneOf) c.instance.makeNested else c.instance,
+                      register.asInstanceOf[Register[Any]],
+                      null.asInstanceOf[c.instance.Focus],
+                      getComment(c.term.modifiers)
+                    )
+                  }
                 }
-                val item    = SimpleField(
-                  getFieldName(c.term.name, c.term.modifiers),
-                  fieldId,
-                  if (nestedOneOf) c.instance.makeNested else c.instance,
-                  register.asInstanceOf[Register[Any]],
-                  null.asInstanceOf[c.instance.Focus],
-                  getComment(c.term.modifiers)
-                )
-                item
-              }.toArray,
+                .toArray,
               register.asInstanceOf[Register[Any]],
               discriminator,
               defaultValue.getOrElse(null.asInstanceOf[A]),
