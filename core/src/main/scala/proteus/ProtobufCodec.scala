@@ -994,22 +994,24 @@ object ProtobufCodec {
           }
         case c: Enum[_]         => () => r.constructor.add(builder, c.valueOrThrow(input.readEnum()))
         case c: Transform[_, _] =>
-          def loop[A](codec: ProtobufCodec[A]): A =
+          def loop[A](codec: ProtobufCodec[A]): () => A =
             codec match {
               case c: Primitive[_]    =>
                 c.primitiveType match {
-                  case _: PrimitiveType.Int     => input.readInt32()
-                  case _: PrimitiveType.Long    => input.readInt64()
-                  case _: PrimitiveType.Boolean => input.readBool()
-                  case _: PrimitiveType.Double  => input.readDouble()
-                  case _: PrimitiveType.Float   => input.readFloat()
+                  case _: PrimitiveType.Int     => () => input.readInt32()
+                  case _: PrimitiveType.Long    => () => input.readInt64()
+                  case _: PrimitiveType.Boolean => () => input.readBool()
+                  case _: PrimitiveType.Double  => () => input.readDouble()
+                  case _: PrimitiveType.Float   => () => input.readFloat()
                   case _                        => throw new Exception(s"Unsupported packed primitive type: $c")
                 }
-              case c: Enum[_]         => c.valueOrThrow(input.readEnum())
-              case c: Transform[_, _] => c.from(loop(c.codec))
+              case c: Enum[_]         => () => c.valueOrThrow(input.readEnum())
+              case c: Transform[_, _] => () => c.from(loop(c.codec)())
               case _                  => throw new Exception(s"Invalid packed type: $c")
             }
-          () => r.constructor.add(builder, loop(r.element))
+
+          val getElement = loop(r.element)
+          () => r.constructor.add(builder, getElement())
         case _                  => throw new Exception(s"Invalid packed type: ${r.element}}")
       }
       while (input.getBytesUntilLimit > 0)
