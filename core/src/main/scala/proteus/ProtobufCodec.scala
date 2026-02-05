@@ -453,9 +453,15 @@ object ProtobufCodec {
     */
   final case class Enum[A](name: String, values: List[EnumValue[A]], reserved: List[Int], nested: Boolean, comment: Option[String] = None)
     extends ProtobufCodec[A] {
-    val valuesByIndex: IntDenseMap[A]    = IntDenseMap.from(values.map(v => (v.index, v.value)))
-    val indexesByValue: HashMap[A, Int]  = HashMap.from(values.map(v => (v.value, v.index)))
-    val namesByValue: HashMap[A, String] = HashMap.from(values.map(v => (v.value, v.name)))
+    private val valuesByIndex: IntDenseMap[A] = IntDenseMap.from(values.map(v => (v.index, v.value)))
+    val indexesByValue: HashMap[A, Int]       = HashMap.from(values.map(v => (v.value, v.index)))
+    val namesByValue: HashMap[A, String]      = HashMap.from(values.map(v => (v.value, v.name)))
+
+    def valueOrThrow(raw: Int): A = {
+      val value = valuesByIndex(raw)
+      if (value == null) throw new Exception(s"Unknown enum value $raw for enum $name")
+      value
+    }
 
     private[proteus] def computeSize(a: A, id: Int, alwaysEncode: Boolean, cache: WriterCache): Int = {
       val index = indexesByValue(a)
@@ -937,7 +943,7 @@ object ProtobufCodec {
           case c: Transform[_, _]      =>
             val res = loop(c.codec, field, tag)
             if (res == null) null.asInstanceOf[A] else c.from(res)
-          case c: Enum[_]              => c.valuesByIndex(input.readEnum())
+          case c: Enum[_]              => c.valueOrThrow(input.readEnum())
           case c: Optional[_]          => Some(loop(c.codec, field, tag))
           case c: Repeated[c, e]       =>
             if (c.packed && (tag & 0x7) == 2) handlePackedRepeated(c)
@@ -991,7 +997,7 @@ object ProtobufCodec {
             case _                        => throw new Exception(s"Unsupported packed primitive type: $c")
           }
         case c: Transform[_, _] => () => c.from(loop(c.codec)())
-        case c: Enum[_]         => () => c.valuesByIndex(input.readEnum())
+        case c: Enum[_]         => () => c.valueOrThrow(input.readEnum())
         case _                  => throw new Exception(s"Invalid packed type: $codec")
       }
 
@@ -1022,7 +1028,7 @@ object ProtobufCodec {
         case c: Message[_]          => handleMessage(c, registers, offset)
         case c: RecursiveMessage[_] => handleMessage(c.codec, registers, offset)
         case c: Transform[_, _]     => c.from(loop(c.codec, offset))
-        case c: Enum[_]             => c.valuesByIndex(input.readEnum())
+        case c: Enum[_]             => c.valueOrThrow(input.readEnum())
         case _                      => throw new Exception(s"Invalid root codec: $codec")
       }
 

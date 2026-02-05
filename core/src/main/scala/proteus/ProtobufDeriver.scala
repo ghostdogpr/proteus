@@ -574,7 +574,7 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
       case ProtobufCodec.Optional(_)                                       =>
         None.asInstanceOf[A]
       case c: ProtobufCodec.Enum[A]                                        =>
-        c.valuesByIndex(0)
+        c.valueOrThrow(0)
       case ProtobufCodec.RepeatedMap(_, constructor, _, _)                 =>
         constructor.emptyObject.asInstanceOf[A]
       case ProtobufCodec.Repeated(_, constructor, _, _, elementClassTag)   =>
