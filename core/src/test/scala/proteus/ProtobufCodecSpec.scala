@@ -749,9 +749,9 @@ object ProtobufCodecSpec extends ZIOSpecDefault {
 
         val codec = Schema[ContactMessage].derive(deriver.modifier[Contact]("Phone", excluded))
 
-        val slackContact = ContactMessage(Contact.Phone("my-phone"))
+        val contact = ContactMessage(Contact.Phone("my-phone"))
 
-        val encoded = codec.encode(slackContact)
+        val encoded = codec.encode(contact)
         val decoded = codec.decode(encoded)
 
         assert(decoded)(equalTo(ContactMessage(Contact.None)))
