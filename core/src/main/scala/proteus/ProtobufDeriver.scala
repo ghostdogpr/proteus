@@ -24,23 +24,17 @@ import proteus.internal.*
 case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vector[InstanceOverride], modifiers: Vector[ModifierOverride])
   extends Deriver[ProtobufCodec] {
 
-  private inline def findTypeId[B]: TypeId[B] =
-    summonFrom {
-      case s: Schema[B] => s.reflect.typeId
-      case t: TypeId[B] => t
-    }
-
   /**
     * Adds a custom codec instance for the given type.
     */
-  inline def instance[B](instance: => ProtobufCodec[B]): ProtobufDeriver =
-    copy(instances = instances :+ InstanceOverrideByType(findTypeId[B], Lazy(instance)))
+  def instance[B: TypeId](instance: => ProtobufCodec[B]): ProtobufDeriver =
+    copy(instances = instances :+ InstanceOverrideByType(summon[TypeId[B]], Lazy(instance)))
 
   /**
     * Adds a custom modifier for the given type.
     */
-  inline def modifier[B](modifier: Modifier.Reflect): ProtobufDeriver =
-    copy(modifiers = modifiers :+ ModifierReflectOverrideByType(findTypeId[B], modifier))
+  def modifier[B: TypeId](modifier: Modifier.Reflect): ProtobufDeriver =
+    copy(modifiers = modifiers :+ ModifierReflectOverrideByType(summon[TypeId[B]], modifier))
 
   /**
     * Adds a custom modifier for a term (case class field or enum member) of the given type.
@@ -48,7 +42,7 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
     * @param termName the name of the term to apply the modifier to (there will be a compile error if the term does not exist)
     * @param modifier the modifier to apply.
     */
-  inline def modifier[B](termName: String, modifier: Modifier.Term): ProtobufDeriver = {
+  inline def modifier[B: TypeId](termName: String, modifier: Modifier.Term): ProtobufDeriver = {
     inline summonInline[Mirror.Of[B]] match {
       case m: Mirror.ProductOf[B] =>
         inline if (!constValue[proteus.Tuple.Contains[m.MirroredElemLabels, termName.type]]) {
@@ -59,7 +53,7 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
           error("Case " + constValue[termName.type] + " does not exist in sealed trait or enum " + constValue[m.MirroredLabel] + ".")
         }
     }
-    copy(modifiers = modifiers :+ ModifierTermOverrideByType(findTypeId[B], termName, modifier))
+    copy(modifiers = modifiers :+ ModifierTermOverrideByType(summon[TypeId[B]], termName, modifier))
   }
 
   /**
