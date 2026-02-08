@@ -263,11 +263,7 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
   )(implicit F: HasBinding[F], D: HasInstance[F]): Lazy[ProtobufCodec[A]] = {
     if (typeId.isOption)
       D.instance(cases.find(c => c.name == "Some").get.value.asRecord.get.fields.head.value.metadata)
-        .map { instance =>
-          if (ProtobufCodec.isRepeated(using instance))
-            throw new Exception(s"Unsupported usage of repeated inside optional type $typeId")
-          ProtobufCodec.Optional(instance).asInstanceOf[ProtobufCodec[A]]
-        }
+        .map(ProtobufCodec.Optional(_).asInstanceOf[ProtobufCodec[A]])
     else if (isEnum(cases, modifiers)) {
       val filteredCases      = cases.filterNot(c =>
         c.modifiers.exists { case Modifier.config(`excludedModifier`, _) => true; case _ => false } ||
