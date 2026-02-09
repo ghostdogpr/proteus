@@ -716,6 +716,34 @@ object ProtobufCodecSpec extends ZIOSpecDefault {
           assert(decoded.name)(equalTo("test")) &&
           assert(decoded.metadata)(equalTo(Map.empty[String, String]))
       },
+      test("proteus excluded modifier with unsupported field uses default value on decode") {
+        case class MessageWithExcludedUnsupported(id: Int, data: List[Option[Int]] = List(Some(42))) derives Schema
+
+        val codec    =
+          Schema[MessageWithExcludedUnsupported].derive(deriver.modifier[MessageWithExcludedUnsupported]("data", excluded))
+        val original = MessageWithExcludedUnsupported(1, List(None))
+
+        val encoded = codec.encode(original)
+        val decoded = codec.decode(encoded)
+
+        assert(decoded)(equalTo(MessageWithExcludedUnsupported(1, List(Some(42)))))
+      },
+      test("proteus excluded modifier uses custom schema default value on decode") {
+        case class UnsupportedPayload(values: List[Option[Int]])
+        object UnsupportedPayload {
+          given Schema[UnsupportedPayload] =
+            Schema.derived[UnsupportedPayload].defaultValue(UnsupportedPayload(List(Some(7), None)))
+        }
+        case class MessageWithExcludedCustomDefault(id: Int, data: UnsupportedPayload) derives Schema
+
+        val codec =
+          Schema[MessageWithExcludedCustomDefault].derive(deriver.modifier[MessageWithExcludedCustomDefault]("data", excluded))
+
+        val encoded = codec.encode(MessageWithExcludedCustomDefault(1, UnsupportedPayload(List(Some(99)))))
+        val decoded = codec.decode(encoded)
+
+        assert(decoded)(equalTo(MessageWithExcludedCustomDefault(1, UnsupportedPayload(List(Some(7), None)))))
+      },
       test("proteus excluded modifier with variant cases") {
         enum Contact derives Schema {
           case Email(address: String)
