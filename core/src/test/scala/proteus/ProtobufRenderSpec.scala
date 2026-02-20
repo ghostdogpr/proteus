@@ -1392,6 +1392,104 @@ message Recursive {
 
         assertTrue(rendered == expected)
       }
+    ),
+    suite("Field-Specific Instance Override")(
+      test("field-specific instance renders custom type for overridden field") {
+        case class TimestampWrapper(millis: Long) derives Schema
+
+        val timestampCodec: ProtobufCodec[Long] =
+          Schema[TimestampWrapper]
+            .derive(deriver)
+            .transform[Long](_.millis, TimestampWrapper(_))
+
+        case class Event(id: Int, createdAt: Long) derives Schema
+
+        val codec    = Schema[Event].derive(deriver.instance[Event, Long]("createdAt", timestampCodec))
+        val rendered = renderCodec(codec)
+        val expected = """syntax = "proto3";
+
+package test;
+
+message Event {
+    int32 id = 1;
+    TimestampWrapper created_at = 2;
+}
+
+message TimestampWrapper {
+    int64 millis = 1;
+}
+"""
+
+        assertTrue(rendered == expected)
+      },
+      test("field-specific instance only affects specified field in rendering") {
+        case class TimestampWrapper(millis: Long) derives Schema
+
+        val timestampCodec: ProtobufCodec[Long] =
+          Schema[TimestampWrapper]
+            .derive(deriver)
+            .transform[Long](_.millis, TimestampWrapper(_))
+
+        case class Event(id: Int, createdAt: Long, updatedAt: Long) derives Schema
+
+        val codec    = Schema[Event].derive(deriver.instance[Event, Long]("createdAt", timestampCodec))
+        val rendered = renderCodec(codec)
+        val expected = """syntax = "proto3";
+
+package test;
+
+message Event {
+    int32 id = 1;
+    TimestampWrapper created_at = 2;
+    int64 updated_at = 3;
+}
+
+message TimestampWrapper {
+    int64 millis = 1;
+}
+"""
+
+        assertTrue(rendered == expected)
+      },
+      test("multiple field-specific instances render correctly") {
+        case class MillisWrapper(millis: Long) derives Schema
+        case class SecondsWrapper(seconds: Long) derives Schema
+
+        val millisCodec: ProtobufCodec[Long] =
+          Schema[MillisWrapper].derive(deriver).transform[Long](_.millis, MillisWrapper(_))
+
+        val secondsCodec: ProtobufCodec[Long] =
+          Schema[SecondsWrapper].derive(deriver).transform[Long](_.seconds, SecondsWrapper(_))
+
+        case class Event(id: Int, createdAt: Long, updatedAt: Long) derives Schema
+
+        val codec    = Schema[Event].derive(
+          deriver
+            .instance[Event, Long]("createdAt", millisCodec)
+            .instance[Event, Long]("updatedAt", secondsCodec)
+        )
+        val rendered = renderCodec(codec)
+        val expected = """syntax = "proto3";
+
+package test;
+
+message Event {
+    int32 id = 1;
+    MillisWrapper created_at = 2;
+    SecondsWrapper updated_at = 3;
+}
+
+message MillisWrapper {
+    int64 millis = 1;
+}
+
+message SecondsWrapper {
+    int64 seconds = 1;
+}
+"""
+
+        assertTrue(rendered == expected)
+      }
     )
   )
 }

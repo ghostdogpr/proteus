@@ -1078,6 +1078,122 @@ object ProtobufCodecSpec extends ZIOSpecDefault {
             containsString("Unsupported usage of repeated inside repeated type")
           )
       }
+    ),
+    suite("Field-Specific Instance Override")(
+      test("field-specific instance override roundtrips correctly") {
+        case class TimestampWrapper(millis: Long) derives Schema
+
+        val timestampCodec: ProtobufCodec[Long] =
+          Schema[TimestampWrapper]
+            .derive(deriver)
+            .transform[Long](_.millis, TimestampWrapper(_))
+
+        case class Event(id: Int, createdAt: Long) derives Schema
+
+        val codec = Schema[Event].derive(deriver.instance[Event, Long]("createdAt", timestampCodec))
+
+        val original = Event(1, 1000L)
+        val encoded  = codec.encode(original)
+        val decoded  = codec.decode(encoded)
+
+        assert(decoded)(equalTo(original))
+      },
+      test("field-specific instance only affects the specified field") {
+        case class TimestampWrapper(millis: Long) derives Schema
+
+        val timestampCodec: ProtobufCodec[Long] =
+          Schema[TimestampWrapper]
+            .derive(deriver)
+            .transform[Long](_.millis, TimestampWrapper(_))
+
+        case class Event(id: Int, createdAt: Long, updatedAt: Long) derives Schema
+
+        // Override only createdAt, not updatedAt
+        val fieldSpecificCodec = Schema[Event].derive(deriver.instance[Event, Long]("createdAt", timestampCodec))
+
+        // Override all Long fields
+        val typeWideCodec = Schema[Event].derive(deriver.instance[Long](timestampCodec))
+
+        val original = Event(1, 1000L, 2000L)
+
+        val fieldSpecificEncoded = fieldSpecificCodec.encode(original)
+        val typeWideEncoded      = typeWideCodec.encode(original)
+
+        // Encodings should differ because field-specific only wraps createdAt
+        assert(fieldSpecificEncoded)(not(equalTo(typeWideEncoded))) &&
+          // But both should roundtrip correctly
+          assert(fieldSpecificCodec.decode(fieldSpecificEncoded))(equalTo(original)) &&
+          assert(typeWideCodec.decode(typeWideEncoded))(equalTo(original))
+      },
+      test("field-specific instance with custom codec for nested message field") {
+        case class Address(street: String, city: String) derives Schema
+        case class CompactAddress(value: String) derives Schema
+
+        val compactAddressCodec: ProtobufCodec[Address] =
+          Schema[CompactAddress]
+            .derive(deriver)
+            .transform[Address](
+              ca => {
+                val parts = ca.value.split(",", 2)
+                Address(parts(0).trim, if (parts.length > 1) parts(1).trim else "")
+              },
+              a => CompactAddress(s"${a.street}, ${a.city}")
+            )
+
+        case class Person(name: String, home: Address, work: Address) derives Schema
+
+        // Override only the "home" field
+        val codec = Schema[Person].derive(deriver.instance[Person, Address]("home", compactAddressCodec))
+
+        val original = Person("Alice", Address("123 Main St", "Springfield"), Address("456 Oak Ave", "Shelbyville"))
+        val encoded  = codec.encode(original)
+        val decoded  = codec.decode(encoded)
+
+        assert(decoded)(equalTo(original))
+      },
+      test("field-specific instance override with default values") {
+        case class TimestampWrapper(millis: Long) derives Schema
+
+        val timestampCodec: ProtobufCodec[Long] =
+          Schema[TimestampWrapper]
+            .derive(deriver)
+            .transform[Long](_.millis, TimestampWrapper(_))
+
+        case class Event(id: Int, createdAt: Long) derives Schema
+
+        val codec = Schema[Event].derive(deriver.instance[Event, Long]("createdAt", timestampCodec))
+
+        // Test with default values (0)
+        val original = Event(0, 0L)
+        val encoded  = codec.encode(original)
+        val decoded  = codec.decode(encoded)
+
+        assert(decoded)(equalTo(original))
+      },
+      test("multiple field-specific instance overrides on different fields") {
+        case class MillisWrapper(millis: Long) derives Schema
+        case class SecondsWrapper(seconds: Long) derives Schema
+
+        val millisCodec: ProtobufCodec[Long] =
+          Schema[MillisWrapper].derive(deriver).transform[Long](_.millis, MillisWrapper(_))
+
+        val secondsCodec: ProtobufCodec[Long] =
+          Schema[SecondsWrapper].derive(deriver).transform[Long](_.seconds, SecondsWrapper(_))
+
+        case class Event(id: Int, createdAt: Long, updatedAt: Long) derives Schema
+
+        val codec = Schema[Event].derive(
+          deriver
+            .instance[Event, Long]("createdAt", millisCodec)
+            .instance[Event, Long]("updatedAt", secondsCodec)
+        )
+
+        val original = Event(1, 1000L, 2000L)
+        val encoded  = codec.encode(original)
+        val decoded  = codec.decode(encoded)
+
+        assert(decoded)(equalTo(original))
+      }
     )
   )
 }

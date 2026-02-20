@@ -21,3 +21,4 @@ node_modules/
 project/project/metals.sbt
 .cursor/mcp.json
 vitepress/docs/.vitepress/cache
+.claude
