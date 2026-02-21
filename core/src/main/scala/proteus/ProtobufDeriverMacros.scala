@@ -15,7 +15,9 @@ import zio.blocks.typeid.TypeId
   */
 object ProtobufDeriverMacros {
 
-  /** Macro for `instance[A](codec)`. Resolves `TypeId[A]` at compile time. */
+  /**
+    * Macro for `instance[A](codec)`. Resolves `TypeId[A]` at compile time.
+    */
   def instanceImpl[A: Type](instance: Expr[ProtobufCodec[A]], self: Expr[ProtobufDeriver])(using Quotes): Expr[ProtobufDeriver] = {
     val typeId = summonTypeId[A]
     '{ $self.addInstance($typeId, $instance) }
@@ -68,7 +70,9 @@ object ProtobufDeriverMacros {
     '{ $self.addInstance($typeId, $termName, $instance) }
   }
 
-  /** Macro for `modifier[A](modifier)`. Resolves `TypeId[A]` at compile time. */
+  /**
+    * Macro for `modifier[A](modifier)`. Resolves `TypeId[A]` at compile time.
+    */
   def modifierImpl[A: Type](modifier: Expr[Modifier.Reflect], self: Expr[ProtobufDeriver])(using Quotes): Expr[ProtobufDeriver] = {
     val typeId = summonTypeId[A]
     '{ $self.addModifier($typeId, $modifier) }

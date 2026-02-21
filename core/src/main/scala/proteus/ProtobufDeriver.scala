@@ -707,7 +707,7 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
     }
 }
 
-private[proteus] sealed trait InstanceShadow
+sealed private[proteus] trait InstanceShadow
 
 object ProtobufDeriver extends ProtobufDeriver(Set.empty, Vector.empty, Vector.empty) {
 
