@@ -1012,7 +1012,7 @@ object ProtobufCodec {
 
           val getElement = loop(r.element)
           () => r.constructor.add(builder, getElement())
-        case _                  => throw new Exception(s"Invalid packed type: ${r.element}}")
+        case _                  => throw new Exception(s"Invalid packed type: ${r.element}")
       }
       while (input.getBytesUntilLimit > 0)
         getElement()
