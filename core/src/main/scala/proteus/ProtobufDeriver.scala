@@ -1,7 +1,5 @@
 package proteus
 
-import scala.compiletime.*
-import scala.deriving.Mirror
 import scala.reflect.ClassTag
 import scala.util.Try
 import scala.util.control.NoStackTrace
@@ -27,58 +25,39 @@ import proteus.internal.*
 case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vector[InstanceOverride], modifiers: Vector[ModifierOverride])
   extends Deriver[ProtobufCodec] {
 
+  // Shadows Deriver.instance[F, T, A] by name so extension methods are reachable.
+  // InstanceShadow is sealed with no instances, making this uncallable.
+  private[proteus] def instance(shadow: InstanceShadow): Nothing = throw new UnsupportedOperationException
+
   /**
     * Adds a custom codec instance for the given type.
+    * Prefer using `instance[A](instance)` which resolves the `TypeId` automatically.
     */
-  def instance[A: TypeId](instance: => ProtobufCodec[A]): ProtobufDeriver =
-    copy(instances = instances :+ InstanceOverrideByType(summon[TypeId[A]], Lazy(instance)))
+  def addInstance[A](typeId: TypeId[A], instance: => ProtobufCodec[A]): ProtobufDeriver =
+    copy(instances = instances :+ InstanceOverrideByType(typeId, Lazy(instance)))
 
   /**
     * Adds a custom codec instance for a term (case class field or enum member) of the given type.
-    * @param termName the name of the term to apply the instance override to (there will be a compile error if the term does not exist)
-    * @param instance the instance to use for the term.
+    * Prefer using `instance[A, B](termName, instance)` which resolves the `TypeId` automatically
+    * and validates the term name and type at compile time.
     */
-  inline def instance[A: TypeId, B](termName: String, instance: => ProtobufCodec[B]): ProtobufDeriver = {
-    inline summonInline[Mirror.Of[A]] match {
-      case m: Mirror.ProductOf[A] =>
-        inline if (!constValue[proteus.Tuple.Contains[m.MirroredElemLabels, termName.type]])
-          error("Field " + constValue[termName.type] + " does not exist in class " + constValue[m.MirroredLabel] + ".")
-        else inline if (!constValue[proteus.Tuple.IsElemType[m.MirroredElemLabels, m.MirroredElemTypes, termName.type, B]])
-          error("Instance type mismatch for field " + constValue[termName.type] + " in " + constValue[m.MirroredLabel] + ".")
-      case m: Mirror.SumOf[A]     =>
-        inline if (!constValue[proteus.Tuple.Contains[m.MirroredElemLabels, termName.type]])
-          error("Case " + constValue[termName.type] + " does not exist in sealed trait or enum " + constValue[m.MirroredLabel] + ".")
-        else inline if (!constValue[proteus.Tuple.IsElemType[m.MirroredElemLabels, m.MirroredElemTypes, termName.type, B]])
-          error("Instance type mismatch for case " + constValue[termName.type] + " in " + constValue[m.MirroredLabel] + ".")
-    }
-    copy(instances = instances :+ InstanceOverrideByTypeAndTermName(summon[TypeId[A]], termName, Lazy(instance)))
-  }
+  def addInstance[A, B](typeId: TypeId[A], termName: String, instance: => ProtobufCodec[B]): ProtobufDeriver =
+    copy(instances = instances :+ InstanceOverrideByTypeAndTermName(typeId, termName, Lazy(instance)))
 
   /**
     * Adds a custom modifier for the given type.
+    * Prefer using `modifier[A](modifier)` which resolves the `TypeId` automatically.
     */
-  def modifier[A: TypeId](modifier: Modifier.Reflect): ProtobufDeriver =
-    copy(modifiers = modifiers :+ ModifierReflectOverrideByType(summon[TypeId[A]], modifier))
+  def addModifier[A](typeId: TypeId[A], modifier: Modifier.Reflect): ProtobufDeriver =
+    copy(modifiers = modifiers :+ ModifierReflectOverrideByType(typeId, modifier))
 
   /**
     * Adds a custom modifier for a term (case class field or enum member) of the given type.
-    *
-    * @param termName the name of the term to apply the modifier to (there will be a compile error if the term does not exist)
-    * @param modifier the modifier to apply.
+    * Prefer using `modifier[A](termName, modifier)` which resolves the `TypeId` automatically
+    * and validates the term name at compile time.
     */
-  inline def modifier[A: TypeId](termName: String, modifier: Modifier.Term): ProtobufDeriver = {
-    inline summonInline[Mirror.Of[A]] match {
-      case m: Mirror.ProductOf[A] =>
-        inline if (!constValue[proteus.Tuple.Contains[m.MirroredElemLabels, termName.type]]) {
-          error("Field " + constValue[termName.type] + " does not exist in class " + constValue[m.MirroredLabel] + ".")
-        }
-      case m: Mirror.SumOf[A]     =>
-        inline if (!constValue[proteus.Tuple.Contains[m.MirroredElemLabels, termName.type]]) {
-          error("Case " + constValue[termName.type] + " does not exist in sealed trait or enum " + constValue[m.MirroredLabel] + ".")
-        }
-    }
-    copy(modifiers = modifiers :+ ModifierTermOverrideByType(summon[TypeId[A]], termName, modifier))
-  }
+  def addModifier[A](typeId: TypeId[A], termName: String, modifier: Modifier.Term): ProtobufDeriver =
+    copy(modifiers = modifiers :+ ModifierTermOverrideByType(typeId, termName, modifier))
 
   /**
     * Enables a derivation flag.
@@ -728,7 +707,55 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
     }
 }
 
+private[proteus] sealed trait InstanceShadow
+
 object ProtobufDeriver extends ProtobufDeriver(Set.empty, Vector.empty, Vector.empty) {
+
+  extension (inline self: ProtobufDeriver) {
+
+    /**
+      * Adds a custom codec instance for the given type.
+      * The `TypeId` is resolved automatically from a `Schema[A]`, a `TypeId[A]`, or derived at compile time.
+      *
+      * @tparam A the type to apply the instance override to.
+      * @param instance the codec instance to use for the type.
+      */
+    inline def instance[A](instance: => ProtobufCodec[A]): ProtobufDeriver =
+      ${ ProtobufDeriverMacros.instanceImpl[A]('instance, 'self) }
+
+    /**
+      * Adds a custom codec instance for a term (case class field or enum member) of the given type.
+      * The `TypeId` is resolved automatically, and the term name and type are validated at compile time.
+      *
+      * @tparam A the parent type containing the term.
+      * @tparam B the type of the term.
+      * @param termName the name of the term to apply the instance override to (compile error if the term does not exist or the type does not match).
+      * @param instance the codec instance to use for the term.
+      */
+    inline def instance[A, B](inline termName: String, instance: => ProtobufCodec[B]): ProtobufDeriver =
+      ${ ProtobufDeriverMacros.termInstanceImpl[A, B]('termName, 'instance, 'self) }
+
+    /**
+      * Adds a custom modifier for the given type.
+      * The `TypeId` is resolved automatically from a `Schema[A]`, a `TypeId[A]`, or derived at compile time.
+      *
+      * @tparam A the type to apply the modifier to.
+      * @param modifier the modifier to apply.
+      */
+    inline def modifier[A](inline modifier: Modifier.Reflect): ProtobufDeriver =
+      ${ ProtobufDeriverMacros.modifierImpl[A]('modifier, 'self) }
+
+    /**
+      * Adds a custom modifier for a term (case class field or enum member) of the given type.
+      * The `TypeId` is resolved automatically, and the term name is validated at compile time.
+      *
+      * @tparam A the parent type containing the term.
+      * @param termName the name of the term to apply the modifier to (compile error if the term does not exist).
+      * @param modifier the modifier to apply.
+      */
+    inline def modifier[A](inline termName: String, inline modifier: Modifier.Term): ProtobufDeriver =
+      ${ ProtobufDeriverMacros.termModifierImpl[A]('termName, 'modifier, 'self) }
+  }
 
   /**
     * Flags for the derivation process.
