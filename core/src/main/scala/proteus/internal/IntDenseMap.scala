@@ -15,10 +15,8 @@ final private[proteus] class IntDenseMap[V] private (
   val indexes: List[Int]
 ) {
   def apply(id: Int): V =
-    if (id >= 0 && id < arraySize) {
-      val value = array(id)
-      if (value != null) value.asInstanceOf[V] else map.getOrElse(id, null.asInstanceOf[V])
-    } else map.getOrElse(id, null.asInstanceOf[V])
+    if (id >= 0 && id < arraySize) array(id).asInstanceOf[V]
+    else map.getOrElse(id, null.asInstanceOf[V])
 }
 
 object IntDenseMap {
