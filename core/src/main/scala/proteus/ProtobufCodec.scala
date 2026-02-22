@@ -523,6 +523,7 @@ object ProtobufCodec {
       case (f: ExcludedField[?], idx) => Nil
     })
     private[proteus] val useBuilder: Boolean = simpleFields.exists(_.useBuilder)
+    private[proteus] val useBitmask: Boolean = fields.length <= 64
 
     private[proteus] def computeSize(a: A, id: Int, registers: Registers, cache: WriterCache): Int =
       wrapEncode(name) {
@@ -861,10 +862,11 @@ object ProtobufCodec {
       case c: RecursiveMessage[_]  => c.codec.write(id, registers, cache)
     }
 
-  private def finalize[A](m: Message[A], registers: Registers, offset: RegisterOffset, visited: Array[Boolean]): Unit = {
+  private def finalize[A](m: Message[A], registers: Registers, offset: RegisterOffset, visitedBits: Long, visitedArray: Array[Boolean]): Unit = {
     var i = 0
-    while (i < visited.length) {
-      if (!visited(i)) {
+    while (i < m.fields.length) {
+      val wasVisited = if (m.useBitmask) (visitedBits & (1L << i)) != 0L else visitedArray(i)
+      if (!wasVisited) {
         // set default values for not visited fields
         m.fields(i) match {
           case field: SimpleField[?]   =>
@@ -905,26 +907,27 @@ object ProtobufCodec {
 
   private def handleMessage[A](m: Message[A], registers: Registers, offset: RegisterOffset)(using input: CodedInputStream): A =
     wrapDecode(m.name) {
-      val visited    = new Array[Boolean](m.fields.length)
-      val nextOffset = offset + m.constructor.usedRegisters
+      var visitedBits: Long            = 0L
+      val visitedArray: Array[Boolean] = if (m.useBitmask) null else new Array[Boolean](m.fields.length)
+      val nextOffset                   = offset + m.constructor.usedRegisters
 
-      def handleRepeated[C[_], E](r: Repeated[C, E], field: IndexedField, tag: Int, packed: Boolean): C[E] = {
+      def handleRepeated[C[_], E](r: Repeated[C, E], field: IndexedField, tag: Int, packed: Boolean, alreadyVisited: Boolean): C[E] = {
         val register = field.field.register.asInstanceOf[Register.Object[_ <: AnyRef]]
         val builder  =
-          if (!visited(field.index)) {
+          if (!alreadyVisited) {
             val builder = r.constructor.newBuilder[E]()(using r.elementClassTag)
             register.set(registers, offset, builder.asInstanceOf[register.Boxed])
             builder
           } else register.get(registers, offset).asInstanceOf[r.constructor.Builder[E]]
         if (packed) handlePackedRepeated(r, builder)
-        else r.constructor.add(builder, loop(r.element, field, tag))
+        else r.constructor.add(builder, loop(r.element, field, tag, alreadyVisited))
         null.asInstanceOf[C[E]]
       }
 
-      def handleRepeatedMap[M[_, _], K, V](r: RepeatedMap[M, K, V], field: IndexedField): M[K, V] = {
+      def handleRepeatedMap[M[_, _], K, V](r: RepeatedMap[M, K, V], field: IndexedField, alreadyVisited: Boolean): M[K, V] = {
         val register = field.field.register.asInstanceOf[Register.Object[_ <: AnyRef]]
         val builder  =
-          if (!visited(field.index)) {
+          if (!alreadyVisited) {
             val builder = r.constructor.newObjectBuilder[K, V]()
             register.set(registers, offset, builder.asInstanceOf[register.Boxed])
             builder
@@ -934,17 +937,17 @@ object ProtobufCodec {
         null.asInstanceOf[M[K, V]]
       }
 
-      def loop[A](codec: ProtobufCodec[A], field: IndexedField, tag: Int): A =
+      def loop[A](codec: ProtobufCodec[A], field: IndexedField, tag: Int, alreadyVisited: Boolean): A =
         codec match {
           case c: Message[_]           => withLimit(handleMessage(c, registers, nextOffset))
           case c: Primitive[_]         => handlePrimitive(c)
           case c: Transform[_, _]      =>
-            val res = loop(c.codec, field, tag)
+            val res = loop(c.codec, field, tag, alreadyVisited)
             if (res == null) null.asInstanceOf[A] else c.from(res)
           case c: Enum[_]              => c.valueOrThrow(input.readEnum())
-          case c: Optional[_]          => Some(loop(c.codec, field, tag))
-          case c: Repeated[c, e]       => handleRepeated(c, field, tag, packed = c.packed && (tag & 0x7) == 2)
-          case c: RepeatedMap[m, k, v] => handleRepeatedMap(c, field)
+          case c: Optional[_]          => Some(loop(c.codec, field, tag, alreadyVisited))
+          case c: Repeated[c, e]       => handleRepeated(c, field, tag, packed = c.packed && (tag & 0x7) == 2, alreadyVisited)
+          case c: RepeatedMap[m, k, v] => handleRepeatedMap(c, field, alreadyVisited)
           case Bytes                   => input.readByteArray()
           case c: RecursiveMessage[_]  => withLimit(handleMessage(c.codec, registers, nextOffset))
         }
@@ -957,15 +960,16 @@ object ProtobufCodec {
           val fieldId = tag >>> 3
           val field   = m.fieldMap(fieldId)
           if (field ne null) {
-            val value = wrapDecode(s"${field.field.name}#$fieldId") {
-              loop(field.field.codec, field, tag)
+            val alreadyVisited = if (m.useBitmask) (visitedBits & (1L << field.index)) != 0L else visitedArray(field.index)
+            val value          = wrapDecode(s"${field.field.name}#$fieldId") {
+              loop(field.field.codec, field, tag, alreadyVisited)
             }
-            visited(field.index) = true
+            if (m.useBitmask) visitedBits |= (1L << field.index) else visitedArray(field.index) = true
             if (value != null) setToRegister(registers, offset, field.field.register, value)
           } else input.skipField(tag): Unit
         }
       }
-      finalize(m, registers, offset, visited)
+      finalize(m, registers, offset, visitedBits, visitedArray)
       m.constructor.construct(registers, offset)
     }
 
