@@ -54,4 +54,11 @@ class ZioServerBackend[R, E, Context](
   * Streaming is supported using ZStream.
   * This backend doesn't have any interceptors and uses the default ZIO runtime.
   */
-object ZioServerBackend extends ZioServerBackend(ServerInterceptor.empty, Runtime.default)
+object ZioServerBackend extends ZioServerBackend(ServerInterceptor.empty, Runtime.default) {
+
+  /**
+    * A layer that provides a ZioServerBackend with the current ZIO runtime.
+    */
+  val layer: ULayer[ZioServerBackend[Any, StatusException, RequestContext]] =
+    ZLayer(ZIO.runtime[Any].map(new ZioServerBackend(ServerInterceptor.empty, _)))
+}
