@@ -112,12 +112,13 @@ object ProtobufDeriverMacros {
 
   /**
     * Resolves `TypeId[A]` at compile time using the best available source:
-    *  1. From `Schema[A].reflect.typeId` if a schema is in scope
+    *  1. From `Schema[A]` in the companion object (by direct symbol lookup,
+    *     avoiding `Expr.summon` which would trigger full Schema macro elaboration)
     *  2. From a given `TypeId[A]` instance
     *  3. Via `TypeId.derived[A]` as a last resort
     */
   private def summonTypeId[A: Type](using Quotes): Expr[TypeId[A]] =
-    Expr.summon[Schema[A]] match {
+    findCompanionSchema[A] match {
       case Some(schema) => '{ $schema.reflect.typeId }
       case None         =>
         Expr.summon[TypeId[A]] match {
@@ -125,4 +126,24 @@ object ProtobufDeriverMacros {
           case None         => '{ TypeId.derived[A] }
         }
     }
+
+  /**
+    * Looks up a `Schema[A]` val/lazy val in `A`'s companion object by inspecting
+    * declarations directly. This constructs a term reference (e.g. `MyType.given_Schema_MyType`)
+    * without going through implicit search, so it does NOT trigger Schema macro elaboration.
+    * The Schema lazy val is only evaluated at runtime when the generated code executes.
+    */
+  private def findCompanionSchema[A: Type](using Quotes): Option[Expr[Schema[A]]] = {
+    import quotes.reflect.*
+    val sym       = TypeRepr.of[A].typeSymbol
+    val companion = sym.companionModule
+    if (companion == Symbol.noSymbol) None
+    else {
+      val schemaType    = TypeRepr.of[Schema[A]]
+      val companionType = Ref(companion).tpe
+      companion.declarations
+        .find(m => m.isValDef && companionType.memberType(m).widen <:< schemaType)
+        .map(m => Ref(companion).select(m).asExprOf[Schema[A]])
+    }
+  }
 }
