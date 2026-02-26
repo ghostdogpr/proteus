@@ -7,9 +7,9 @@ object HasRpcMacros {
   private def decomposeIntersection(using Quotes)(tpe: quotes.reflect.TypeRepr): List[quotes.reflect.TypeRepr] = {
     import quotes.reflect.*
     tpe.dealias match {
-      case AndType(left, right)         => decomposeIntersection(left) ++ decomposeIntersection(right)
+      case AndType(left, right)        => decomposeIntersection(left) ++ decomposeIntersection(right)
       case t if t =:= TypeRepr.of[Any] => Nil
-      case t                            => List(t)
+      case t                           => List(t)
     }
   }
 
