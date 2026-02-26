@@ -14,9 +14,9 @@ import zio.stream.*
 class ZioClientBackend(channel: ZChannel) extends ClientBackend[IO[StatusException, *], ZStream[Any, StatusException, *]] {
   def client[Rpcs, Request, Response](
     rpc: Rpc.Unary[Request, Response],
-    service: Service[Rpcs & rpc.type],
+    service: Service[Rpcs],
     options: CallOptions => CallOptions
-  ): UIO[Request => IO[StatusException, Response]] = {
+  )(using HasRpc[Rpcs, rpc.type]): UIO[Request => IO[StatusException, Response]] = {
     val descriptor = rpc.toMethodDescriptor(service)
     ZIO.succeed { req =>
       SafeMetadata.make.flatMap(headers => ClientCalls.unaryCall(channel, descriptor, options(CallOptions.DEFAULT), headers, req))
@@ -24,9 +24,9 @@ class ZioClientBackend(channel: ZChannel) extends ClientBackend[IO[StatusExcepti
   }
   def client[Rpcs, Request, Response](
     rpc: Rpc.ClientStreaming[Request, Response],
-    service: Service[Rpcs & rpc.type],
+    service: Service[Rpcs],
     options: CallOptions => CallOptions
-  ): UIO[ZStream[Any, StatusException, Request] => IO[StatusException, Response]] = {
+  )(using HasRpc[Rpcs, rpc.type]): UIO[ZStream[Any, StatusException, Request] => IO[StatusException, Response]] = {
     val descriptor = rpc.toMethodDescriptor(service)
     ZIO.succeed { req =>
       SafeMetadata.make.flatMap(headers => ClientCalls.clientStreamingCall(channel, descriptor, options(CallOptions.DEFAULT), headers, req))
@@ -34,9 +34,9 @@ class ZioClientBackend(channel: ZChannel) extends ClientBackend[IO[StatusExcepti
   }
   def client[Rpcs, Request, Response](
     rpc: Rpc.ServerStreaming[Request, Response],
-    service: Service[Rpcs & rpc.type],
+    service: Service[Rpcs],
     options: CallOptions => CallOptions
-  ): UIO[Request => ZStream[Any, StatusException, Response]] = {
+  )(using HasRpc[Rpcs, rpc.type]): UIO[Request => ZStream[Any, StatusException, Response]] = {
     val descriptor = rpc.toMethodDescriptor(service)
     ZIO.succeed { req =>
       ZStream
@@ -46,9 +46,9 @@ class ZioClientBackend(channel: ZChannel) extends ClientBackend[IO[StatusExcepti
   }
   def client[Rpcs, Request, Response](
     rpc: Rpc.BidiStreaming[Request, Response],
-    service: Service[Rpcs & rpc.type],
+    service: Service[Rpcs],
     options: CallOptions => CallOptions
-  ): UIO[ZStream[Any, StatusException, Request] => ZStream[Any, StatusException, Response]] = {
+  )(using HasRpc[Rpcs, rpc.type]): UIO[ZStream[Any, StatusException, Request] => ZStream[Any, StatusException, Response]] = {
     val descriptor = rpc.toMethodDescriptor(service)
     ZIO.succeed { req =>
       ZStream
@@ -59,9 +59,9 @@ class ZioClientBackend(channel: ZChannel) extends ClientBackend[IO[StatusExcepti
 
   def clientWithMetadata[Rpcs, Request, Response](
     rpc: Rpc.Unary[Request, Response],
-    service: Service[Rpcs & rpc.type],
+    service: Service[Rpcs],
     options: CallOptions => CallOptions
-  ): UIO[(Request, Metadata) => IO[StatusException, (Response, Metadata)]] = {
+  )(using HasRpc[Rpcs, rpc.type]): UIO[(Request, Metadata) => IO[StatusException, (Response, Metadata)]] = {
     val descriptor = rpc.toMethodDescriptor(service)
     ZIO.succeed { (req, ctx) =>
       SafeMetadata
@@ -76,9 +76,9 @@ class ZioClientBackend(channel: ZChannel) extends ClientBackend[IO[StatusExcepti
 
   def clientWithMetadata[Rpcs, Request, Response](
     rpc: Rpc.ClientStreaming[Request, Response],
-    service: Service[Rpcs & rpc.type],
+    service: Service[Rpcs],
     options: CallOptions => CallOptions
-  ): UIO[(ZStream[Any, StatusException, Request], Metadata) => IO[StatusException, (Response, Metadata)]] = {
+  )(using HasRpc[Rpcs, rpc.type]): UIO[(ZStream[Any, StatusException, Request], Metadata) => IO[StatusException, (Response, Metadata)]] = {
     val descriptor = rpc.toMethodDescriptor(service)
     ZIO.succeed { (req, ctx) =>
       SafeMetadata
@@ -93,9 +93,9 @@ class ZioClientBackend(channel: ZChannel) extends ClientBackend[IO[StatusExcepti
 
   def clientWithMetadata[Rpcs, Request, Response](
     rpc: Rpc.ServerStreaming[Request, Response],
-    service: Service[Rpcs & rpc.type],
+    service: Service[Rpcs],
     options: CallOptions => CallOptions
-  ): UIO[(Request, Metadata) => ZStream[Any, StatusException, Response]] = {
+  )(using HasRpc[Rpcs, rpc.type]): UIO[(Request, Metadata) => ZStream[Any, StatusException, Response]] = {
     val descriptor = rpc.toMethodDescriptor(service)
     ZIO.succeed { (req, ctx) =>
       ZStream
@@ -106,9 +106,9 @@ class ZioClientBackend(channel: ZChannel) extends ClientBackend[IO[StatusExcepti
 
   def clientWithMetadata[Rpcs, Request, Response](
     rpc: Rpc.BidiStreaming[Request, Response],
-    service: Service[Rpcs & rpc.type],
+    service: Service[Rpcs],
     options: CallOptions => CallOptions
-  ): UIO[(ZStream[Any, StatusException, Request], Metadata) => ZStream[Any, StatusException, Response]] = {
+  )(using HasRpc[Rpcs, rpc.type]): UIO[(ZStream[Any, StatusException, Request], Metadata) => ZStream[Any, StatusException, Response]] = {
     val descriptor = rpc.toMethodDescriptor(service)
     ZIO.succeed { (req, ctx) =>
       ZStream

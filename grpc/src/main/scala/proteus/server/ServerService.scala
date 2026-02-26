@@ -117,7 +117,7 @@ case class ServerService[Unary[_], Streaming[_], Context, Rpcs] private (
     *
     * @param service the service we want to build.
     */
-  def build(service: Service[Rpcs]): ServerServiceDefinition = {
+  def build[S](service: Service[S])(using HasAllRpcs[S, Rpcs], HasAllServerRpcs[Rpcs, S]): ServerServiceDefinition = {
     val rpcs = serverRpcs.sortBy(_.name)
 
     val methodDescriptors: List[MethodDescriptor[?, ?]] =

@@ -15,9 +15,9 @@ import io.grpc.*
 class Fs2ClientBackend[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F]) extends ClientBackend[F, Stream[F, *]] {
   def client[Rpcs, Request, Response](
     rpc: Rpc.Unary[Request, Response],
-    service: Service[Rpcs & rpc.type],
+    service: Service[Rpcs],
     options: CallOptions => CallOptions
-  ): F[Request => F[Response]] = {
+  )(using HasRpc[Rpcs, rpc.type]): F[Request => F[Response]] = {
     val methodDescriptor = rpc.toMethodDescriptor(service)
     val clientOptions    = ClientOptions.default.configureCallOptions(options)
     Fs2ClientCall[F](channel, methodDescriptor, dispatcher, clientOptions)
@@ -26,9 +26,9 @@ class Fs2ClientBackend[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F])
 
   def client[Rpcs, Request, Response](
     rpc: Rpc.ClientStreaming[Request, Response],
-    service: Service[Rpcs & rpc.type],
+    service: Service[Rpcs],
     options: CallOptions => CallOptions
-  ): F[Stream[F, Request] => F[Response]] = {
+  )(using HasRpc[Rpcs, rpc.type]): F[Stream[F, Request] => F[Response]] = {
     val methodDescriptor = rpc.toMethodDescriptor(service)
     val clientOptions    = ClientOptions.default.configureCallOptions(options)
     Fs2ClientCall[F](channel, methodDescriptor, dispatcher, clientOptions)
@@ -37,9 +37,9 @@ class Fs2ClientBackend[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F])
 
   def client[Rpcs, Request, Response](
     rpc: Rpc.ServerStreaming[Request, Response],
-    service: Service[Rpcs & rpc.type],
+    service: Service[Rpcs],
     options: CallOptions => CallOptions
-  ): F[Request => Stream[F, Response]] = {
+  )(using HasRpc[Rpcs, rpc.type]): F[Request => Stream[F, Response]] = {
     val methodDescriptor = rpc.toMethodDescriptor(service)
     val clientOptions    = ClientOptions.default.configureCallOptions(options)
     Fs2ClientCall[F](channel, methodDescriptor, dispatcher, clientOptions)
@@ -48,9 +48,9 @@ class Fs2ClientBackend[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F])
 
   def client[Rpcs, Request, Response](
     rpc: Rpc.BidiStreaming[Request, Response],
-    service: Service[Rpcs & rpc.type],
+    service: Service[Rpcs],
     options: CallOptions => CallOptions
-  ): F[Stream[F, Request] => Stream[F, Response]] = {
+  )(using HasRpc[Rpcs, rpc.type]): F[Stream[F, Request] => Stream[F, Response]] = {
     val methodDescriptor = rpc.toMethodDescriptor(service)
     val clientOptions    = ClientOptions.default.configureCallOptions(options)
     Fs2ClientCall[F](channel, methodDescriptor, dispatcher, clientOptions)
@@ -59,9 +59,9 @@ class Fs2ClientBackend[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F])
 
   def clientWithMetadata[Rpcs, Request, Response](
     rpc: Rpc.Unary[Request, Response],
-    service: Service[Rpcs & rpc.type],
+    service: Service[Rpcs],
     options: CallOptions => CallOptions
-  ): F[(Request, Metadata) => F[(Response, Metadata)]] = {
+  )(using HasRpc[Rpcs, rpc.type]): F[(Request, Metadata) => F[(Response, Metadata)]] = {
     val methodDescriptor = rpc.toMethodDescriptor(service)
     val clientOptions    = ClientOptions.default.configureCallOptions(options)
     Fs2ClientCall[F](channel, methodDescriptor, dispatcher, clientOptions)
@@ -70,9 +70,9 @@ class Fs2ClientBackend[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F])
 
   def clientWithMetadata[Rpcs, Request, Response](
     rpc: Rpc.ClientStreaming[Request, Response],
-    service: Service[Rpcs & rpc.type],
+    service: Service[Rpcs],
     options: CallOptions => CallOptions
-  ): F[(Stream[F, Request], Metadata) => F[(Response, Metadata)]] = {
+  )(using HasRpc[Rpcs, rpc.type]): F[(Stream[F, Request], Metadata) => F[(Response, Metadata)]] = {
     val methodDescriptor = rpc.toMethodDescriptor(service)
     val clientOptions    = ClientOptions.default.configureCallOptions(options)
     Fs2ClientCall[F](channel, methodDescriptor, dispatcher, clientOptions)
@@ -81,9 +81,9 @@ class Fs2ClientBackend[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F])
 
   def clientWithMetadata[Rpcs, Request, Response](
     rpc: Rpc.ServerStreaming[Request, Response],
-    service: Service[Rpcs & rpc.type],
+    service: Service[Rpcs],
     options: CallOptions => CallOptions
-  ): F[(Request, Metadata) => Stream[F, Response]] = {
+  )(using HasRpc[Rpcs, rpc.type]): F[(Request, Metadata) => Stream[F, Response]] = {
     val methodDescriptor = rpc.toMethodDescriptor(service)
     val clientOptions    = ClientOptions.default.configureCallOptions(options)
     Fs2ClientCall[F](channel, methodDescriptor, dispatcher, clientOptions)
@@ -92,9 +92,9 @@ class Fs2ClientBackend[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F])
 
   def clientWithMetadata[Rpcs, Request, Response](
     rpc: Rpc.BidiStreaming[Request, Response],
-    service: Service[Rpcs & rpc.type],
+    service: Service[Rpcs],
     options: CallOptions => CallOptions
-  ): F[(Stream[F, Request], Metadata) => Stream[F, Response]] = {
+  )(using HasRpc[Rpcs, rpc.type]): F[(Stream[F, Request], Metadata) => Stream[F, Response]] = {
     val methodDescriptor = rpc.toMethodDescriptor(service)
     val clientOptions    = ClientOptions.default.configureCallOptions(options)
     Fs2ClientCall[F](channel, methodDescriptor, dispatcher, clientOptions)
