@@ -96,7 +96,7 @@ sealed trait ProtobufCodec[A] {
           val m = thunk()
           m.copy(nested = if (m.nested.isEmpty) Some(true) else m.nested)
         }
-      case Optional(codec)            => Optional(codec.makeNested)
+      case Optional(codec, oneof)     => Optional(codec.makeNested, oneof)
       case _                          => this
     }
 
@@ -107,7 +107,7 @@ sealed trait ProtobufCodec[A] {
       case e: Enum[_]              => e.name
       case Transform(_, _, codec)  => codec.getName
       case RecursiveMessage(thunk) => thunk().name
-      case Optional(codec)         => codec.getName
+      case Optional(codec, _)      => codec.getName
       case _                       => ""
     }
 }
@@ -772,7 +772,7 @@ object ProtobufCodec {
   /**
     * Represents an optional type.
     */
-  final case class Optional[A](codec: ProtobufCodec[A]) extends ProtobufCodec[Option[A]] {
+  final case class Optional[A](codec: ProtobufCodec[A], oneof: Boolean) extends ProtobufCodec[Option[A]] {
     private[proteus] def computeSize(a: Option[A], id: Int, registers: Registers, cache: WriterCache): Int =
       a match {
         case None        => 0

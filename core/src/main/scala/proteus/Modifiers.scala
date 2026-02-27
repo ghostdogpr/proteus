@@ -27,8 +27,9 @@ object Modifiers {
   /**
     * A modifier to force a type to be encoded as a oneOf.
     * Sum types with no fields are encoded as enums by default and this modifier can be used to force them to be encoded as a oneOf instead.
+    * You can also use this modifier on a optional field to force it to be encoded as a oneOf instead of an optional field.
     */
-  val oneOf: Modifier.Reflect = Modifier.config(oneOfModifier, "")
+  val oneOf: Modifier.config = Modifier.config(oneOfModifier, "")
 
   /**
     * A modifier to control how oneof types are encoded, see [[OneOfFlag]] for more details.

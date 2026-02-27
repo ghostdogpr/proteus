@@ -201,7 +201,10 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
                 o.defaultValue,
                 o.comment
               )
-            case ProtobufCodec.Optional(codec) if flags.contains(DerivationFlag.OptionalAsOneOf)                                      =>
+            case ProtobufCodec.Optional(codec, oneof)
+                if oneof ||
+                  flags.contains(DerivationFlag.OptionalAsOneOf) ||
+                  field.modifiers.exists { case Modifier.config(`oneOfModifier`, _) => true; case _ => false } =>
               id += 1
               while (allReservedIndexes.contains(id)) id += 1
               val emptyId = id
@@ -210,7 +213,7 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
               val valueId = id
               val empty   = Empty()
               builder += OneOfField(
-                getFieldName(field.name, field.modifiers),
+                name,
                 Array(
                   SimpleField(s"no_$name", emptyId, Empty.emptyCodec.transform(_ => None, _ => empty), register, None, None),
                   SimpleField(s"${name}_value", valueId, codec.transform(Some(_), _.get), register, null, None)
@@ -304,7 +307,8 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
         .map { instance =>
           if (ProtobufCodec.isRepeated(using instance))
             throw new Exception(s"Unsupported usage of repeated inside optional type $typeId")
-          ProtobufCodec.Optional(instance).asInstanceOf[ProtobufCodec[A]]
+          val oneof = modifiers.collectFirst { case Modifier.config(`oneOfModifier`, _) => true }.getOrElse(false)
+          ProtobufCodec.Optional(instance, oneof).asInstanceOf[ProtobufCodec[A]]
         }
     else if (isEnum(cases, modifiers)) {
       val filteredCases      = cases.filterNot(c =>
@@ -620,7 +624,7 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
             setToRegister(registers, RegisterOffset.Zero, field.register, field.defaultValue)
         }
         constructor.construct(registers, RegisterOffset.Zero)
-      case ProtobufCodec.Optional(_)                                       =>
+      case ProtobufCodec.Optional(_, _)                                    =>
         None.asInstanceOf[A]
       case c: ProtobufCodec.Enum[A]                                        =>
         c.valueOrThrow(0)

@@ -1075,6 +1075,29 @@ message Empty {}
         assertTrue(standardRendered == expectedStandard) &&
           assertTrue(oneOfRendered == expectedOneOf)
       },
+      test("oneOf modifier on optional field renders as oneOf") {
+        case class FieldOneOf(value: Option[String], other: Option[Int]) derives Schema
+
+        val codec    = Schema[FieldOneOf].derive(deriver.modifier[FieldOneOf]("value", oneOf))
+        val rendered = renderCodec(codec)
+
+        val expected = """syntax = "proto3";
+
+package test;
+
+message FieldOneOf {
+    oneof value {
+        Empty no_value = 1;
+        string value_value = 2;
+    }
+    optional int32 other = 3;
+}
+
+message Empty {}
+"""
+
+        assertTrue(rendered == expected)
+      },
       test("NestedOneOf flag creates nested messages for enum variants") {
         enum Contact derives Schema {
           case Email(address: String)
@@ -1485,6 +1508,66 @@ message MillisWrapper {
 
 message SecondsWrapper {
     int64 seconds = 1;
+}
+"""
+
+        assertTrue(rendered == expected)
+      },
+      test("field-specific instance override with oneOf codec for optional field") {
+        enum OptionalInt derives Schema {
+          case NoInt
+          case IntValue(int: Int)
+        }
+
+        object OptionalInt {
+          given Schema[OptionalInt.NoInt.type] = Schema[Empty].transform[OptionalInt.NoInt.type](_ => OptionalInt.NoInt, _ => Empty())
+          given Schema[OptionalInt.IntValue]   = Schema[Int].transform[OptionalInt.IntValue](OptionalInt.IntValue(_), _.int)
+        }
+
+        val optionalIntCodec: ProtobufCodec[Option[Int]] =
+          Schema[OptionalInt]
+            .derive(deriver)
+            .transform[Option[Int]](
+              {
+                case OptionalInt.NoInt         => None
+                case OptionalInt.IntValue(int) => Some(int)
+              },
+              {
+                case None      => OptionalInt.NoInt
+                case Some(int) => OptionalInt.IntValue(int)
+              }
+            )
+
+        case class Test(a: Option[Int], b: Option[Int]) derives Schema
+
+        val oneofOptionIntCodec = Schema[Option[Int]].derive(deriver.modifier[Option[Int]](oneOf))
+
+        val testDeriver = deriver
+          .instance[Option[Int]](optionalIntCodec)
+          .instance[Test, Option[Int]]("a", oneofOptionIntCodec)
+
+        val codec    = Schema[Test].derive(testDeriver)
+        val rendered = renderCodec(codec)
+
+        val expected = """syntax = "proto3";
+
+package test;
+
+message Test {
+    oneof a {
+        Empty no_a = 1;
+        int32 a_value = 2;
+    }
+    OptionalInt b = 3;
+}
+
+message Empty {}
+
+message OptionalInt {
+    oneof value {
+        Empty no_int = 1;
+        int32 int_value = 2;
+    }
 }
 """
 
