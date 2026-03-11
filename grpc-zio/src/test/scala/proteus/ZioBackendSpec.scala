@@ -229,15 +229,15 @@ object ZioBackendSpec extends ZIOSpecDefault {
         ] {
           def unary[Req: ProtobufCodec, Resp: ProtobufCodec](
             io: RequestContext => IO[String, Resp]
-          ): (Req => RequestContext => IO[StatusException, Resp]) =
+          ): (Req => RequestContext => IO[StatusException, Resp])                                          =
             _ => ctx => io(ctx).mapError(error => Status.INTERNAL.withDescription(error).asException())
           def clientStreaming[Req: ProtobufCodec, Resp: ProtobufCodec](
             io: ZStream[Any, String, Req] => RequestContext => IO[String, Resp]
-          ): (ZStream[Any, StatusException, Req] => RequestContext => IO[StatusException, Resp]) =
+          ): (ZStream[Any, StatusException, Req] => RequestContext => IO[StatusException, Resp])           =
             stream => ctx => io(stream.mapError(_.getMessage))(ctx).mapError(error => Status.INTERNAL.withDescription(error).asException())
           def serverStreaming[Req: ProtobufCodec, Resp: ProtobufCodec](
             io: RequestContext => ZStream[Any, String, Resp]
-          ): (Req => RequestContext => ZStream[Any, StatusException, Resp]) =
+          ): (Req => RequestContext => ZStream[Any, StatusException, Resp])                                =
             _ => ctx => io(ctx).mapError(error => Status.INTERNAL.withDescription(error).asException())
           def bidiStreaming[Req: ProtobufCodec, Resp: ProtobufCodec](
             io: ZStream[Any, String, Req] => RequestContext => ZStream[Any, String, Resp]
