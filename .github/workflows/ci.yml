@@ -15,16 +15,16 @@ jobs:
       fail-fast: false
     steps:
       - name: Checkout current branch
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
       - name: Setup Scala and Java
-        uses: coursier/setup-action@v1
+        uses: coursier/setup-action@v2
         with:
           jvm: temurin:17
           apps: sbt
       - name: Cache scala dependencies
-        uses: coursier/cache-action@v6
+        uses: coursier/cache-action@v8
       - name: Lint code
         run: sbt check
 
@@ -34,16 +34,16 @@ jobs:
       fail-fast: false
     steps:
       - name: Checkout current branch
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
       - name: Setup Scala and Java
-        uses: coursier/setup-action@v1
+        uses: coursier/setup-action@v2
         with:
           jvm: temurin:17
           apps: sbt
       - name: Cache scala dependencies
-        uses: coursier/cache-action@v6
+        uses: coursier/cache-action@v8
       - name: Run tests
         run: sbt test
         
@@ -53,16 +53,16 @@ jobs:
     if: github.event_name != 'pull_request'
     steps:
       - name: Checkout current branch
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
       - name: Setup Scala and Java
-        uses: coursier/setup-action@v1
+        uses: coursier/setup-action@v2
         with:
           jvm: temurin:17
           apps: sbt
       - name: Cache scala dependencies
-        uses: coursier/cache-action@v6
+        uses: coursier/cache-action@v8
       - name: Release artifacts
         run: sbt ci-release
         env:
