@@ -1756,7 +1756,7 @@ enum Status {
           .modifier[Cookie]("seq", deprecated)
           .modifier[Cookie]("grade", comment("comment"))
           .customizeEnums { e =>
-            val prefix = e.name.replaceAll("([a-z0-9])([A-Z])", "$1_$2").replaceAll("([A-Z])([A-Z][a-z])", "$1_$2").toUpperCase + "_"
+            val prefix = proteus.internal.typeNameToUpperSnakeCase(e.name) + "_"
             e.copy(
               options = e.options :+ OptionValue.identifier(OptionName.Extension("spec.type"), "FIELD_TYPE_STRING"),
               values = e.values.map(v => v.copy(options = v.options :+ OptionValue.stringLit(specValue, v.name.stripPrefix(prefix))))
