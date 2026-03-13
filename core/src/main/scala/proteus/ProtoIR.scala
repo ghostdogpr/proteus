@@ -77,7 +77,8 @@ object ProtoIR {
     elements: List[MessageElement],
     reserved: List[Reserved],
     comment: Option[String] = None,
-    options: List[OptionValue] = List.empty
+    options: List[OptionValue] = List.empty,
+    nested: Boolean = false
   ) {
     lazy val collectTypeReferences: Set[String] = elements.toSet.flatMap(_.collectTypeReferences)
   }
@@ -127,7 +128,8 @@ object ProtoIR {
     values: List[EnumValue],
     reserved: List[Reserved],
     comment: Option[String] = None,
-    options: List[OptionValue] = List.empty
+    options: List[OptionValue] = List.empty,
+    nested: Boolean = false
   )
 
   final case class Service(name: String, rpcs: List[Rpc], comment: Option[String] = None)

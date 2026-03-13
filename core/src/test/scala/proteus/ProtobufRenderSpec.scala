@@ -1742,67 +1742,47 @@ enum Status {
       },
       test("complex message with nested types, multiline options, field options, and enum options") {
         import ProtoIR.*
-        val cookieGrade = MessageElement.NestedEnumElement(
-          Enum(
-            "CookieGrade",
-            List(
-              EnumValue("COOKIE_GRADE_UNSPECIFIED", 0),
-              EnumValue("COOKIE_GRADE_S", 1, options = List(OptionValue.stringLit(OptionName.Extension("spec.value"), "S"))),
-              EnumValue("COOKIE_GRADE_A", 2, options = List(OptionValue.stringLit(OptionName.Extension("spec.value"), "A"))),
-              EnumValue("COOKIE_GRADE_B", 3, options = List(OptionValue.stringLit(OptionName.Extension("spec.value"), "B"))),
-              EnumValue("COOKIE_GRADE_C", 4, options = List(OptionValue.stringLit(OptionName.Extension("spec.value"), "C")))
-            ),
-            List.empty,
-            options = List(OptionValue.identifier(OptionName.Extension("spec.type"), "FIELD_TYPE_STRING"))
-          )
-        )
-        val cookie      = MessageElement.NestedMessageElement(
-          Message(
-            "Cookie",
-            List(
-              MessageElement.FieldElement(
-                Field(
-                  Type.Int32,
-                  "seq",
-                  1,
-                  optional = false,
-                  comment = None,
-                  options = List(
-                    OptionValue.deprecated,
-                    OptionValue.boolLit(OptionName.Extension("spec.nullable"), true)
+
+        enum CookieGrade derives Schema { case Unspecified, S, A, B, C }
+        case class Cookie(seq: Option[Int], grade: CookieGrade, abc: Option[Long]) derives Schema
+        case class PlayStart(cookieArray: List[Cookie]) derives Schema
+
+        val specNullable = OptionName.Extension("spec.nullable")
+        val specValue    = OptionName.Extension("spec.value")
+
+        val customDeriver = deriver
+          .enable(ProtobufDeriver.DerivationFlag.AutoPrefixEnums)
+          .modifier[Cookie](nested)
+          .modifier[Cookie]("seq", deprecated)
+          .modifier[Cookie]("grade", comment("comment"))
+          .customizeEnums { e =>
+            val prefix = e.name.replaceAll("([a-z0-9])([A-Z])", "$1_$2").replaceAll("([A-Z])([A-Z][a-z])", "$1_$2").toUpperCase + "_"
+            e.copy(
+              options = e.options :+ OptionValue.identifier(OptionName.Extension("spec.type"), "FIELD_TYPE_STRING"),
+              values = e.values.map(v => v.copy(options = v.options :+ OptionValue.stringLit(specValue, v.name.stripPrefix(prefix))))
+            )
+          }
+          .customizeMessages { msg =>
+            val withAnalytics =
+              if (msg.nested) msg
+              else
+                msg.copy(
+                  options = msg.options :+ OptionValue(
+                    OptionName.Extension("spec.analytics"),
+                    OptionVal.MessageValue(List("track" -> OptionVal.MessageValue()))
                   )
                 )
-              ),
-              MessageElement.FieldElement(
-                Field(Type.EnumRefType("CookieGrade"), "grade", 2, optional = false, comment = Some("enum을 이용해 가능한 값을 명시한다."))
-              ),
-              MessageElement.FieldElement(
-                Field(
-                  Type.Int64,
-                  "abc",
-                  3,
-                  optional = false,
-                  comment = None,
-                  options = List(OptionValue.boolLit(OptionName.Extension("spec.nullable"), true))
-                )
-              )
-            ),
-            List.empty
-          )
-        )
-        val msg         = Message(
-          "PlayStart",
-          List(
-            cookieGrade,
-            cookie,
-            MessageElement.FieldElement(Field(Type.ListType(Type.RefType("Cookie")), "cookieArray", 1, optional = false, comment = None))
-          ),
-          List.empty,
-          options = List(OptionValue(OptionName.Extension("spec.analytics"), OptionVal.MessageValue(List("track" -> OptionVal.MessageValue()))))
-        )
-        val cu          = CompilationUnit(Some("test"), List(Statement.TopLevelStatement(TopLevelDef.MessageDef(msg))), List.empty)
-        val rendered    = Renderer.render(cu)
-        val expected    = """syntax = "proto3";
+            val withNullable  = withAnalytics.copy(elements = withAnalytics.elements.map {
+              case f @ MessageElement.FieldElement(field) if field.optional =>
+                MessageElement.FieldElement(field.copy(optional = false, options = field.options :+ OptionValue.boolLit(specNullable, true)))
+              case other                                                    => other
+            })
+            withNullable
+          }
+
+        val codec    = Schema[PlayStart].derive(customDeriver)
+        val rendered = renderCodec(codec)
+        val expected = """syntax = "proto3";
 
 package test;
 
@@ -1811,22 +1791,22 @@ message PlayStart {
         track: {}
     };
 
-    enum CookieGrade {
-        option (spec.type) = FIELD_TYPE_STRING;
-        COOKIE_GRADE_UNSPECIFIED = 0;
-        COOKIE_GRADE_S = 1 [(spec.value) = "S"];
-        COOKIE_GRADE_A = 2 [(spec.value) = "A"];
-        COOKIE_GRADE_B = 3 [(spec.value) = "B"];
-        COOKIE_GRADE_C = 4 [(spec.value) = "C"];
-    }
-
     message Cookie {
         int32 seq = 1 [deprecated = true, (spec.nullable) = true];
-        CookieGrade grade = 2; // enum을 이용해 가능한 값을 명시한다.
+        CookieGrade grade = 2; // comment
         int64 abc = 3 [(spec.nullable) = true];
     }
 
-    repeated Cookie cookieArray = 1;
+    repeated Cookie cookie_array = 1;
+}
+
+enum CookieGrade {
+    option (spec.type) = FIELD_TYPE_STRING;
+    COOKIE_GRADE_UNSPECIFIED = 0 [(spec.value) = "UNSPECIFIED"];
+    COOKIE_GRADE_S = 1 [(spec.value) = "S"];
+    COOKIE_GRADE_A = 2 [(spec.value) = "A"];
+    COOKIE_GRADE_B = 3 [(spec.value) = "B"];
+    COOKIE_GRADE_C = 4 [(spec.value) = "C"];
 }
 """
         assertTrue(rendered == expected)

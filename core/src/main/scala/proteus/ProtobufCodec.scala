@@ -454,8 +454,14 @@ object ProtobufCodec {
   /**
     * Represents an enum type.
     */
-  final case class Enum[A](name: String, values: List[EnumValue[A]], reserved: List[Int], nested: Boolean, comment: Option[String] = None)
-    extends ProtobufCodec[A] {
+  final case class Enum[A](
+    name: String,
+    values: List[EnumValue[A]],
+    reserved: List[Int],
+    nested: Boolean,
+    comment: Option[String] = None,
+    customizeIR: ProtoIR.Enum => ProtoIR.Enum = identity
+  ) extends ProtobufCodec[A] {
     private val valuesByIndex: IntDenseMap[A] = IntDenseMap.from(values.map(v => (v.index, v.value)))
     val indexesByValue: HashMap[A, Int]       = HashMap.from(values.map(v => (v.value, v.index)))
     val namesByValue: HashMap[A, String]      = HashMap.from(values.map(v => (v.value, v.name)))
@@ -485,14 +491,17 @@ object ProtobufCodec {
       * Converts the enum to its protobuf IR representation.
       */
     def toProtoIR: ProtoIR.Enum =
-      ProtoIR.Enum(
-        name,
-        values.sortBy(_.index).map { v =>
-          val opts = ProtoIR.OptionValue.deprecatedOpts(v.deprecated)
-          ProtoIR.EnumValue(v.name, v.index, v.comment, opts)
-        },
-        reserved = reserved.sorted.map(ProtoIR.Reserved.Number(_)),
-        comment = comment
+      customizeIR(
+        ProtoIR.Enum(
+          name,
+          values.sortBy(_.index).map { v =>
+            val opts = ProtoIR.OptionValue.deprecatedOpts(v.deprecated)
+            ProtoIR.EnumValue(v.name, v.index, v.comment, opts)
+          },
+          reserved = reserved.sorted.map(ProtoIR.Reserved.Number(_)),
+          comment = comment,
+          nested = nested
+        )
       )
   }
 
@@ -508,7 +517,8 @@ object ProtobufCodec {
     reserved: Set[Int],
     inline: Boolean,
     nested: Option[Boolean],
-    comment: Option[String] = None
+    comment: Option[String] = None,
+    customizeIR: ProtoIR.Message => ProtoIR.Message = identity
   ) extends ProtobufCodec[A] {
 
     /**
@@ -664,11 +674,14 @@ object ProtobufCodec {
         case c: ProtoIR.MessageElement.OneOfElement => c.oneOf.fields.head.number
         case e: ProtoIR.MessageElement.FieldElement => e.field.number
       }
-      ProtoIR.Message(
-        name,
-        nestedMessageElements ++ sortedAllElements,
-        reserved = reserved.toList.sorted.map(ProtoIR.Reserved.Number(_)),
-        comment = comment
+      customizeIR(
+        ProtoIR.Message(
+          name,
+          nestedMessageElements ++ sortedAllElements,
+          reserved = reserved.toList.sorted.map(ProtoIR.Reserved.Number(_)),
+          comment = comment,
+          nested = nested.getOrElse(false)
+        )
       )
     }
   }
