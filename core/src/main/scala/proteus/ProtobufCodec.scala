@@ -217,14 +217,16 @@ object ProtobufCodec {
       codec: ProtobufCodec[A],
       register: Register[Any],
       defaultValue: A,
-      comment: Option[String] = None
+      comment: Option[String] = None,
+      deprecated: Boolean = false
     ) extends MessageField[A] {
 
       /**
         * Converts the message field to its protobuf IR representation.
         */
       def toProtoIR: ProtoIR.MessageElement.FieldElement = {
-        val field = ProtoIR.Field(toProtoType(codec), name, id, deprecated = false, optional = isOptional(using codec), comment = comment)
+        val opts  = ProtoIR.OptionValue.deprecatedOpts(deprecated)
+        val field = ProtoIR.Field(toProtoType(codec), name, id, optional = isOptional(using codec), comment = comment, options = opts)
         ProtoIR.MessageElement.FieldElement(field)
       }
 
@@ -259,14 +261,15 @@ object ProtobufCodec {
         val fields = cases
           .flatMap {
             case field: SimpleField[?]   =>
+              val opts = ProtoIR.OptionValue.deprecatedOpts(field.deprecated)
               Some(
                 ProtoIR.Field(
                   toProtoType(field.codec),
                   field.name,
                   field.id,
-                  deprecated = false,
                   optional = isOptional(using field.codec),
-                  comment = field.comment
+                  comment = field.comment,
+                  options = opts
                 )
               )
             case field: ExcludedField[?] => None
@@ -446,7 +449,7 @@ object ProtobufCodec {
   /**
     * Represents a value of an enum.
     */
-  final case class EnumValue[A](name: String, index: Int, value: A, comment: Option[String] = None)
+  final case class EnumValue[A](name: String, index: Int, value: A, comment: Option[String] = None, deprecated: Boolean = false)
 
   /**
     * Represents an enum type.
@@ -484,7 +487,10 @@ object ProtobufCodec {
     def toProtoIR: ProtoIR.Enum =
       ProtoIR.Enum(
         name,
-        values.sortBy(_.index).map(v => ProtoIR.EnumValue(v.name, v.index, v.comment)),
+        values.sortBy(_.index).map { v =>
+          val opts = ProtoIR.OptionValue.deprecatedOpts(v.deprecated)
+          ProtoIR.EnumValue(v.name, v.index, v.comment, opts)
+        },
         reserved = reserved.sorted.map(ProtoIR.Reserved.Number(_)),
         comment = comment
       )

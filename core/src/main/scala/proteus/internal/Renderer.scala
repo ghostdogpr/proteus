@@ -49,38 +49,101 @@ private[proteus] object Renderer {
   private def renderOption(opt: TopLevelOption): Text =
     statement(s"""option ${opt.key} = "${opt.value}"""")
 
+  private def renderOptionValCompact(v: OptionVal): String = v match {
+    case OptionVal.Identifier(value)                      => value
+    case OptionVal.IntLit(value)                          => value.toString
+    case OptionVal.FloatLit(value)                        => renderFloatLit(value)
+    case OptionVal.StringLit(value)                       => s""""$value""""
+    case OptionVal.BoolLit(value)                         => value.toString
+    case OptionVal.MessageValue(fields) if fields.isEmpty => "{}"
+    case OptionVal.MessageValue(fields)                   =>
+      fields.map { case (k, v) => s"$k: ${renderOptionValCompact(v)}" }.mkString("{ ", ", ", " }")
+    case OptionVal.ScalarList(values)                     =>
+      values.map(renderOptionValCompact).mkString("[", ", ", "]")
+    case OptionVal.MessageList(values)                    =>
+      values.map(renderOptionValCompact).mkString("[", ", ", "]")
+  }
+
+  private def renderFloatLit(value: Double): String =
+    if (value == Double.PositiveInfinity) "inf"
+    else if (value == Double.NegativeInfinity) "-inf"
+    else if (value.isNaN) "nan"
+    else value.toString
+
+  private def renderMessageField(key: String, value: OptionVal): Text = value match {
+    case OptionVal.MessageValue(fields) if fields.isEmpty => line(s"$key: {}")
+    case OptionVal.MessageValue(fields)                   =>
+      many(
+        line(s"$key: {"),
+        indent(fields.map { case (k, v) => renderMessageField(k, v) }),
+        line("}")
+      )
+    case OptionVal.ScalarList(values)                     =>
+      line(s"$key: [${values.map(renderOptionValCompact).mkString(", ")}]")
+    case OptionVal.MessageList(values) if values.isEmpty  =>
+      line(s"$key: []")
+    case OptionVal.MessageList(values)                    =>
+      many(
+        line(s"$key: ["),
+        indent(values.map(v => renderMessageField("", v))),
+        line("]")
+      )
+    case other                                            =>
+      line(s"$key: ${renderOptionValCompact(other)}")
+  }
+
+  private def renderInlineOptions(options: List[OptionValue]): String =
+    if (options.isEmpty) "" else options.map(o => s"${o.name.render} = ${renderOptionValCompact(o.value)}").mkString(" [", ", ", "]")
+
+  private def renderStatementOptions(options: List[OptionValue]): List[Text] =
+    options.map { o =>
+      o.value match {
+        case OptionVal.MessageValue(fields) if fields.isEmpty => line(s"option ${o.name.render} = {};")
+        case OptionVal.MessageValue(fields)                   =>
+          many(
+            line(s"option ${o.name.render} = {"),
+            indent(fields.map { case (k, v) => renderMessageField(k, v) }),
+            line("};")
+          )
+        case other                                            => line(s"option ${o.name.render} = ${renderOptionValCompact(other)};")
+      }
+    }
+
   private def renderStatement(st: Statement): Text =
     st match {
       case Statement.ImportStatement(path)  => statement(s"""import "$path"""")
       case Statement.TopLevelStatement(tld) => renderTopLevelDef(tld)
     }
 
-  private def renderEnumElement(enumValue: EnumValue): Text =
+  private def renderEnumElement(enumValue: EnumValue): Text = {
+    val opts = renderInlineOptions(enumValue.options)
     enumValue match {
-      case EnumValue(identifier, intvalue, comment) =>
+      case EnumValue(identifier, intvalue, comment, _) =>
         comment match {
           case Some(c) if c.contains("\n") =>
             // Multiline comment - render on previous line(s)
             many(
               renderComment(c),
-              line(s"$identifier = $intvalue;")
+              line(s"$identifier = $intvalue$opts;")
             )
           case Some(c)                     =>
             // Single-line comment - render inline
-            line(s"$identifier = $intvalue; // $c")
+            line(s"$identifier = $intvalue$opts; // $c")
           case None                        =>
             // No comment
-            line(s"$identifier = $intvalue;")
+            line(s"$identifier = $intvalue$opts;")
         }
     }
+  }
 
   private def renderEnum(enumeration: Enum): Text = {
-    val hasContent  = enumeration.reserved.nonEmpty || enumeration.values.nonEmpty
+    val hasContent  = enumeration.reserved.nonEmpty || enumeration.values.nonEmpty || enumeration.options.nonEmpty
     val commentLine = enumeration.comment.map(renderComment).getOrElse(many())
     if (hasContent) {
       many(
         commentLine,
         line(s"enum ${enumeration.name} {"),
+        indent(renderStatementOptions(enumeration.options)),
         indent(renderReserved(enumeration.reserved)),
         indent(enumeration.values.map(renderEnumElement)),
         line("}")
@@ -93,12 +156,16 @@ private[proteus] object Renderer {
   }
 
   private def renderMessage(message: Message): Text = {
-    val hasContent  = message.reserved.nonEmpty || message.elements.filterNot(_ == ProtoIR.excludedMessageElement).nonEmpty
-    val commentLine = message.comment.map(renderComment).getOrElse(many())
+    val hasOtherContent = message.reserved.nonEmpty || message.elements.exists(_ != ProtoIR.excludedMessageElement)
+    val hasContent      = hasOtherContent || message.options.nonEmpty
+    val commentLine     = message.comment.map(renderComment).getOrElse(many())
+    val optionsSep      = if (message.options.nonEmpty && hasOtherContent) emptyLine else many()
     if (hasContent) {
       many(
         commentLine,
         line(s"message ${message.name} {"),
+        indent(renderStatementOptions(message.options)),
+        optionsSep,
         indent(renderReserved(message.reserved)),
         indent(message.elements.map(renderMessageElement)),
         line("}")
@@ -159,9 +226,9 @@ private[proteus] object Renderer {
   private def renderField(field: Field, isOneOf: Boolean = false): Text =
     if (field == ProtoIR.excludedField) many()
     else {
-      val ty         = renderType(field.ty)
-      val deprecated = if (field.deprecated) " [deprecated = true]" else ""
-      val optional   = field.ty match {
+      val ty       = renderType(field.ty)
+      val opts     = renderInlineOptions(field.options)
+      val optional = field.ty match {
         case _: Type.PrimitiveType | _: Type.EnumRefType | _: Type.RefType =>
           if (field.optional && !isOneOf) "optional " else ""
         case _: Type.ListType | _: Type.MapType                            =>
@@ -173,14 +240,14 @@ private[proteus] object Renderer {
           // Multiline comment - render on previous line(s)
           many(
             renderComment(c),
-            line(s"$optional$ty ${field.name} = ${field.number}$deprecated;")
+            line(s"$optional$ty ${field.name} = ${field.number}$opts;")
           )
         case Some(c)                     =>
           // Single-line comment - render inline
-          line(s"$optional$ty ${field.name} = ${field.number}$deprecated; // $c")
+          line(s"$optional$ty ${field.name} = ${field.number}$opts; // $c")
         case None                        =>
           // No comment
-          line(s"$optional$ty ${field.name} = ${field.number}$deprecated;")
+          line(s"$optional$ty ${field.name} = ${field.number}$opts;")
       }
     }
 

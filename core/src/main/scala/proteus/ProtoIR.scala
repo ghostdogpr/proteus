@@ -7,6 +7,46 @@ object ProtoIR {
 
   final case class TopLevelOption(key: String, value: String)
 
+  sealed trait OptionVal
+  object OptionVal {
+    final case class Identifier(value: String)                                    extends OptionVal
+    final case class IntLit(value: Long)                                          extends OptionVal
+    final case class FloatLit(value: Double)                                      extends OptionVal
+    final case class StringLit(value: String)                                     extends OptionVal
+    final case class BoolLit(value: Boolean)                                      extends OptionVal
+    final case class MessageValue(fields: List[(String, OptionVal)] = List.empty) extends OptionVal
+    final case class ScalarList(values: List[OptionVal])                          extends OptionVal
+    final case class MessageList(values: List[MessageValue])                      extends OptionVal
+  }
+
+  sealed trait OptionName {
+    def render: String
+  }
+  object OptionName       {
+    final case class BuiltIn(name: String)                                         extends OptionName {
+      def render: String = name
+    }
+    final case class Extension(fullIdent: String, path: List[String] = List.empty) extends OptionName {
+      def render: String =
+        if (path.isEmpty) s"($fullIdent)"
+        else s"($fullIdent).${path.mkString(".")}"
+    }
+  }
+
+  final case class OptionValue(name: OptionName, value: OptionVal)
+  object OptionValue {
+    val deprecated: OptionValue = OptionValue(OptionName.BuiltIn("deprecated"), OptionVal.BoolLit(true))
+
+    def deprecatedOpts(deprecated: Boolean): List[OptionValue] =
+      if (deprecated) List(OptionValue.deprecated) else List.empty
+
+    def identifier(name: OptionName, value: String): OptionValue = OptionValue(name, OptionVal.Identifier(value))
+    def intLit(name: OptionName, value: Long): OptionValue       = OptionValue(name, OptionVal.IntLit(value))
+    def floatLit(name: OptionName, value: Double): OptionValue   = OptionValue(name, OptionVal.FloatLit(value))
+    def stringLit(name: OptionName, value: String): OptionValue  = OptionValue(name, OptionVal.StringLit(value))
+    def boolLit(name: OptionName, value: Boolean): OptionValue   = OptionValue(name, OptionVal.BoolLit(value))
+  }
+
   sealed trait Statement
   object Statement {
     final case class ImportStatement(path: String)     extends Statement
@@ -32,7 +72,13 @@ object ProtoIR {
     }
   }
 
-  final case class Message(name: String, elements: List[MessageElement], reserved: List[Reserved], comment: Option[String] = None) {
+  final case class Message(
+    name: String,
+    elements: List[MessageElement],
+    reserved: List[Reserved],
+    comment: Option[String] = None,
+    options: List[OptionValue] = List.empty
+  ) {
     lazy val collectTypeReferences: Set[String] = elements.toSet.flatMap(_.collectTypeReferences)
   }
 
@@ -54,11 +100,18 @@ object ProtoIR {
     }
   }
 
-  final case class OneOf(name: String, fields: List[Field], comment: Option[String] = None)
+  final case class OneOf(name: String, fields: List[Field], comment: Option[String] = None, options: List[OptionValue] = List.empty)
 
-  final case class Field(ty: Type, name: String, number: Int, deprecated: Boolean, optional: Boolean, comment: Option[String])
+  final case class Field(
+    ty: Type,
+    name: String,
+    number: Int,
+    optional: Boolean,
+    comment: Option[String],
+    options: List[OptionValue] = List.empty
+  )
 
-  val excludedField: Field                   = Field(Type.Bool, "", 0, deprecated = false, optional = false, None)
+  val excludedField: Field                   = Field(Type.Bool, "", 0, optional = false, None)
   val excludedMessageElement: MessageElement = MessageElement.FieldElement(excludedField)
 
   sealed trait Reserved
@@ -68,8 +121,14 @@ object ProtoIR {
     final case class Range(start: Int, end: Int) extends Reserved
   }
 
-  final case class EnumValue(name: String, intValue: Int, comment: Option[String] = None)
-  final case class Enum(name: String, values: List[EnumValue], reserved: List[Reserved], comment: Option[String] = None)
+  final case class EnumValue(name: String, intValue: Int, comment: Option[String] = None, options: List[OptionValue] = List.empty)
+  final case class Enum(
+    name: String,
+    values: List[EnumValue],
+    reserved: List[Reserved],
+    comment: Option[String] = None,
+    options: List[OptionValue] = List.empty
+  )
 
   final case class Service(name: String, rpcs: List[Rpc], comment: Option[String] = None)
 

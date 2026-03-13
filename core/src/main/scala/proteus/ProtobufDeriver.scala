@@ -242,7 +242,8 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
                 instance,
                 register,
                 field.value.getDefaultValue.getOrElse(getDefaultValue(using instance)),
-                getComment(field.modifiers)
+                getComment(field.modifiers),
+                isDeprecated(field.modifiers)
               )
           }
         }
@@ -333,7 +334,7 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
         val prefix     = getEnumPrefix(modifiers, flags, typeId)
         val suffix     = getEnumSuffix(modifiers, flags, typeId)
         val enumName   = getEnumMemberName(c.name, c.modifiers, prefix, suffix)
-        builder += ProtobufCodec.EnumValue(enumName, fieldIndex, a, getComment(c.modifiers))
+        builder += ProtobufCodec.EnumValue(enumName, fieldIndex, a, getComment(c.modifiers), isDeprecated(c.modifiers))
       }
       Lazy(ProtobufCodec.Enum(getTypeName(typeId, modifiers), builder.result(), reservedIndexes.toList, nested = nested, getComment(modifiers)))
     } else
@@ -381,7 +382,8 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
                       if (nestedOneOf) instance.makeNested else instance,
                       register.asInstanceOf[Register[Any]],
                       null.asInstanceOf[instance.Focus],
-                      getComment(c.modifiers)
+                      getComment(c.modifiers),
+                      isDeprecated(c.modifiers)
                     )
                   }
               }
@@ -582,6 +584,9 @@ case class ProtobufDeriver private (flags: Set[DerivationFlag], instances: Vecto
 
   private def getComment(modifiers: Seq[Modifier]): Option[String] =
     modifiers.collectFirst { case Modifier.config(`commentModifier`, value) => value }
+
+  private def isDeprecated(modifiers: Seq[Modifier]): Boolean =
+    modifiers.exists { case Modifier.config(`deprecatedModifier`, _) => true; case _ => false }
 
   private def isEnum(cases: IndexedSeq[Term[?, ?, ?]], modifiers: Seq[Modifier]): Boolean =
     cases.forall(c =>

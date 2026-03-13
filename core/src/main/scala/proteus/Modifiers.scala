@@ -15,6 +15,11 @@ object Modifiers {
   val excluded: Modifier.Term = Modifier.config(excludedModifier, "true")
 
   /**
+    * A modifier to mark a field as deprecated.
+    */
+  val deprecated: Modifier.Term = Modifier.config(deprecatedModifier, "true")
+
+  /**
     * A modifier to nest a type inside its parent message.
     */
   val nested: Modifier.Reflect = Modifier.config(nestedModifier, "true")

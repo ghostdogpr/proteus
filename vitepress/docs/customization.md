@@ -116,6 +116,7 @@ Here are the different types of modifiers you can apply:
 - `comment(comment: String)`: Adds a comment to a type, field, or enum member.
 - `rename(name: String)`: Renames a type, field, or enum member.
 - `reserved(indexes: Int*)`: Adds some reserved indexes to a type. Those reserved indexes will be skipped when deriving the protobuf type. If this modifier is applied to a field, the field will use the given index(es).
+- `deprecated`: Marks a field or an enum member as deprecated. It will be rendered with the `[deprecated = true]` option in the protobuf definition.
 
 There are two possible `OneOfFlag` values:
 - `Inline`: Inlines the `oneof` as a single field inside the parent message.
