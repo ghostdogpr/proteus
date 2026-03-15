@@ -12,6 +12,7 @@ export default defineConfig({
       { text: 'Documentation', link: '/getting-started' },
       { text: 'Guides', link: '/migrating-to-proteus' },
       { text: 'FAQ', link: '/faq' },
+      { text: 'About', link: '/about' },
     ],
 
     logo: '/proteus.svg',
@@ -35,6 +36,9 @@ export default defineConfig({
       },
       {
         text: 'FAQ', link: '/faq'
+      },
+      {
+        text: 'About', link: '/about'
       }
     ],
 
