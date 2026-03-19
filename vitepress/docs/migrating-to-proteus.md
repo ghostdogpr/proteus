@@ -118,7 +118,7 @@ lazy val timeCodec: ProtobufCodec[OffsetDateTime] =
       millis => OffsetDateTime.ofInstant(
         Instant.ofEpochMilli(millis), ZoneOffset.UTC
       ),
-      _.toInstant().toEpochMilli().toLong
+      _.toInstant().toEpochMilli()
     )
 ```
 This codec encodes the `OffsetDateTime` type in the same way as a `Long` (which will be `int64` in the Protobuf schema). We provide functions to transform between `OffsetDateTime` and `Long`.

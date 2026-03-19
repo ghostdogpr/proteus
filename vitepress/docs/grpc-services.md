@@ -163,8 +163,10 @@ There is also a variant of `client` that allows you to send and receive metadata
 
 So with our direct backend, the return type is `(Request, Metadata) => (Response, Metadata)`.
 ```scala
+val sayHelloClientWithMetadata = backend.clientWithMetadata(sayHelloRpc, greeterService)
+
 val requestMetadata = new Metadata()
 requestMetadata.put(Metadata.Key.of("auth-token", Metadata.ASCII_STRING_MARSHALLER), "1234567890")
-sayHelloClient(HelloRequest("Pierre"), requestMetadata)._1
+sayHelloClientWithMetadata(HelloRequest("Pierre"), requestMetadata)._1
 // HelloReply("Hello, Pierre!")
 ```

@@ -36,7 +36,7 @@ class GreeterServer(port: Int) {
 class GreeterClient(host: String, port: Int) {
   val channel: ManagedChannel = ManagedChannelBuilder.forAddress(host, port).usePlaintext().build()
   val backend                 = DirectClientBackend(channel)
-  val sayHelloClient          = backend.client(greeterService, sayHelloRpc)
+  val sayHelloClient          = backend.client(sayHelloRpc, greeterService)
 }
 ```
 
