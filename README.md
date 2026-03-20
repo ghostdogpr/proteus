@@ -1,5 +1,8 @@
 # Proteus
 
+[![Maven Central](https://img.shields.io/maven-central/v/com.github.ghostdogpr/proteus-core_3)](https://central.sonatype.com/artifact/com.github.ghostdogpr/proteus-core_3)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+
 **Proteus** is a **[Scala](https://www.scala-lang.org/) open source library** for working with **[Protobuf](https://protobuf.dev/)** and **[gRPC](https://grpc.io/)**.
 
 It is designed to be **code-first**, meaning that it is able to generate Protobuf codecs and .proto files directly from your Scala code.
