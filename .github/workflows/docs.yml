@@ -29,14 +29,14 @@ jobs:
         uses: actions/configure-pages@v5
       - name: Install dependencies
         run: npm install
-        working-directory: vitepress
+        working-directory: docs
       - name: Build with VitePress
         run: npm run docs:build
-        working-directory: vitepress
+        working-directory: docs
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v4
         with:
-          path: vitepress/docs/.vitepress/dist
+          path: docs/.vitepress/dist
 
   deploy:
     environment:
