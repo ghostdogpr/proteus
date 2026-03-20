@@ -2,6 +2,7 @@ package proteus
 package server
 
 import scala.concurrent.Future
+import scala.util.control.NonFatal
 
 import io.grpc.{Metadata, ServerCall, ServerCallHandler, Status}
 
@@ -25,17 +26,22 @@ class FutureServerBackend[Context](interceptor: ServerContextInterceptor[Future,
               override def onMessage(message: Request): Unit = {
                 import scala.concurrent.ExecutionContext.Implicits.global
                 val responseMetadata = new Metadata()
-                val futureResponse   =
-                  interceptor.unary(ctx => logic(message, ctx))(using rpc.requestCodec, rpc.responseCodec)(message)(
-                    RequestResponseMetadata(headers, responseMetadata)
-                  )
-                futureResponse.onComplete {
-                  case scala.util.Success(response) =>
-                    call.sendHeaders(new Metadata())
-                    call.sendMessage(response)
-                    call.close(Status.OK, responseMetadata)
-                  case scala.util.Failure(ex)       =>
-                    call.close(Status.INTERNAL.withDescription(ex.getMessage).withCause(ex), new Metadata())
+                try {
+                  val futureResponse =
+                    interceptor.unary(ctx => logic(message, ctx))(using rpc.requestCodec, rpc.responseCodec)(message)(
+                      RequestResponseMetadata(headers, responseMetadata)
+                    )
+                  futureResponse.onComplete {
+                    case scala.util.Success(response) =>
+                      call.sendHeaders(new Metadata())
+                      call.sendMessage(response)
+                      call.close(Status.OK, responseMetadata)
+                    case scala.util.Failure(ex)       =>
+                      ServerBackend.closeCallWithError(call, ex)
+                  }
+                } catch {
+                  case NonFatal(ex) =>
+                    ServerBackend.closeCallWithError(call, ex)
                 }
               }
             }

@@ -2,7 +2,7 @@ package proteus
 
 import java.util.concurrent.TimeUnit
 
-import io.grpc.Metadata
+import io.grpc.{Metadata, Status}
 import io.grpc.netty.{NettyChannelBuilder, NettyServerBuilder}
 import zio.test.*
 
@@ -19,6 +19,12 @@ object DirectBackendSpec extends ZIOSpecDefault {
   val metadataServiceDef = ServerService(using DirectServerBackend)
     .rpcWithContext(metadataRpc, processWithMetadata)
     .build(metadataService)
+
+  val failingRpc        = Rpc.unary[MetadataRequest, MetadataResponse]("AlwaysFail")
+  val failingService    = Service("test.package", "FailingService").rpc(failingRpc)
+  val failingServiceDef = ServerService(using DirectServerBackend)
+    .rpc(failingRpc, _ => throw Status.NOT_FOUND.withDescription("missing").asRuntimeException())
+    .build(failingService)
 
   def spec = suite("DirectBackendSpec")(
     test("should discover services via gRPC reflection") {
@@ -61,6 +67,26 @@ object DirectBackendSpec extends ZIOSpecDefault {
       channel.shutdown().awaitTermination(5, TimeUnit.SECONDS)
 
       assertTrue(validateMetadataResponse(response, responseMetadata, "test-client-123", "hello metadata"))
+    },
+    test("should preserve explicit gRPC statuses") {
+      val port    = 9003
+      val server  = NettyServerBuilder.forPort(port).addService(failingServiceDef).build().start()
+      val channel = NettyChannelBuilder.forAddress("localhost", port).usePlaintext().build()
+      val client  = new DirectClientBackend(channel).client(failingRpc, failingService)
+
+      val error =
+        try {
+          client(MetadataRequest("boom"))
+          None
+        } catch {
+          case ex: io.grpc.StatusRuntimeException => Some(ex)
+        }
+
+      server.shutdown().awaitTermination(5, TimeUnit.SECONDS)
+      channel.shutdown().awaitTermination(5, TimeUnit.SECONDS)
+
+      assertTrue(error.exists(_.getStatus.getCode == Status.Code.NOT_FOUND)) &&
+        assertTrue(error.exists(_.getStatus.getDescription == "missing"))
     }
   )
 }

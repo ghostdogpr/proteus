@@ -57,7 +57,7 @@ case class Service[Rpcs] private (
     * Converts the service to a gRPC file descriptor for the reflection service.
     */
   lazy val fileDescriptor: FileDescriptor = {
-    val fileBuilder               = FileDescriptorProto.newBuilder().setName(s"${name.toLowerCase}.proto").setPackage(packageName.getOrElse(""))
+    val fileBuilder               = FileDescriptorProto.newBuilder().setName(s"${toSnakeCase(name)}.proto").setPackage(packageName.getOrElse(""))
     val dependencyFileDescriptors = usedDependencies.flatMap(_.fileDescriptor)
 
     dependencyFileDescriptors.foreach(fileDescriptor => fileBuilder.addDependency(fileDescriptor.getName))
@@ -113,11 +113,12 @@ case class Service[Rpcs] private (
     *
     * @param options options to write at the top of the .proto file.
     * @param folder the folder to write the .proto file to.
-    * @param fileName the name of the .proto file (without the extension).
+    * @param fileName the name of the .proto file.
     */
   def renderToFile(options: List[ProtoIR.TopLevelOption], folder: String, fileName: String): Unit = {
-    val rendered = render(options)
-    val path     = Path.of(folder, fileName)
+    val rendered       = render(options)
+    val normalizedName = if (fileName.endsWith(".proto")) fileName else s"$fileName.proto"
+    val path           = Path.of(folder, normalizedName)
     Files.createDirectories(path.getParent)
     Files.write(path, rendered.getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING): Unit
   }

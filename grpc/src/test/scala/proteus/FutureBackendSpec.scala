@@ -5,7 +5,7 @@ import java.util.concurrent.TimeUnit
 import scala.concurrent.{Await, Future}
 import scala.concurrent.duration.*
 
-import io.grpc.Metadata
+import io.grpc.{Metadata, Status}
 import io.grpc.netty.{NettyChannelBuilder, NettyServerBuilder}
 import zio.test.*
 
@@ -28,6 +28,12 @@ object FutureBackendSpec extends ZIOSpecDefault {
   val metadataServiceDef = ServerService(using FutureServerBackend)
     .rpcWithContext(metadataRpc, processWithMetadataFuture)
     .build(metadataService)
+
+  val failingRpc        = Rpc.unary[MetadataRequest, MetadataResponse]("AlwaysFail")
+  val failingService    = Service("test.package", "FailingService").rpc(failingRpc)
+  val failingServiceDef = ServerService(using FutureServerBackend)
+    .rpc(failingRpc, _ => Future.failed(Status.INVALID_ARGUMENT.withDescription("bad request").asException()))
+    .build(failingService)
 
   def spec = suite("FutureBackendSpec")(
     test("should discover services via gRPC reflection") {
@@ -72,6 +78,28 @@ object FutureBackendSpec extends ZIOSpecDefault {
       channel.shutdown().awaitTermination(5, TimeUnit.SECONDS)
 
       assertTrue(validateMetadataResponse(response, responseMetadata, "future-client-456", "hello future metadata"))
+    },
+    test("should preserve explicit gRPC statuses") {
+      val port         = 8003
+      val server       = NettyServerBuilder.forPort(port).addService(failingServiceDef).build().start()
+      val channel      = NettyChannelBuilder.forAddress("localhost", port).usePlaintext().build()
+      val clientFuture = new FutureClientBackend(channel).client(failingRpc, failingService)
+      val client       = Await.result(clientFuture, 5.seconds)
+
+      val error =
+        try {
+          Await.result(client(MetadataRequest("boom")), 5.seconds)
+          None
+        } catch {
+          case ex: io.grpc.StatusException        => Some(ex.getStatus)
+          case ex: io.grpc.StatusRuntimeException => Some(ex.getStatus)
+        }
+
+      server.shutdown().awaitTermination(5, TimeUnit.SECONDS)
+      channel.shutdown().awaitTermination(5, TimeUnit.SECONDS)
+
+      assertTrue(error.exists(_.getCode == Status.Code.INVALID_ARGUMENT)) &&
+        assertTrue(error.exists(_.getDescription == "bad request"))
     }
   )
 }

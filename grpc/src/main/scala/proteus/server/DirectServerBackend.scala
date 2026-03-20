@@ -1,6 +1,8 @@
 package proteus
 package server
 
+import scala.util.control.NonFatal
+
 import io.grpc.{Metadata, ServerCall, ServerCallHandler, Status}
 
 /**
@@ -29,8 +31,8 @@ class DirectServerBackend[Context](interceptor: ServerContextInterceptor[[A] =>>
                   call.sendMessage(response)
                   call.close(Status.OK, responseMetadata)
                 } catch {
-                  case ex: Exception =>
-                    call.close(Status.INTERNAL.withDescription(ex.getMessage).withCause(ex), new Metadata())
+                  case NonFatal(ex) =>
+                    ServerBackend.closeCallWithError(call, ex)
                 }
             }
           }
