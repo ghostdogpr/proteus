@@ -58,7 +58,7 @@ case class Service[Rpcs] private (
     */
   lazy val fileDescriptor: FileDescriptor = {
     val fileName                  = packageName.fold(toSnakeCase(name))(p => s"${p.replace('.', '/')}/${toSnakeCase(name)}")
-    val fileBuilder               = FileDescriptorProto.newBuilder().setName(s"${fileName}.proto").setPackage(packageName.getOrElse(""))
+    val fileBuilder               = FileDescriptorProto.newBuilder().setName(s"$fileName.proto").setPackage(packageName.getOrElse(""))
     val dependencyFileDescriptors = usedDependencies.flatMap(_.fileDescriptor)
 
     dependencyFileDescriptors.foreach(fileDescriptor => fileBuilder.addDependency(fileDescriptor.getName))
