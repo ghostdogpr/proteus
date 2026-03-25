@@ -26,6 +26,19 @@ object DirectBackendSpec extends ZIOSpecDefault {
     .rpc(failingRpc, _ => throw Status.NOT_FOUND.withDescription("missing").asRuntimeException())
     .build(failingService)
 
+  // Same-named services in different packages
+  case class SimpleRequest(value: String) derives ProtobufCodec
+  case class SimpleResponse(result: String) derives ProtobufCodec
+  val simpleRpc       = Rpc.unary[SimpleRequest, SimpleResponse]("Process")
+  val serviceAlpha    = Service("pkg.alpha", "MyService").rpc(simpleRpc)
+  val serviceBeta     = Service("pkg.beta", "MyService").rpc(simpleRpc)
+  val serviceAlphaDef = ServerService(using DirectServerBackend)
+    .rpc(simpleRpc, req => SimpleResponse(req.value))
+    .build(serviceAlpha)
+  val serviceBetaDef  = ServerService(using DirectServerBackend)
+    .rpc(simpleRpc, req => SimpleResponse(req.value))
+    .build(serviceBeta)
+
   def spec = suite("DirectBackendSpec")(
     test("should discover services via gRPC reflection") {
       assertTrue(testReflection(9000, testServiceDef))
@@ -87,6 +100,13 @@ object DirectBackendSpec extends ZIOSpecDefault {
 
       assertTrue(error.exists(_.getStatus.getCode == Status.Code.NOT_FOUND)) &&
         assertTrue(error.exists(_.getStatus.getDescription == "missing"))
+    },
+    test("should resolve same-named services in different packages via reflection") {
+      val services = List(serviceAlphaDef, serviceBetaDef)
+      assertTrue(
+        resolveServiceSymbol(9004, services, "pkg.alpha.MyService"),
+          resolveServiceSymbol(9005, services, "pkg.beta.MyService")
+      )
     }
   )
 }
