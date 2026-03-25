@@ -209,8 +209,8 @@ object GrpcTestUtils {
     val reflectionService = ProtoReflectionServiceV1.newInstance
     val builder           = NettyServerBuilder.forPort(port)
     serverDefinitions.foreach(sd => builder.addService(sd))
-    val server  = builder.addService(reflectionService).build().start()
-    val channel = NettyChannelBuilder.forAddress("localhost", port).usePlaintext().build()
+    val server            = builder.addService(reflectionService).build().start()
+    val channel           = NettyChannelBuilder.forAddress("localhost", port).usePlaintext().build()
 
     val reflectionStub  = ServerReflectionGrpc.newStub(channel)
     val future          = new CompletableFuture[Boolean]()
@@ -219,12 +219,12 @@ object GrpcTestUtils {
         if (response.hasFileDescriptorResponse) future.complete(true): Unit
         else if (response.hasErrorResponse) future.complete(false): Unit
         else ()
-      def onError(throwable: Throwable): Unit = future.completeExceptionally(throwable): Unit
-      def onCompleted(): Unit                 = if (!future.isDone) future.complete(false): Unit
+      def onError(throwable: Throwable): Unit                                    = future.completeExceptionally(throwable): Unit
+      def onCompleted(): Unit                                                    = if (!future.isDone) future.complete(false): Unit
     })
     requestObserver.onNext(ServerReflectionRequest.newBuilder().setFileContainingSymbol(symbolToResolve).build())
     requestObserver.onCompleted()
-    val resolved = future.get(2, TimeUnit.SECONDS)
+    val resolved        = future.get(2, TimeUnit.SECONDS)
 
     server.shutdown().awaitTermination(5, TimeUnit.SECONDS)
     channel.shutdown().awaitTermination(5, TimeUnit.SECONDS)
