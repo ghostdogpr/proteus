@@ -105,7 +105,7 @@ object DirectBackendSpec extends ZIOSpecDefault {
       val services = List(serviceAlphaDef, serviceBetaDef)
       assertTrue(
         resolveServiceSymbol(9004, services, "pkg.alpha.MyService"),
-          resolveServiceSymbol(9005, services, "pkg.beta.MyService")
+        resolveServiceSymbol(9004, services, "pkg.beta.MyService")
       )
     }
   )
