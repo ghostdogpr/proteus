@@ -57,7 +57,8 @@ case class Service[Rpcs] private (
     * Converts the service to a gRPC file descriptor for the reflection service.
     */
   lazy val fileDescriptor: FileDescriptor = {
-    val fileBuilder               = FileDescriptorProto.newBuilder().setName(s"${toSnakeCase(name)}.proto").setPackage(packageName.getOrElse(""))
+    val fileName                  = packageName.fold(toSnakeCase(name))(p => s"${p.replace('.', '/')}/${toSnakeCase(name)}")
+    val fileBuilder               = FileDescriptorProto.newBuilder().setName(s"$fileName.proto").setPackage(packageName.getOrElse(""))
     val dependencyFileDescriptors = usedDependencies.flatMap(_.fileDescriptor)
 
     dependencyFileDescriptors.foreach(fileDescriptor => fileBuilder.addDependency(fileDescriptor.getName))
