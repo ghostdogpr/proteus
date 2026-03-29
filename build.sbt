@@ -6,6 +6,7 @@ val zioBlocksSchemaVersion      = "0.0.27"
 val zioTestVersion              = "2.1.24"
 val zioGrpcVersion              = "0.6.3"
 val fs2GrpcVersion              = "3.0.0"
+val oxVersion                   = "1.0.4"
 val chimneyVersion              = "1.8.2"
 val circeVersion                = "0.14.15"
 val zioSchemaVersion            = "1.8.2"
@@ -32,7 +33,7 @@ addCommandAlias("check", "all scalafmtSbtCheck scalafmtCheck test:scalafmtCheck"
 lazy val root = project
   .in(file("."))
   .settings(publish / skip := true)
-  .aggregate(core.jvm, core.js, grpc, zioGrpc, fs2Grpc, json.jvm, json.js, benchmarks, examples)
+  .aggregate(core.jvm, core.js, grpc, zioGrpc, fs2Grpc, oxGrpc, json.jvm, json.js, benchmarks, examples)
 
 lazy val core = crossProject(JSPlatform, JVMPlatform)
   .crossType(CrossType.Pure)
@@ -94,6 +95,18 @@ lazy val fs2Grpc = project
   )
   .dependsOn(grpc % "compile->compile;test->test")
 
+lazy val oxGrpc = project
+  .in(file("grpc-ox"))
+  .settings(name := "proteus-grpc-ox")
+  .settings(commonSettings)
+  .settings(
+    libraryDependencies ++=
+      Seq(
+        "com.softwaremill.ox" %% "core" % oxVersion
+      )
+  )
+  .dependsOn(grpc % "compile->compile;test->test")
+
 lazy val json = crossProject(JSPlatform, JVMPlatform)
   .crossType(CrossType.Pure)
   .in(file("json"))
@@ -144,7 +157,7 @@ lazy val examples = project
     scalacOptions ++= Seq("-Wconf:msg=(discarded non-Unit):silent"),
     generateProtos       := (Compile / runMain).toTask(" proteus.examples.greeter.ProtoGen").value
   )
-  .dependsOn(zioGrpc, fs2Grpc)
+  .dependsOn(zioGrpc, fs2Grpc, oxGrpc)
 
 lazy val commonSettings = Def.settings(
   scalacOptions ++= Seq(

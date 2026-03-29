@@ -21,7 +21,7 @@ jobs:
       - name: Setup Scala and Java
         uses: coursier/setup-action@v3
         with:
-          jvm: temurin:17
+          jvm: temurin:21
           apps: sbt
       - name: Cache scala dependencies
         uses: coursier/cache-action@v8
@@ -40,13 +40,13 @@ jobs:
       - name: Setup Scala and Java
         uses: coursier/setup-action@v3
         with:
-          jvm: temurin:17
+          jvm: temurin:21
           apps: sbt
       - name: Cache scala dependencies
         uses: coursier/cache-action@v8
       - name: Run tests
         run: sbt test
-        
+
   publish:
     runs-on: ubuntu-24.04
     needs: [lint, test]
@@ -59,7 +59,7 @@ jobs:
       - name: Setup Scala and Java
         uses: coursier/setup-action@v3
         with:
-          jvm: temurin:17
+          jvm: temurin:21
           apps: sbt
       - name: Cache scala dependencies
         uses: coursier/cache-action@v8
