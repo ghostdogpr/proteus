@@ -54,8 +54,7 @@ class OxServerBackend[Context](interceptor: ServerContextInterceptor[[A] =>> A, 
       catch {
         // InterruptedException is expected on cancellation — gRPC already closed the call
         case _: InterruptedException => ()
-        case NonFatal(ex)            =>
-          ServerBackend.closeCallWithError(call, ex)
+        case NonFatal(ex)            => ServerBackend.closeCallWithError(call, ex)
       }
     }
 
@@ -181,8 +180,6 @@ object OxServerBackend extends OxServerBackend(ServerInterceptor.empty) {
     *
     * @param interceptor an interceptor that can run on every request.
     */
-  def apply[Context](
-    interceptor: ServerContextInterceptor[[A] =>> A, Flow, RequestResponseMetadata, Context]
-  ): OxServerBackend[Context] =
+  def apply[Context](interceptor: ServerContextInterceptor[[A] =>> A, Flow, RequestResponseMetadata, Context]): OxServerBackend[Context] =
     new OxServerBackend(interceptor)
 }

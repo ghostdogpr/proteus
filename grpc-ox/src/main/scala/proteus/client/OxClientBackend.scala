@@ -42,19 +42,16 @@ class OxClientBackend(channel: Channel) extends ClientBackend[[A] =>> A, Flow] {
   private def awaitReady(call: ClientCall[?, ?], readySignal: OxChannel[Unit]): Unit =
     while (!call.isReady)
       readySignal.receiveOrClosed() match {
-        case _: ox.channels.ChannelClosed =>
-          throw Status.CANCELLED.withDescription("Call closed while waiting for readiness").asRuntimeException()
+        case _: ox.channels.ChannelClosed => throw Status.CANCELLED.withDescription("Call closed while waiting for readiness").asRuntimeException()
         case _                            => ()
       }
 
   private def streamingResponseFlow[T](responseChannel: OxChannel[T], call: ClientCall[?, ?]): Flow[T] =
     Flow.fromSource(responseChannel).tap(_ => call.request(1))
 
-  def client[Rpcs, Request, Response](
-    rpc: Rpc.Unary[Request, Response],
-    service: Service[Rpcs],
-    options: CallOptions => CallOptions
-  )(using HasRpc[Rpcs, rpc.type]): Request => Response =
+  def client[Rpcs, Request, Response](rpc: Rpc.Unary[Request, Response], service: Service[Rpcs], options: CallOptions => CallOptions)(
+    using HasRpc[Rpcs, rpc.type]
+  ): Request => Response =
     request => {
       val methodDescriptor = rpc.toMethodDescriptor(service)
       val call             = channel.newCall(methodDescriptor, options(CallOptions.DEFAULT))
@@ -66,11 +63,9 @@ class OxClientBackend(channel: Channel) extends ClientBackend[[A] =>> A, Flow] {
       }
     }
 
-  def client[Rpcs, Request, Response](
-    rpc: Rpc.ClientStreaming[Request, Response],
-    service: Service[Rpcs],
-    options: CallOptions => CallOptions
-  )(using HasRpc[Rpcs, rpc.type]): Flow[Request] => Response = { requestFlow =>
+  def client[Rpcs, Request, Response](rpc: Rpc.ClientStreaming[Request, Response], service: Service[Rpcs], options: CallOptions => CallOptions)(
+    using HasRpc[Rpcs, rpc.type]
+  ): Flow[Request] => Response = { requestFlow =>
     val methodDescriptor = rpc.toMethodDescriptor(service)
     val responseChannel  = OxChannel.buffered[Response](1)
     val readySignal      = OxChannel.buffered[Unit](1)
@@ -80,7 +75,10 @@ class OxClientBackend(channel: Channel) extends ClientBackend[[A] =>> A, Flow] {
     call.request(1)
 
     try {
-      requestFlow.runForeach { req => awaitReady(call, readySignal); call.sendMessage(req) }
+      requestFlow.runForeach { req =>
+        awaitReady(call, readySignal)
+        call.sendMessage(req)
+      }
       call.halfClose()
     } catch {
       case NonFatal(ex) =>
@@ -91,11 +89,9 @@ class OxClientBackend(channel: Channel) extends ClientBackend[[A] =>> A, Flow] {
     Flow.fromSource(responseChannel).runLast()
   }
 
-  def client[Rpcs, Request, Response](
-    rpc: Rpc.ServerStreaming[Request, Response],
-    service: Service[Rpcs],
-    options: CallOptions => CallOptions
-  )(using HasRpc[Rpcs, rpc.type]): Request => Flow[Response] = { request =>
+  def client[Rpcs, Request, Response](rpc: Rpc.ServerStreaming[Request, Response], service: Service[Rpcs], options: CallOptions => CallOptions)(
+    using HasRpc[Rpcs, rpc.type]
+  ): Request => Flow[Response] = { request =>
     val methodDescriptor = rpc.toMethodDescriptor(service)
     val responseChannel  = OxChannel.buffered[Response](1)
     val readySignal      = OxChannel.buffered[Unit](1)
@@ -109,11 +105,9 @@ class OxClientBackend(channel: Channel) extends ClientBackend[[A] =>> A, Flow] {
     streamingResponseFlow(responseChannel, call)
   }
 
-  def client[Rpcs, Request, Response](
-    rpc: Rpc.BidiStreaming[Request, Response],
-    service: Service[Rpcs],
-    options: CallOptions => CallOptions
-  )(using HasRpc[Rpcs, rpc.type]): Flow[Request] => Flow[Response] = { requestFlow =>
+  def client[Rpcs, Request, Response](rpc: Rpc.BidiStreaming[Request, Response], service: Service[Rpcs], options: CallOptions => CallOptions)(
+    using HasRpc[Rpcs, rpc.type]
+  ): Flow[Request] => Flow[Response] = { requestFlow =>
     val methodDescriptor = rpc.toMethodDescriptor(service)
     val responseChannel  = OxChannel.buffered[Response](1)
     val readySignal      = OxChannel.buffered[Unit](1)
@@ -125,7 +119,10 @@ class OxClientBackend(channel: Channel) extends ClientBackend[[A] =>> A, Flow] {
 
     Thread.startVirtualThread { () =>
       try {
-        requestFlow.runForeach { req => awaitReady(call, readySignal); call.sendMessage(req) }
+        requestFlow.runForeach { req =>
+          awaitReady(call, readySignal)
+          call.sendMessage(req)
+        }
         call.halfClose()
       } catch {
         case NonFatal(ex) =>
@@ -146,11 +143,9 @@ class OxClientBackend(channel: Channel) extends ClientBackend[[A] =>> A, Flow] {
     }
   }
 
-  def clientWithMetadata[Rpcs, Request, Response](
-    rpc: Rpc.Unary[Request, Response],
-    service: Service[Rpcs],
-    options: CallOptions => CallOptions
-  )(using HasRpc[Rpcs, rpc.type]): (Request, Metadata) => (Response, Metadata) = { (request, requestMetadata) =>
+  def clientWithMetadata[Rpcs, Request, Response](rpc: Rpc.Unary[Request, Response], service: Service[Rpcs], options: CallOptions => CallOptions)(
+    using HasRpc[Rpcs, rpc.type]
+  ): (Request, Metadata) => (Response, Metadata) = { (request, requestMetadata) =>
     val methodDescriptor         = rpc.toMethodDescriptor(service)
     val responseHeaders          = new AtomicReference[Metadata]()
     val responseTrailers         = new AtomicReference[Metadata]()
@@ -186,7 +181,10 @@ class OxClientBackend(channel: Channel) extends ClientBackend[[A] =>> A, Flow] {
     call.request(1)
 
     try {
-      requestFlow.runForeach { req => awaitReady(call, readySignal); call.sendMessage(req) }
+      requestFlow.runForeach { req =>
+        awaitReady(call, readySignal)
+        call.sendMessage(req)
+      }
       call.halfClose()
     } catch {
       case NonFatal(ex) =>
@@ -233,7 +231,10 @@ class OxClientBackend(channel: Channel) extends ClientBackend[[A] =>> A, Flow] {
 
     Thread.startVirtualThread { () =>
       try {
-        requestFlow.runForeach { req => awaitReady(call, readySignal); call.sendMessage(req) }
+        requestFlow.runForeach { req =>
+          awaitReady(call, readySignal)
+          call.sendMessage(req)
+        }
         call.halfClose()
       } catch {
         case NonFatal(ex) =>
