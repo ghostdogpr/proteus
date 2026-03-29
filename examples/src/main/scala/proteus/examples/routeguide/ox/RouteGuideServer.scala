@@ -22,9 +22,9 @@ class RouteGuideServer(port: Int) {
 
   def recordRoute(points: Flow[Point]): RouteSummary = {
     println("Server: RecordRoute")
-    val startTime = System.currentTimeMillis()
-    var pointCount = 0
-    var distance   = 0
+    val startTime                = System.currentTimeMillis()
+    var pointCount               = 0
+    var distance                 = 0
     var lastPoint: Option[Point] = None
 
     points.runForeach { point =>
