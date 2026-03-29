@@ -4,7 +4,10 @@ export default defineConfig({
   base: '/proteus/',
   title: "Proteus",
   description: "Protobuf library for Scala",
-  head: [['link', { rel: 'icon', href: '/proteus/favicon.png' }]],
+  head: [
+    ['link', { rel: 'icon', href: '/proteus/favicon.png' }],
+    ['script', { defer: '', src: 'https://cloud.umami.is/script.js', 'data-website-id': '6a091ffe-f57f-4344-b63d-5c74d19cbfd0' }]
+  ],
 
   themeConfig: {
     nav: [
