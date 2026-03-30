@@ -15,10 +15,10 @@ class DirectClientBackend(channel: Channel) extends ClientBackendUnary[[A] =>> A
     rpc: Rpc.Unary[Request, Response],
     service: Service[Rpcs],
     options: CallOptions => CallOptions
-  )(using HasRpc[Rpcs, rpc.type]): Request => Response =
+  )(using HasRpc[Rpcs, rpc.type]): Request => Response = {
+    val methodDescriptor = rpc.toMethodDescriptor(service)
     request => {
-      val methodDescriptor = rpc.toMethodDescriptor(service)
-      val call             = channel.newCall(methodDescriptor, options(CallOptions.DEFAULT))
+      val call = channel.newCall(methodDescriptor, options(CallOptions.DEFAULT))
       try
         ClientCalls.blockingUnaryCall(call, request)
       catch {
@@ -26,29 +26,32 @@ class DirectClientBackend(channel: Channel) extends ClientBackendUnary[[A] =>> A
         case ex: Exception              => throw Status.INTERNAL.withDescription(ex.getMessage).withCause(ex).asRuntimeException()
       }
     }
+  }
 
   def clientWithMetadata[Rpcs, Request, Response](
     rpc: Rpc.Unary[Request, Response],
     service: Service[Rpcs],
     options: CallOptions => CallOptions
-  )(using HasRpc[Rpcs, rpc.type]): (Request, Metadata) => (Response, Metadata) = { (request, requestMetadata) =>
-    val methodDescriptor         = rpc.toMethodDescriptor(service)
-    val responseHeaders          = new AtomicReference[Metadata]()
-    val responseTrailers         = new AtomicReference[Metadata]()
-    val interceptor              = MetadataUtils.newCaptureMetadataInterceptor(responseHeaders, responseTrailers)
-    val interceptedChannel       = ClientInterceptors.intercept(channel, interceptor)
-    val metadataAttachingChannel = ClientInterceptors.intercept(interceptedChannel, MetadataUtils.newAttachHeadersInterceptor(requestMetadata))
+  )(using HasRpc[Rpcs, rpc.type]): (Request, Metadata) => (Response, Metadata) = {
+    val methodDescriptor = rpc.toMethodDescriptor(service)
+    (request, requestMetadata) => {
+      val responseHeaders          = new AtomicReference[Metadata]()
+      val responseTrailers         = new AtomicReference[Metadata]()
+      val interceptor              = MetadataUtils.newCaptureMetadataInterceptor(responseHeaders, responseTrailers)
+      val interceptedChannel       = ClientInterceptors.intercept(channel, interceptor)
+      val metadataAttachingChannel = ClientInterceptors.intercept(interceptedChannel, MetadataUtils.newAttachHeadersInterceptor(requestMetadata))
 
-    try {
-      val call             = metadataAttachingChannel.newCall(methodDescriptor, options(CallOptions.DEFAULT))
-      val response         = ClientCalls.blockingUnaryCall(call, request)
-      val combinedMetadata = new Metadata()
-      Option(responseHeaders.get()).foreach(combinedMetadata.merge)
-      Option(responseTrailers.get()).foreach(combinedMetadata.merge)
-      (response, combinedMetadata)
-    } catch {
-      case ex: StatusRuntimeException => throw ex
-      case ex: Exception              => throw Status.INTERNAL.withDescription(ex.getMessage).withCause(ex).asRuntimeException()
+      try {
+        val call             = metadataAttachingChannel.newCall(methodDescriptor, options(CallOptions.DEFAULT))
+        val response         = ClientCalls.blockingUnaryCall(call, request)
+        val combinedMetadata = new Metadata()
+        Option(responseHeaders.get()).foreach(combinedMetadata.merge)
+        Option(responseTrailers.get()).foreach(combinedMetadata.merge)
+        (response, combinedMetadata)
+      } catch {
+        case ex: StatusRuntimeException => throw ex
+        case ex: Exception              => throw Status.INTERNAL.withDescription(ex.getMessage).withCause(ex).asRuntimeException()
+      }
     }
   }
 }
