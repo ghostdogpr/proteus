@@ -8,7 +8,7 @@ val zioGrpcVersion              = "0.6.3"
 val fs2GrpcVersion              = "3.0.0"
 val chimneyVersion              = "1.9.0"
 val circeVersion                = "0.14.15"
-val zioSchemaVersion            = "1.8.2"
+val zioSchemaVersion            = "1.8.3"
 val upickleVersion              = "4.4.3"
 val borerVersion                = "1.16.2"
 
