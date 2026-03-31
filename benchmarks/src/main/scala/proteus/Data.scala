@@ -11,7 +11,7 @@ import io.scalaland.chimney.protobufs.*
 import test.test as scalapb
 import upickle.default.*
 import zio.blocks.schema.*
-import zio.blocks.schema.json.JsonBinaryCodecDeriver
+import zio.blocks.schema.json.JsonCodecDeriver
 
 object Data {
 
@@ -133,7 +133,7 @@ object Data {
 
   val proteusCodec = Schema[A].derive(deriver)
 
-  val jsonCodec = Schema[A].derive(JsonBinaryCodecDeriver)
+  val jsonCodec = Schema[A].derive(JsonCodecDeriver)
 
   val zioSchemaCodec = zio.schema.codec.ProtobufCodec.protobufCodec(zio.schema.DeriveSchema.gen[A])
 
