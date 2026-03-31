@@ -130,7 +130,7 @@ case class ProtobufDeriver private (
   override def derivePrimitive[A](
     primitiveType: PrimitiveType[A],
     typeId: TypeId[A],
-    binding: Binding[BindingType.Primitive, A],
+    binding: Binding.Primitive[A],
     doc: Doc,
     modifiers: Seq[Modifier.Reflect],
     defaultValue: Option[A],
@@ -141,7 +141,7 @@ case class ProtobufDeriver private (
   override def deriveRecord[F[_, _], A](
     fields: IndexedSeq[Term[F, A, ?]],
     typeId: TypeId[A],
-    binding: Binding[BindingType.Record, A],
+    binding: Binding.Record[A],
     doc: Doc,
     modifiers: Seq[Modifier.Reflect],
     defaultValue: Option[A],
@@ -155,7 +155,6 @@ case class ProtobufDeriver private (
         Lazy(ProtobufCodec.RecursiveMessage(() => instanceCache.get(typeId).asInstanceOf[ProtobufCodec.Message[A]]))
       } else {
         visited.put(typeId, ())
-        val recordBinding      = binding.asInstanceOf[Binding.Record[A]]
         val registers          = Reflect.Record.registers(fields.map(_.value).toArray)
         val offset             = Reflect.Record.usedRegisters(registers)
         val reservedIndexes    = getReservedIndexes(modifiers).toSet
@@ -297,8 +296,8 @@ case class ProtobufDeriver private (
             val codec = ProtobufCodec.Message(
               getTypeName(typeId, modifiers),
               builder.result(),
-              recordBinding.constructor,
-              recordBinding.deconstructor,
+              binding.constructor,
+              binding.deconstructor,
               offset,
               reservedIndexes,
               inline = false,
@@ -317,7 +316,7 @@ case class ProtobufDeriver private (
   override def deriveVariant[F[_, _], A](
     cases: IndexedSeq[Term[F, A, ?]],
     typeId: TypeId[A],
-    binding: Binding[BindingType.Variant, A],
+    binding: Binding.Variant[A],
     doc: Doc,
     modifiers: Seq[Modifier.Reflect],
     defaultValue: Option[A],
@@ -381,8 +380,7 @@ case class ProtobufDeriver private (
           val nestedOneOf        = modifiers
             .collectFirst { case Modifier.config(`oneOfModifier`, value) => value.contains("nested") }
             .getOrElse(flags.contains(DerivationFlag.NestedOneOf))
-          val variant            = binding.asInstanceOf[Binding.Variant[A]]
-          val discriminator      = variant.discriminator
+          val discriminator      = binding.discriminator
           val reservedIndexes    = getReservedIndexes(modifiers).toSet
           val allReservedIndexes = reservedIndexes ++ getReservedIndexes(cases.flatMap(_.modifiers)).toSet
           var id                 = 1
@@ -456,15 +454,14 @@ case class ProtobufDeriver private (
   override def deriveSequence[F[_, _], C[_], A](
     element: Reflect[F, A],
     typeId: TypeId[C[A]],
-    binding: Binding[BindingType.Seq[C], C[A]],
+    binding: Binding.Seq[C, A],
     doc: Doc,
     modifiers: Seq[Modifier.Reflect],
     defaultValue: Option[C[A]],
     examples: Seq[C[A]]
-  )(implicit F: HasBinding[F], D: HasInstance[F]): Lazy[ProtobufCodec[C[A]]] = {
-    val seqBinding = binding.asInstanceOf[Binding.Seq[C, A]]
+  )(implicit F: HasBinding[F], D: HasInstance[F]): Lazy[ProtobufCodec[C[A]]] =
     D.instance(element.metadata).map { instance =>
-      val isByteArray = seqBinding.constructor.empty(element.typeId.classTag) match {
+      val isByteArray = binding.constructor.empty(element.typeId.classTag) match {
         case _: Array[Byte] => true
         case _              => false
       }
@@ -476,26 +473,24 @@ case class ProtobufDeriver private (
           throw new ProteusException(s"Unsupported usage of repeated inside repeated type $typeId")
         ProtobufCodec.Repeated[C, A](
           instance,
-          seqBinding.constructor,
-          seqBinding.deconstructor,
+          binding.constructor,
+          binding.deconstructor,
           isPacked(instance),
           element.typeId.classTag.asInstanceOf[ClassTag[A]]
         )
       }
     }
-  }
 
   override def deriveMap[F[_, _], M[_, _], K, V](
     key: Reflect[F, K],
     value: Reflect[F, V],
     typeId: TypeId[M[K, V]],
-    binding: Binding[BindingType.Map[M], M[K, V]],
+    binding: Binding.Map[M, K, V],
     doc: Doc,
     modifiers: Seq[Modifier.Reflect],
     defaultValue: Option[M[K, V]],
     examples: Seq[M[K, V]]
   )(implicit F: HasBinding[F], D: HasInstance[F]): Lazy[ProtobufCodec[M[K, V]]] = {
-    val mapBinding    = binding.asInstanceOf[Binding.Map[M, K, V]]
     val registers     = Reflect.Record.registers(Array(key, value))
     val keyRegister   = registers(0)
     val valueRegister = registers(1)
@@ -533,8 +528,8 @@ case class ProtobufDeriver private (
             nested = if (mapInProto) None else Some(true),
             comment = None
           ),
-          mapBinding.constructor,
-          mapBinding.deconstructor,
+          binding.constructor,
+          binding.deconstructor,
           mapInProto
         )
       }
@@ -542,7 +537,7 @@ case class ProtobufDeriver private (
   }
 
   override def deriveDynamic[F[_, _]](
-    binding: Binding[BindingType.Dynamic, DynamicValue],
+    binding: Binding.Dynamic,
     doc: Doc,
     modifiers: Seq[Modifier.Reflect],
     defaultValue: Option[DynamicValue],
@@ -552,17 +547,15 @@ case class ProtobufDeriver private (
   override def deriveWrapper[F[_, _], A, B](
     wrapped: Reflect[F, B],
     typeId: TypeId[A],
-    binding: Binding[BindingType.Wrapper[A, B], A],
+    binding: Binding.Wrapper[A, B],
     doc: Doc,
     modifiers: Seq[Modifier.Reflect],
     defaultValue: Option[A],
     examples: Seq[A]
-  )(implicit F: HasBinding[F], D: HasInstance[F]): Lazy[ProtobufCodec[A]] = {
-    val wrapperBinding = binding.asInstanceOf[Binding.Wrapper[A, B]]
+  )(implicit F: HasBinding[F], D: HasInstance[F]): Lazy[ProtobufCodec[A]] =
     D.instance(wrapped.metadata).map { wrappedCodec =>
-      wrappedCodec.transform(wrapperBinding.wrap, wrapperBinding.unwrap)
+      wrappedCodec.transform(binding.wrap, binding.unwrap)
     }
-  }
 
   private def isPacked(instance: ProtobufCodec[?]): Boolean =
     instance match {
