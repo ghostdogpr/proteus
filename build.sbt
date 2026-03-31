@@ -1,15 +1,15 @@
 val scala3Version = "3.3.7"
 
-val grpcVersion                 = "1.77.0"
+val grpcVersion                 = "1.77.1"
 val scalaProtobufRuntimeVersion = "0.8.16"
 val zioBlocksSchemaVersion      = "0.0.27"
 val zioTestVersion              = "2.1.24"
 val zioGrpcVersion              = "0.6.3"
 val fs2GrpcVersion              = "3.0.0"
 val oxVersion                   = "1.0.4"
-val chimneyVersion              = "1.8.2"
+val chimneyVersion              = "1.9.0"
 val circeVersion                = "0.14.15"
-val zioSchemaVersion            = "1.8.2"
+val zioSchemaVersion            = "1.8.3"
 val upickleVersion              = "4.4.3"
 val borerVersion                = "1.16.2"
 
