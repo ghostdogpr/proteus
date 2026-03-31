@@ -2,12 +2,13 @@ package proteus.examples.routeguide.ox
 
 import java.util.concurrent.atomic.AtomicReference
 
+import ox.InScopeRunner
 import ox.flow.Flow
 
 import proteus.examples.routeguide.*
 import proteus.server.{OxServerBackend, ServerService}
 
-class RouteGuideServer(port: Int) {
+class RouteGuideServer(port: Int, runner: InScopeRunner) {
   private val routeNotes = new AtomicReference[Map[Point, List[RouteNote]]](Map.empty)
 
   def getFeature(point: Point): Feature = {
@@ -43,7 +44,7 @@ class RouteGuideServer(port: Int) {
       oldMap.getOrElse(note.location, List.empty)
     }
 
-  val backend = OxServerBackend
+  val backend = OxServerBackend(runner)
 
   val service = ServerService(using backend)
     .rpc(getFeatureRpc, getFeature)
