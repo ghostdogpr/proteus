@@ -7,11 +7,11 @@ It uses [grpc-java](https://github.com/grpc/grpc-java) under the hood, either di
 In order to use it, you will need to add the following dependency to your `build.sbt` file:
 
 ```scala
-"com.github.ghostdogpr" %% "proteus-grpc" % "0.1.0"
+"com.github.ghostdogpr" %% "proteus-grpc" % "0.2.0"
 // optional, only if you use these backends
-"com.github.ghostdogpr" %% "proteus-grpc-zio" % "0.1.0" // zio backend
-"com.github.ghostdogpr" %% "proteus-grpc-fs2" % "0.1.0" // fs2 backend
-"com.github.ghostdogpr" %% "proteus-grpc-ox"  % "0.1.0" // ox backend (requires JDK 21+)
+"com.github.ghostdogpr" %% "proteus-grpc-zio" % "0.2.0" // zio backend
+"com.github.ghostdogpr" %% "proteus-grpc-fs2" % "0.2.0" // fs2 backend
+"com.github.ghostdogpr" %% "proteus-grpc-ox"  % "0.2.0" // ox backend (requires JDK 21+)
 ```
 
 ## Defining services

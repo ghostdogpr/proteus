@@ -17,7 +17,7 @@ Let's address the elephant in the room: why not use code generation like everyon
 We first need to add the Proteus library to our project. If you are using sbt, you can add the following dependency to your `build.sbt` file:
 
 ```scala
-"com.github.ghostdogpr" %% "proteus-core" % "0.1.0"
+"com.github.ghostdogpr" %% "proteus-core" % "0.2.0"
 ```
 Let's create a simple case class we would like to encode and decode into Protobuf.
 
