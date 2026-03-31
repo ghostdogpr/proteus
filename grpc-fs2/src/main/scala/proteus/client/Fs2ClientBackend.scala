@@ -56,7 +56,9 @@ class Fs2ClientBackend[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F])
   )(using HasRpc[Rpcs, rpc.type]): F[Stream[F, Request] => Stream[F, Response]] = {
     val methodDescriptor = rpc.toMethodDescriptor(service)
     val clientOptions    = ClientOptions.default.configureCallOptions(options)
-    Async[F].pure(requests => Stream.eval(mkCall(methodDescriptor, clientOptions)).flatMap(call => call.streamingToStreamingCall(requests, new Metadata())))
+    Async[F].pure(requests =>
+      Stream.eval(mkCall(methodDescriptor, clientOptions)).flatMap(call => call.streamingToStreamingCall(requests, new Metadata()))
+    )
   }
 
   def clientWithMetadata[Rpcs, Request, Response](
@@ -86,7 +88,9 @@ class Fs2ClientBackend[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F])
   )(using HasRpc[Rpcs, rpc.type]): F[(Request, Metadata) => Stream[F, Response]] = {
     val methodDescriptor = rpc.toMethodDescriptor(service)
     val clientOptions    = ClientOptions.default.configureCallOptions(options)
-    Async[F].pure((request, metadata) => Stream.eval(mkCall(methodDescriptor, clientOptions)).flatMap(call => call.unaryToStreamingCall(request, metadata)))
+    Async[F].pure((request, metadata) =>
+      Stream.eval(mkCall(methodDescriptor, clientOptions)).flatMap(call => call.unaryToStreamingCall(request, metadata))
+    )
   }
 
   def clientWithMetadata[Rpcs, Request, Response](
@@ -96,7 +100,9 @@ class Fs2ClientBackend[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F])
   )(using HasRpc[Rpcs, rpc.type]): F[(Stream[F, Request], Metadata) => Stream[F, Response]] = {
     val methodDescriptor = rpc.toMethodDescriptor(service)
     val clientOptions    = ClientOptions.default.configureCallOptions(options)
-    Async[F].pure((requests, metadata) => Stream.eval(mkCall(methodDescriptor, clientOptions)).flatMap(call => call.streamingToStreamingCall(requests, metadata)))
+    Async[F].pure((requests, metadata) =>
+      Stream.eval(mkCall(methodDescriptor, clientOptions)).flatMap(call => call.streamingToStreamingCall(requests, metadata))
+    )
   }
 }
 
