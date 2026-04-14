@@ -1073,6 +1073,9 @@ object ProtoParserSpec extends ZIOSpecDefault {
                           comment = None,
                           options = List.empty
                         )
+                      ),
+                      options = List(
+                        OptionValue(OptionName.BuiltIn("deprecated"), OptionVal.BoolLit(true))
                       )
                     )
                   )
@@ -1155,6 +1158,114 @@ object ProtoParserSpec extends ZIOSpecDefault {
                       List(MessageElement.FieldElement(Field(Type.String, "name", 1, optional = false, comment = None))),
                       reserved = List.empty,
                       comment = Some("A user record")
+                    )
+                  )
+                )
+              ),
+              options = List.empty
+            )
+          )
+        )
+      },
+      test("comments before package and import statements") {
+        val input = """syntax = "proto3";
+                      |// Package docs
+                      |package test;
+                      |
+                      |/* shared types */
+                      |import "shared.proto";
+                      |
+                      |message User {}
+                      |""".stripMargin
+
+        val result = ProtoParser.parse(input)
+        assertTrue(
+          result == Right(
+            CompilationUnit(
+              Some("test"),
+              List(
+                Statement.ImportStatement("shared.proto"),
+                Statement.TopLevelStatement(
+                  TopLevelDef.MessageDef(
+                    Message("User", List.empty, reserved = List.empty)
+                  )
+                )
+              ),
+              options = List.empty
+            )
+          )
+        )
+      },
+      test("comments before top-level and message options") {
+        val input = """syntax = "proto3";
+                      |// file option
+                      |option optimize_for = SPEED;
+                      |
+                      |message User {
+                      |    // field settings
+                      |    option deprecated = true;
+                      |}
+                      |""".stripMargin
+
+        val result = ProtoParser.parse(input)
+        assertTrue(
+          result == Right(
+            CompilationUnit(
+              None,
+              List(
+                Statement.TopLevelStatement(
+                  TopLevelDef.MessageDef(
+                    Message(
+                      "User",
+                      List.empty,
+                      reserved = List.empty,
+                      options = List(
+                        OptionValue(OptionName.BuiltIn("deprecated"), OptionVal.BoolLit(true))
+                      )
+                    )
+                  )
+                )
+              ),
+              options = List(
+                TopLevelOption(OptionName.BuiltIn("optimize_for"), OptionVal.Identifier("SPEED"))
+              )
+            )
+          )
+        )
+      },
+      test("comments before service options") {
+        val input = """syntax = "proto3";
+                      |service Svc {
+                      |    // service settings
+                      |    option deprecated = true;
+                      |    rpc Foo (Req) returns (Resp) {}
+                      |}
+                      |""".stripMargin
+
+        val result = ProtoParser.parse(input)
+        assertTrue(
+          result == Right(
+            CompilationUnit(
+              None,
+              List(
+                Statement.TopLevelStatement(
+                  TopLevelDef.ServiceDef(
+                    Service(
+                      "Svc",
+                      List(
+                        Rpc(
+                          "Foo",
+                          RpcMessage(Fqn(None, "Req")),
+                          RpcMessage(Fqn(None, "Resp")),
+                          streamingRequest = false,
+                          streamingResponse = false,
+                          comment = None,
+                          options = List.empty
+                        )
+                      ),
+                      options = List(
+                        OptionValue(OptionName.BuiltIn("deprecated"), OptionVal.BoolLit(true))
+                      )
                     )
                   )
                 )

@@ -212,7 +212,7 @@ object ProtoParser {
   )
 
   private def optionStatement[$: P]: P[OptionValue] = P(
-    "option" ~ ws ~ optionValuePair ~ semi
+    ws ~ "option" ~ ws ~ optionValuePair ~ semi
   )
 
   private def repeatedField[$: P]: P[Field] = P(
@@ -373,14 +373,23 @@ object ProtoParser {
     }
   }
 
-  private def serviceBody[$: P]: P[List[Rpc]] = P(
-    (padding ~ (optionStatement.map(_ => None) | emptyStatement.map(_ => None) | rpcDef.map(Some(_)))).rep
-  ).map(_.collect { case Some(r) => r }.toList)
+  private def serviceBody[$: P]: P[(List[OptionValue], List[Rpc])] = P(
+    (padding ~ (optionStatement.map(o => Left(o)) | emptyStatement.map(_ => Right(None)) | rpcDef.map(r => Right(Some(r))))).rep
+  ).map { elements =>
+    val opts = List.newBuilder[OptionValue]
+    val rpcs = List.newBuilder[Rpc]
+    elements.foreach {
+      case Left(option)     => opts += option
+      case Right(Some(rpc)) => rpcs += rpc
+      case Right(None)      => ()
+    }
+    (opts.result(), rpcs.result())
+  }
 
   private def serviceDef[$: P]: P[Service] = P(
     commentBlock ~ ws ~ "service" ~ ws ~ ident ~ ws ~ "{" ~ serviceBody ~ padding ~ "}"
-  ).map { case (comment, name, rpcs) =>
-    Service(name, rpcs, comment)
+  ).map { case (comment, name, (options, rpcs)) =>
+    Service(name, rpcs, comment, options)
   }
 
   private def syntaxStatement[$: P]: P[Unit] = P(
@@ -388,17 +397,17 @@ object ProtoParser {
   ).map(_ => ())
 
   private def packageStatement[$: P]: P[String] = P(
-    "package" ~ ws ~ fullIdent ~ semi
+    ws ~ "package" ~ ws ~ fullIdent ~ semi
   )
 
   private def importStatement[$: P]: P[Statement.ImportStatement] = P(
-    "import" ~ ws ~ ("weak".! | "public".!).? ~ ws ~ strLit ~ semi
+    ws ~ "import" ~ ws ~ ("weak".! | "public".!).? ~ ws ~ strLit ~ semi
   ).map { case (modifier, path) =>
     Statement.ImportStatement(path, modifier)
   }
 
   private def topLevelOption[$: P]: P[TopLevelOption] = P(
-    "option" ~ ws ~ optionName ~ ws ~ "=" ~ ws ~ optionVal ~ semi
+    ws ~ "option" ~ ws ~ optionName ~ ws ~ "=" ~ ws ~ optionVal ~ semi
   ).map { case (name, value) => TopLevelOption(name, value) }
 
   private def topLevelDef[$: P]: P[TopLevelDef] = P(

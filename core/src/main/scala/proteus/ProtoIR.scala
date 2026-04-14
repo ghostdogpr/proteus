@@ -139,7 +139,7 @@ object ProtoIR {
     nested: Boolean = false
   )
 
-  final case class Service(name: String, rpcs: List[Rpc], comment: Option[String] = None)
+  final case class Service(name: String, rpcs: List[Rpc], comment: Option[String] = None, options: List[OptionValue] = List.empty)
 
   final case class RpcMessage(fqn: Fqn)
 

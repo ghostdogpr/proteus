@@ -264,11 +264,15 @@ private[proteus] object Renderer {
 
   private def renderService(service: Service): Text = {
     val commentLine = service.comment.map(renderComment).getOrElse(many())
-    val hasContent  = service.rpcs.nonEmpty
+    val hasRpcs     = service.rpcs.nonEmpty
+    val hasContent  = service.options.nonEmpty || hasRpcs
+    val optionsSep  = if (service.options.nonEmpty && hasRpcs) emptyLine else many()
     if (hasContent) {
       many(
         commentLine,
         line(s"service ${service.name} {"),
+        indent(renderStatementOptions(service.options)),
+        optionsSep,
         indent(service.rpcs.map(renderRpc)),
         line("}")
       )
