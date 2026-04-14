@@ -42,12 +42,14 @@ object ProtoParser {
         Left(s"Parse error at index $index: ${trace.longMsg}")
     }
 
+  private val Proto3MaxFieldNumber: Int = 536870911
+
   private def whitespace[$: P]: P[Unit]      = P(CharsWhileIn(" \t\r\n", 0))
   private def lineComment[$: P]: P[String]   = P("//" ~ CharsWhile(_ != '\n', 0).! ~ ("\n" | End))
   private def inlineComment[$: P]: P[String] = P(CharsWhileIn(" \t", 0) ~ lineComment)
   private def blockComment[$: P]: P[String]  = P("/*" ~ (!"*/" ~ AnyChar).rep.! ~ "*/")
   private def comment[$: P]: P[String]       = P(lineComment | blockComment)
-  private def padding[$: P]: P[Unit]         = P(CharsWhileIn(" \t\r\n", 0))
+  private def padding[$: P]: P[Unit]         = whitespace
   private def ws[$: P]: P[Unit]              = P((CharsWhileIn(" \t\r\n") | comment.map(_ => ())).rep)
 
   private def commentBlock[$: P]: P[Option[String]] =
@@ -81,7 +83,7 @@ object ProtoParser {
 
   private def intLit[$: P]: P[Long] = P(
     ("-".!.? ~ (
-      ("0" ~ CharIn("xX") ~ CharsWhileIn("0-9a-fA-F")).!.map(s => java.lang.Long.parseLong(s.substring(2), 16)) |
+      ("0" ~ CharIn("xX") ~ CharsWhileIn("0-9a-fA-F").!).map(s => java.lang.Long.parseLong(s, 16)) |
         ("0" ~ CharsWhileIn("0-7")).!.map(s => java.lang.Long.parseLong(s, 8)) |
         CharsWhileIn("0-9").!.map(_.toLong)
     )).map {
@@ -259,7 +261,7 @@ object ProtoParser {
   }
 
   private def reservedRange[$: P]: P[Reserved] = P(
-    intLit.map(_.toInt) ~ (ws ~ "to" ~ ws ~ (keyword("max").map(_ => 536870911) | intLit.map(_.toInt))).?
+    intLit.map(_.toInt) ~ (ws ~ "to" ~ ws ~ (keyword("max").map(_ => Proto3MaxFieldNumber) | intLit.map(_.toInt))).?
   ).map {
     case (start, Some(end)) => Reserved.Range(start, end)
     case (n, None)          => Reserved.Number(n)
@@ -320,12 +322,12 @@ object ProtoParser {
       field.map(f => Right(MessageElement.FieldElement(f)))
   )
 
-  private type MessageBodyElement = Option[Either[Either[OptionValue, Nothing], Either[List[Reserved], MessageElement]]]
+  private type MessageBodyElement = Option[Either[OptionValue, Either[List[Reserved], MessageElement]]]
 
   private def messageBody[$: P]: P[(List[OptionValue], List[Reserved], List[MessageElement])] = P(
     (padding ~ (
       emptyStatement.map(_ => None: MessageBodyElement) |
-        optionStatement.map(o => Some(Left(Left(o))): MessageBodyElement) |
+        optionStatement.map(o => Some(Left(o)): MessageBodyElement) |
         messageElement.map(e => Some(Right(e)): MessageBodyElement)
     )).rep
   ).map { elements =>
@@ -333,7 +335,7 @@ object ProtoParser {
     val res   = List.newBuilder[Reserved]
     val elems = List.newBuilder[MessageElement]
     elements.foreach {
-      case Some(Left(Left(o)))      => opts += o
+      case Some(Left(o))            => opts += o
       case Some(Right(Left(r)))     => res ++= r
       case Some(Right(Right(elem))) => elems += elem
       case None                     => ()
@@ -349,7 +351,7 @@ object ProtoParser {
 
   private def rpcBody[$: P]: P[List[OptionValue]] = P(
     "{" ~ (ws ~ (emptyStatement.map(_ => None) | optionStatement.map(Some(_)))).rep ~ ws ~ "}"
-  ).map(_.flatten.toList)
+  ).map(_.collect { case Some(o) => o }.toList)
 
   private def rpcDef[$: P]: P[Rpc] = P(
     commentBlock ~ ws ~ "rpc" ~ ws ~ ident ~ ws ~
@@ -366,14 +368,14 @@ object ProtoParser {
     val parts = head :: tail.toList
     if (parts.length == 1 && dot.isEmpty) Fqn(None, parts.head)
     else {
-      val pkg = (dot.map(_ => "") ++: parts.init).toList
+      val pkg = if (dot.isDefined) "" :: parts.init else parts.init
       Fqn(Some(pkg), parts.last)
     }
   }
 
   private def serviceBody[$: P]: P[List[Rpc]] = P(
     (padding ~ (optionStatement.map(_ => None) | emptyStatement.map(_ => None) | rpcDef.map(Some(_)))).rep
-  ).map(_.flatten.toList)
+  ).map(_.collect { case Some(r) => r }.toList)
 
   private def serviceDef[$: P]: P[Service] = P(
     commentBlock ~ ws ~ "service" ~ ws ~ ident ~ ws ~ "{" ~ serviceBody ~ padding ~ "}"
