@@ -1,5 +1,6 @@
 val scala3Version = "3.3.7"
 
+val fastparseVersion            = "3.1.1"
 val grpcVersion                 = "1.80.0"
 val scalaProtobufRuntimeVersion = "0.8.16"
 val zioBlocksSchemaVersion      = "0.0.33"
@@ -33,7 +34,7 @@ addCommandAlias("check", "all scalafmtSbtCheck scalafmtCheck test:scalafmtCheck"
 lazy val root = project
   .in(file("."))
   .settings(publish / skip := true)
-  .aggregate(core.jvm, core.js, grpc, zioGrpc, fs2Grpc, oxGrpc, json.jvm, json.js, benchmarks, examples)
+  .aggregate(core.jvm, core.js, parser.jvm, parser.js, grpc, zioGrpc, fs2Grpc, oxGrpc, json.jvm, json.js, benchmarks, examples)
 
 lazy val core = crossProject(JSPlatform, JVMPlatform)
   .crossType(CrossType.Pure)
@@ -56,6 +57,22 @@ lazy val core = crossProject(JSPlatform, JVMPlatform)
     libraryDependencies ++= Seq("com.thesamet.scalapb" %%% "protobuf-runtime-scala" % scalaProtobufRuntimeVersion),
     Test / fork                              := false
   )
+
+lazy val parser = crossProject(JSPlatform, JVMPlatform)
+  .crossType(CrossType.Pure)
+  .in(file("parser"))
+  .settings(name := "proteus-parser")
+  .settings(commonSettings)
+  .settings(
+    libraryDependencies ++=
+      Seq(
+        "com.lihaoyi" %%% "fastparse"    % fastparseVersion,
+        "dev.zio"     %%% "zio-test"     % zioTestVersion % Test,
+        "dev.zio"     %%% "zio-test-sbt" % zioTestVersion % Test
+      )
+  )
+  .dependsOn(core % "compile->compile;test->test")
+  .jsSettings(Test / fork := false)
 
 lazy val grpc = project
   .in(file("grpc"))
