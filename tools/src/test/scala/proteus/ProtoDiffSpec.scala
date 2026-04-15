@@ -2,7 +2,7 @@ package proteus
 
 import zio.test.*
 
-import proteus.ProtoDiff.*
+import proteus.Change.*
 import proteus.ProtoIR.*
 
 object ProtoDiffSpec extends ZIOSpecDefault {

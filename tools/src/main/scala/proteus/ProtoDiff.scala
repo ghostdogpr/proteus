@@ -19,66 +19,7 @@ import proteus.ProtoIR.*
   */
 object ProtoDiff {
 
-  sealed trait CompatMode
-  object CompatMode {
-    case object Wire      extends CompatMode
-    case object Source    extends CompatMode
-    case object Strictest extends CompatMode
-  }
-
-  sealed trait Severity {
-    def level: Int
-  }
-  object Severity       {
-    case object Error   extends Severity { val level: Int = 2 }
-    case object Warning extends Severity { val level: Int = 1 }
-    case object Info    extends Severity { val level: Int = 0 }
-  }
-
-  /**
-    * A single detected change. [[path]] gives the nesting context (e.g. `List("Outer", "Inner")`).
-    */
-  sealed trait Change {
-    def path: List[String]
-  }
-
-  final case class PackageChanged(path: List[String], oldName: Option[String], newName: Option[String])                                 extends Change
-  final case class ImportAdded(path: List[String], importPath: String)                                                                  extends Change
-  final case class ImportRemoved(path: List[String], importPath: String)                                                                extends Change
-  final case class ImportModifierChanged(path: List[String], importPath: String, oldModifier: Option[String], newModifier: Option[String])
-    extends Change
-  final case class MessageAdded(path: List[String], name: String)                                                                       extends Change
-  final case class MessageRemoved(path: List[String], name: String)                                                                     extends Change
-  final case class MessageRenamed(path: List[String], oldName: String, newName: String)                                                 extends Change
-  final case class FieldAdded(path: List[String], name: String, number: Int)                                                            extends Change
-  final case class FieldRemoved(path: List[String], name: String, number: Int, numberReserved: Boolean)                                 extends Change
-  final case class FieldNumberChanged(path: List[String], name: String, oldNumber: Int, newNumber: Int)                                 extends Change
-  final case class FieldRenamed(path: List[String], number: Int, oldName: String, newName: String)                                      extends Change
-  final case class FieldTypeChanged(path: List[String], name: String, number: Int, oldType: Type, newType: Type)                        extends Change
-  final case class FieldOptionalityChanged(path: List[String], name: String, number: Int, wasOptional: Boolean)                         extends Change
-  final case class FieldOrderChanged(path: List[String])                                                                                extends Change
-  final case class FieldOneOfChanged(path: List[String], name: String, number: Int, oldOneOf: Option[String], newOneOf: Option[String]) extends Change
-  final case class OneOfAdded(path: List[String], name: String)                                                                         extends Change
-  final case class OneOfRemoved(path: List[String], name: String)                                                                       extends Change
-  final case class EnumAdded(path: List[String], name: String)                                                                          extends Change
-  final case class EnumRemoved(path: List[String], name: String)                                                                        extends Change
-  final case class EnumRenamed(path: List[String], oldName: String, newName: String)                                                    extends Change
-  final case class EnumValueAdded(path: List[String], name: String, number: Int)                                                        extends Change
-  final case class EnumValueRemoved(path: List[String], name: String, number: Int, numberReserved: Boolean)                             extends Change
-  final case class EnumValueNumberChanged(path: List[String], name: String, oldNumber: Int, newNumber: Int)                             extends Change
-  final case class EnumValueRenamed(path: List[String], number: Int, oldName: String, newName: String)                                  extends Change
-  final case class ReservedAdded(path: List[String], reserved: Reserved)                                                                extends Change
-  final case class ReservedRemoved(path: List[String], reserved: Reserved)                                                              extends Change
-  final case class OptionAdded(path: List[String], optionName: String)                                                                  extends Change
-  final case class OptionRemoved(path: List[String], optionName: String)                                                                extends Change
-  final case class OptionChanged(path: List[String], optionName: String, oldValue: OptionVal, newValue: OptionVal)                      extends Change
-  final case class ServiceAdded(path: List[String], name: String)                                                                       extends Change
-  final case class ServiceRemoved(path: List[String], name: String)                                                                     extends Change
-  final case class RpcAdded(path: List[String], name: String)                                                                           extends Change
-  final case class RpcRemoved(path: List[String], name: String)                                                                         extends Change
-  final case class RpcRequestTypeChanged(path: List[String], name: String, oldType: String, newType: String)                            extends Change
-  final case class RpcResponseTypeChanged(path: List[String], name: String, oldType: String, newType: String)                           extends Change
-  final case class RpcStreamingChanged(path: List[String], name: String, direction: String, wasStreaming: Boolean)                      extends Change
+  import Change.*
 
   /**
     * Returns the severity of a [[Change]] under the given [[CompatMode]].
