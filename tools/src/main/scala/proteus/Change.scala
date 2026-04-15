@@ -1,6 +1,7 @@
 package proteus
 
 import proteus.ProtoIR.*
+import proteus.internal.Renderer
 
 /**
   * A single detected change between two proto3 definitions.
@@ -62,7 +63,8 @@ enum Change {
       case FieldRemoved(_, name, number, reserved)                => s"field '$name' ($number) removed${if (reserved) " (number reserved)" else ""}"
       case FieldNumberChanged(_, name, oldNum, newNum)            => s"field '$name' number changed from $oldNum to $newNum"
       case FieldRenamed(_, number, oldName, newName)              => s"field $number renamed from '$oldName' to '$newName'"
-      case FieldTypeChanged(_, name, number, oldType, newType)    => s"field '$name' ($number) type changed from $oldType to $newType"
+      case FieldTypeChanged(_, name, number, oldType, newType)    =>
+        s"field '$name' ($number) type changed from ${Renderer.renderType(oldType)} to ${Renderer.renderType(newType)}"
       case FieldOptionalityChanged(_, name, number, wasOptional)  =>
         s"field '$name' ($number) ${if (wasOptional) "optional removed" else "made optional"}"
       case FieldOrderChanged(_)                                   => "field order changed"
@@ -77,8 +79,8 @@ enum Change {
       case EnumValueRemoved(_, name, number, reserved)            => s"enum value '$name' ($number) removed${if (reserved) " (number reserved)" else ""}"
       case EnumValueNumberChanged(_, name, oldNum, newNum)        => s"enum value '$name' number changed from $oldNum to $newNum"
       case EnumValueRenamed(_, number, oldName, newName)          => s"enum value $number renamed from '$oldName' to '$newName'"
-      case ReservedAdded(_, reserved)                             => s"reserved $reserved added"
-      case ReservedRemoved(_, reserved)                           => s"reserved $reserved removed"
+      case ReservedAdded(_, reserved)                             => s"reserved ${Renderer.renderReservedValue(reserved)} added"
+      case ReservedRemoved(_, reserved)                           => s"reserved ${Renderer.renderReservedValue(reserved)} removed"
       case OptionAdded(_, optionName)                             => s"option '$optionName' added"
       case OptionRemoved(_, optionName)                           => s"option '$optionName' removed"
       case OptionChanged(_, optionName, _, _)                     => s"option '$optionName' changed"

@@ -213,13 +213,8 @@ private[proteus] object Renderer {
     }
 
   private def renderReserved(reserved: List[Reserved]): Text = {
-    val numeric = reserved.collect {
-      case Reserved.Number(number)    => s"$number"
-      case Reserved.Range(start, end) => s"$start to $end"
-    }
-    val names   = reserved.collect { case Reserved.Name(name) =>
-      s""""$name""""
-    }
+    val numeric = reserved.collect { case r @ (_: Reserved.Number | _: Reserved.Range) => renderReservedValue(r) }
+    val names   = reserved.collect { case r: Reserved.Name => renderReservedValue(r) }
 
     many(
       maybe(
@@ -302,7 +297,13 @@ private[proteus] object Renderer {
       )
   }
 
-  private def renderType(ty: Type): String = {
+  private[proteus] def renderReservedValue(r: Reserved): String = r match {
+    case Reserved.Number(n)   => n.toString
+    case Reserved.Name(name)  => s""""$name""""
+    case Reserved.Range(s, e) => s"$s to $e"
+  }
+
+  private[proteus] def renderType(ty: Type): String = {
     import Type._
     ty match {
       case Double                      => "double"
