@@ -85,6 +85,33 @@ object ProtoParserSpec extends ZIOSpecDefault {
 
         assertTrue(ProtoParser.parse(input).isLeft)
       },
+      test("without syntax or package") {
+        val input = """message Foo {
+                      |    string bar = 1;
+                      |}
+                      |""".stripMargin
+
+        val result = ProtoParser.parse(input)
+        assertTrue(
+          result == Right(
+            CompilationUnit(
+              None,
+              List(
+                Statement.TopLevelStatement(
+                  TopLevelDef.MessageDef(
+                    Message(
+                      "Foo",
+                      List(MessageElement.FieldElement(Field(Type.String, "bar", 1, optional = false, comment = None))),
+                      reserved = List.empty
+                    )
+                  )
+                )
+              ),
+              options = List.empty
+            )
+          )
+        )
+      },
       test("imports") {
         val input = """syntax = "proto3";
                       |

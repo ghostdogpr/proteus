@@ -445,7 +445,7 @@ object ProtoParser {
   )
 
   private def compilationUnit[$: P]: P[CompilationUnit] = P(
-    ws ~ syntaxStatement ~ padding ~ packageStatement.? ~ (padding ~ topLevelElement).rep ~ ws ~ End
+    ws ~ syntaxStatement.?.map(_ => ()) ~ padding ~ packageStatement.? ~ (padding ~ topLevelElement).rep ~ ws ~ End
   ).map { case (pkg, elements) =>
     val imports   = List.newBuilder[Statement]
     val options   = List.newBuilder[TopLevelOption]
