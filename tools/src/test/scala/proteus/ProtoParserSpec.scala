@@ -607,7 +607,7 @@ object ProtoParserSpec extends ZIOSpecDefault {
         )
       },
       test("rejects invalid field numbers") {
-        val zero = """syntax = "proto3";
+        val zero     = """syntax = "proto3";
                      |message Foo {
                      |    string bar = 0;
                      |}
@@ -636,7 +636,7 @@ object ProtoParserSpec extends ZIOSpecDefault {
         )
       },
       test("rejects invalid reserved numbers and ranges") {
-        val reservedImpl = """syntax = "proto3";
+        val reservedImpl  = """syntax = "proto3";
                             |message Foo {
                             |    reserved 19000;
                             |}

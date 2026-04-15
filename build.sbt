@@ -34,7 +34,7 @@ addCommandAlias("check", "all scalafmtSbtCheck scalafmtCheck test:scalafmtCheck"
 lazy val root = project
   .in(file("."))
   .settings(publish / skip := true)
-  .aggregate(core.jvm, core.js, parser.jvm, parser.js, grpc, zioGrpc, fs2Grpc, oxGrpc, json.jvm, json.js, benchmarks, examples)
+  .aggregate(core.jvm, core.js, tools.jvm, tools.js, grpc, zioGrpc, fs2Grpc, oxGrpc, json.jvm, json.js, benchmarks, examples)
 
 lazy val core = crossProject(JSPlatform, JVMPlatform)
   .crossType(CrossType.Pure)
@@ -58,10 +58,10 @@ lazy val core = crossProject(JSPlatform, JVMPlatform)
     Test / fork                              := false
   )
 
-lazy val parser = crossProject(JSPlatform, JVMPlatform)
+lazy val tools = crossProject(JSPlatform, JVMPlatform)
   .crossType(CrossType.Pure)
-  .in(file("parser"))
-  .settings(name := "proteus-parser")
+  .in(file("tools"))
+  .settings(name := "proteus-tools")
   .settings(commonSettings)
   .settings(
     libraryDependencies ++=

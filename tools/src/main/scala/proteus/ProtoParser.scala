@@ -42,13 +42,13 @@ object ProtoParser {
         Left(s"Parse error at index $index: ${trace.longMsg}")
     }
 
-  private val Proto3MinFieldNumber: Long             = 1L
-  private val Proto3MaxFieldNumber: Int              = 536870911
-  private val ProtoReservedFieldNumberStart: Long    = 19000L
-  private val ProtoReservedFieldNumberEnd: Long      = 19999L
-  private val Proto3MaxFieldNumberLong: Long         = Proto3MaxFieldNumber.toLong
-  private val Int32MinValue: Long                    = Int.MinValue.toLong
-  private val Int32MaxValue: Long                    = Int.MaxValue.toLong
+  private val Proto3MinFieldNumber: Long          = 1L
+  private val Proto3MaxFieldNumber: Int           = 536870911
+  private val ProtoReservedFieldNumberStart: Long = 19000L
+  private val ProtoReservedFieldNumberEnd: Long   = 19999L
+  private val Proto3MaxFieldNumberLong: Long      = Proto3MaxFieldNumber.toLong
+  private val Int32MinValue: Long                 = Int.MinValue.toLong
+  private val Int32MaxValue: Long                 = Int.MaxValue.toLong
 
   private def whitespace[$: P]: P[Unit]      = P(CharsWhileIn(" \t\r\n", 0))
   private def lineComment[$: P]: P[String]   = P("//" ~ CharsWhile(_ != '\n', 0).! ~ ("\n" | End))
