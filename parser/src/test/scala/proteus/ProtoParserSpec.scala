@@ -606,6 +606,52 @@ object ProtoParserSpec extends ZIOSpecDefault {
           )
         )
       },
+      test("rejects invalid field numbers") {
+        val zero = """syntax = "proto3";
+                     |message Foo {
+                     |    string bar = 0;
+                     |}
+                     |""".stripMargin
+        val negative = """syntax = "proto3";
+                         |message Foo {
+                         |    string bar = -1;
+                         |}
+                         |""".stripMargin
+        val reserved = """syntax = "proto3";
+                         |message Foo {
+                         |    string bar = 19000;
+                         |}
+                         |""".stripMargin
+        val tooLarge = """syntax = "proto3";
+                         |message Foo {
+                         |    string bar = 3000000000;
+                         |}
+                         |""".stripMargin
+
+        assertTrue(
+          ProtoParser.parse(zero).isLeft,
+          ProtoParser.parse(negative).isLeft,
+          ProtoParser.parse(reserved).isLeft,
+          ProtoParser.parse(tooLarge).isLeft
+        )
+      },
+      test("rejects invalid reserved numbers and ranges") {
+        val reservedImpl = """syntax = "proto3";
+                            |message Foo {
+                            |    reserved 19000;
+                            |}
+                            |""".stripMargin
+        val reversedRange = """syntax = "proto3";
+                              |message Foo {
+                              |    reserved 10 to 5;
+                              |}
+                              |""".stripMargin
+
+        assertTrue(
+          ProtoParser.parse(reservedImpl).isLeft,
+          ProtoParser.parse(reversedRange).isLeft
+        )
+      },
       test("nested messages and enums") {
         val input = """syntax = "proto3";
                       |
@@ -832,6 +878,15 @@ object ProtoParserSpec extends ZIOSpecDefault {
             )
           )
         )
+      },
+      test("rejects enum value outside int32 range") {
+        val input = """syntax = "proto3";
+                      |enum Foo {
+                      |    BAR = 3000000000;
+                      |}
+                      |""".stripMargin
+
+        assertTrue(ProtoParser.parse(input).isLeft)
       }
     ),
     suite("Services")(

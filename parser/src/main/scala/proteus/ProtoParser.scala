@@ -42,7 +42,13 @@ object ProtoParser {
         Left(s"Parse error at index $index: ${trace.longMsg}")
     }
 
-  private val Proto3MaxFieldNumber: Int = 536870911
+  private val Proto3MinFieldNumber: Long             = 1L
+  private val Proto3MaxFieldNumber: Int              = 536870911
+  private val ProtoReservedFieldNumberStart: Long    = 19000L
+  private val ProtoReservedFieldNumberEnd: Long      = 19999L
+  private val Proto3MaxFieldNumberLong: Long         = Proto3MaxFieldNumber.toLong
+  private val Int32MinValue: Long                    = Int.MinValue.toLong
+  private val Int32MaxValue: Long                    = Int.MaxValue.toLong
 
   private def whitespace[$: P]: P[Unit]      = P(CharsWhileIn(" \t\r\n", 0))
   private def lineComment[$: P]: P[String]   = P("//" ~ CharsWhile(_ != '\n', 0).! ~ ("\n" | End))
@@ -91,6 +97,17 @@ object ProtoParser {
       case (_, n)       => n
     }
   )
+
+  private def int32Lit[$: P]: P[Int] =
+    intLit.filter(n => n >= Int32MinValue && n <= Int32MaxValue).map(_.toInt)
+
+  private def isValidFieldNumber(number: Long): Boolean =
+    number >= Proto3MinFieldNumber &&
+      number <= Proto3MaxFieldNumberLong &&
+      (number < ProtoReservedFieldNumberStart || number > ProtoReservedFieldNumberEnd)
+
+  private def fieldNumber[$: P]: P[Int] =
+    intLit.filter(isValidFieldNumber).map(_.toInt)
 
   private def floatLit[$: P]: P[Double] = P(
     CharIn("+\\-").!.? ~ (
@@ -216,13 +233,13 @@ object ProtoParser {
   )
 
   private def repeatedField[$: P]: P[Field] = P(
-    keyword("repeated") ~ ws ~ fieldType ~ ws ~ ident ~ ws ~ "=" ~ ws ~ intLit.map(_.toInt) ~ ws ~ inlineOptions ~ semi
+    keyword("repeated") ~ ws ~ fieldType ~ ws ~ ident ~ ws ~ "=" ~ ws ~ fieldNumber ~ ws ~ inlineOptions ~ semi
   ).map { case (ty, name, number, opts) =>
     Field(Type.ListType(ty), name, number, optional = false, comment = None, options = opts)
   }
 
   private def singularField[$: P]: P[Field] = P(
-    keyword("optional").!.?.map(_.isDefined) ~ ws ~ fieldType ~ ws ~ ident ~ ws ~ "=" ~ ws ~ intLit.map(_.toInt) ~ ws ~ inlineOptions ~ semi
+    keyword("optional").!.?.map(_.isDefined) ~ ws ~ fieldType ~ ws ~ ident ~ ws ~ "=" ~ ws ~ fieldNumber ~ ws ~ inlineOptions ~ semi
   ).map { case (opt, ty, name, number, opts) =>
     Field(ty, name, number, optional = opt, comment = None, options = opts)
   }
@@ -235,7 +252,7 @@ object ProtoParser {
 
   private def oneOfField[$: P]: P[Field] = P(
     commentBlock ~ ws ~
-      fieldType ~ ws ~ ident ~ ws ~ "=" ~ ws ~ intLit.map(_.toInt) ~ ws ~ inlineOptions ~ semi
+      fieldType ~ ws ~ ident ~ ws ~ "=" ~ ws ~ fieldNumber ~ ws ~ inlineOptions ~ semi
       ~ inlineComment.?
   ).map { case (preComment, ty, name, number, opts, maybeInlineComment) =>
     Field(ty, name, number, optional = false, comment = mergeComments(preComment, maybeInlineComment), options = opts)
@@ -261,10 +278,14 @@ object ProtoParser {
   }
 
   private def reservedRange[$: P]: P[Reserved] = P(
-    intLit.map(_.toInt) ~ (ws ~ "to" ~ ws ~ (keyword("max").map(_ => Proto3MaxFieldNumber) | intLit.map(_.toInt))).?
+    fieldNumber ~ (ws ~ "to" ~ ws ~ (keyword("max").map(_ => Proto3MaxFieldNumber) | fieldNumber)).?
   ).map {
     case (start, Some(end)) => Reserved.Range(start, end)
     case (n, None)          => Reserved.Number(n)
+  }.filter {
+    case Reserved.Range(start, end) => start <= end
+    case Reserved.Number(_)         => true
+    case Reserved.Name(_)           => true
   }
 
   private def reservedNames[$: P]: P[List[Reserved]] = P(
@@ -280,7 +301,7 @@ object ProtoParser {
   )
 
   private def enumField[$: P]: P[EnumValue] = P(
-    commentBlock ~ ws ~ ident ~ ws ~ "=" ~ ws ~ intLit.map(_.toInt) ~ ws ~ inlineOptions ~ semi ~ inlineComment.?
+    commentBlock ~ ws ~ ident ~ ws ~ "=" ~ ws ~ int32Lit ~ ws ~ inlineOptions ~ semi ~ inlineComment.?
   ).map { case (preComment, name, value, opts, inlineComment) =>
     val comment = mergeComments(preComment, inlineComment)
     EnumValue(name, value, comment, opts)
