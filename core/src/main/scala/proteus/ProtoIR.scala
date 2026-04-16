@@ -151,7 +151,7 @@ object ProtoIR {
         case _: ProtoIR.Type.PrimitiveType            => Set.empty
         case ProtoIR.Type.MapType(keyType, valueType) => keyType.collectTypeReferences ++ valueType.collectTypeReferences
         case ProtoIR.Type.ListType(valueType)         => valueType.collectTypeReferences
-        case ProtoIR.Type.RefType(name)               => Set(name)
+        case ProtoIR.Type.RefType(qualifiers, name)   => Set(qualifiers.headOption.getOrElse(name))
         case ProtoIR.Type.EnumRefType(name)           => Set(name)
       }
   }
@@ -174,14 +174,65 @@ object ProtoIR {
     case object String   extends PrimitiveType
     case object Bytes    extends PrimitiveType
 
-    final case class MapType(keyType: Type, valueType: Type) extends Type
-    final case class ListType(valueType: Type)               extends Type
-    final case class RefType(name: String)                   extends Type
-    final case class EnumRefType(name: String)               extends Type
+    final case class MapType(keyType: Type, valueType: Type)         extends Type
+    final case class ListType(valueType: Type)                       extends Type
+    final case class RefType(qualifiers: List[String], name: String) extends Type {
+      def qualifiedName: String = if (qualifiers.isEmpty) name else s"${qualifiers.mkString(".")}.$name"
+    }
+    final case class EnumRefType(name: String)                       extends Type
   }
 
   final case class Fqn(packageName: Option[List[String]], name: String) {
     def render: String =
       packageName.map(_.mkString(".")).map(_ + ".").getOrElse("") + name
+  }
+
+  /**
+    * Validates that all qualified type references (RefType with non-empty qualifiers)
+    * resolve to existing nested messages within the given top-level definitions.
+    * Returns a list of invalid qualified names.
+    */
+  def findInvalidRefs(topLevelDefs: Iterable[TopLevelDef]): List[String] = {
+    def hasNestedPathAt(elements: List[MessageElement], path: List[String]): Boolean =
+      path match {
+        case Nil       => true
+        case h :: tail =>
+          elements
+            .collectFirst { case MessageElement.NestedMessageElement(msg) if msg.name == h => msg }
+            .exists(msg => hasNestedPathAt(msg.elements, tail))
+      }
+
+    def collectQualifiedRefs(elements: List[MessageElement]): List[Type.RefType] =
+      elements.flatMap {
+        case MessageElement.FieldElement(field)       => collectQualifiedRefsFromType(field.ty)
+        case MessageElement.OneOfElement(oneOf)       => oneOf.fields.flatMap(f => collectQualifiedRefsFromType(f.ty))
+        case MessageElement.NestedMessageElement(msg) => collectQualifiedRefs(msg.elements)
+        case _: MessageElement.NestedEnumElement      => Nil
+      }
+
+    def collectQualifiedRefsFromType(ty: Type): List[Type.RefType] =
+      ty match {
+        case r: Type.RefType if r.qualifiers.nonEmpty => List(r)
+        case Type.ListType(valueType)                 => collectQualifiedRefsFromType(valueType)
+        case Type.MapType(_, valueType)               => collectQualifiedRefsFromType(valueType)
+        case _                                        => Nil
+      }
+
+    val messagesByName: Map[String, Message] = topLevelDefs.collect { case TopLevelDef.MessageDef(msg) =>
+      msg.name -> msg
+    }.toMap
+
+    val allRefs = topLevelDefs.flatMap {
+      case TopLevelDef.MessageDef(msg) => collectQualifiedRefs(msg.elements)
+      case _                           => Nil
+    }
+
+    allRefs.toList.distinct
+      .filterNot { ref =>
+        messagesByName
+          .get(ref.qualifiers.head)
+          .exists(msg => hasNestedPathAt(msg.elements, ref.qualifiers.tail :+ ref.name))
+      }
+      .map(_.qualifiedName)
   }
 }

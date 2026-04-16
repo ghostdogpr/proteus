@@ -93,10 +93,16 @@ case class Service[Rpcs] private (
     * @param options options to write at the top of the .proto file.
     */
   def render(options: List[ProtoIR.TopLevelOption]): String = {
-    val conflicts = findConflicts
+    val conflicts   = findConflicts
     if (conflicts.nonEmpty) {
       throw new ProteusException(
         s"Conflicts found in service $name:\n ${conflicts.map { case (name, defs) => s"- Type `$name` is defined in different ways: \n${defs.mkString("\n")}" }.mkString("\n")}\n"
+      )
+    }
+    val invalidRefs = ProtoIR.findInvalidRefs(filteredTypes ++ usedDependencies.flatMap(_.types))
+    if (invalidRefs.nonEmpty) {
+      throw new ProteusException(
+        s"Invalid qualified type references in service $name:\n${invalidRefs.map(r => s"- `$r` does not resolve to an existing nested message").mkString("\n")}\n"
       )
     }
     Renderer.render(
@@ -144,6 +150,7 @@ case class Service[Rpcs] private (
       .mapValues(_.map(Renderer.renderTopLevelDef).map(Text.renderText).distinct)
       .toMap
       .filter((_, values) => values.length > 1)
+
 }
 
 object Service {

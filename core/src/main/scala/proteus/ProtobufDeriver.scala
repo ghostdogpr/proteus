@@ -160,6 +160,9 @@ case class ProtobufDeriver private (
         val reservedIndexes    = getReservedIndexes(modifiers).toSet
         val allReservedIndexes = reservedIndexes ++ getReservedIndexes(fields.flatMap(_.modifiers)).toSet
         val nested             = modifiers.collectFirst { case Modifier.config(`nestedModifier`, value) => value.toBooleanOption }.flatten
+        val canonicalParent    =
+          if (flags.contains(DerivationFlag.AutoRefOneOf) && nested.contains(true)) getCanonicalParent(typeId)
+          else None
         val builder            = IArray.newBuilder[ProtobufCodec.MessageField[?]]
         var id                 = 0
 
@@ -167,7 +170,7 @@ case class ProtobufDeriver private (
           val name     = getFieldName(field.name, field.modifiers)
           val register = registers(index)
           instance match {
-            case t @ ProtobufCodec.Transform(from, to, ProtobufCodec.Message(_, Array(o: OneOfField[inner]), _, _, _, _, true, _, _, _)) =>
+            case t @ ProtobufCodec.Transform(from, to, ProtobufCodec.Message(_, Array(o: OneOfField[inner]), _, _, _, _, true, _, _, _, _)) =>
               val idIterator = getReservedIndexes(field.modifiers).iterator
               builder += OneOfField(
                 name,
@@ -198,7 +201,7 @@ case class ProtobufDeriver private (
                 catch { case _: Exception => null.asInstanceOf[A] },
                 o.comment
               )
-            case ProtobufCodec.Message(_, Array(o: OneOfField[?]), _, _, _, _, true, _, _, _)                                            =>
+            case ProtobufCodec.Message(_, Array(o: OneOfField[?]), _, _, _, _, true, _, _, _, _)                                            =>
               val idIterator = getReservedIndexes(field.modifiers).iterator
               builder += OneOfField(
                 name,
@@ -246,13 +249,17 @@ case class ProtobufDeriver private (
                 None,
                 getComment(field.modifiers)
               )
-            case instance                                                                                                                =>
-              val fieldId = getReservedIndex(field.modifiers) match {
+            case instance                                                                                                                   =>
+              val fieldId       = getReservedIndex(field.modifiers) match {
                 case Some(reservedIndex) => reservedIndex
                 case None                =>
                   id += 1
                   while (allReservedIndexes.contains(id)) id += 1
                   id
+              }
+              val refQualifiers = getRefQualifiers(field.modifiers) match {
+                case Some(Nil) => getCanonicalParent(field.value.typeId).map(List(_))
+                case other     => other
               }
               builder += SimpleField(
                 name,
@@ -261,7 +268,8 @@ case class ProtobufDeriver private (
                 register,
                 field.value.getDefaultValue.getOrElse(getDefaultValue(using instance)),
                 getComment(field.modifiers),
-                isDeprecated(field.modifiers)
+                isDeprecated(field.modifiers),
+                refQualifiers
               )
           }
         }
@@ -303,7 +311,8 @@ case class ProtobufDeriver private (
               inline = false,
               nested = nested,
               comment = getComment(modifiers),
-              customizeIR = messageCustomizer
+              customizeIR = messageCustomizer,
+              canonicalParent = canonicalParent
             )
 
             visited.remove(typeId)
@@ -611,10 +620,24 @@ case class ProtobufDeriver private (
   private def isDeprecated(modifiers: Seq[Modifier]): Boolean =
     modifiers.exists { case Modifier.config(`deprecatedModifier`, _) => true; case _ => false }
 
+  private def getRefQualifiers(modifiers: Seq[Modifier]): Option[List[String]] =
+    modifiers.collectFirst { case Modifier.config(`refModifier`, value) => value }.map {
+      case ""    => Nil
+      case value => value.split('.').toList
+    }
+
+  private def getCanonicalParent(typeId: TypeId[?]): Option[String] = {
+    val parentNames = typeId.parents.collect { case TypeRepr.Ref(id) => id.name }.toSet
+    typeId.owner.segments.reverse.collectFirst {
+      case s: Owner.Term if parentNames.contains(s.name) => s.name
+      case s: Owner.Type if parentNames.contains(s.name) => s.name
+    }
+  }
+
   private def isEnum(cases: IndexedSeq[Term[?, ?, ?]], modifiers: Seq[Modifier]): Boolean =
     cases.forall(c =>
       innerSchema(c.value) match {
-        case record: Reflect.Record[?, ?] => record.fields.length == 0
+        case record: Reflect.Record[?, ?] => record.fields.isEmpty
         case _                            => false
       }
     ) && !modifiers.exists { case Modifier.config(`oneOfModifier`, _) => true; case _ => false }
@@ -631,7 +654,7 @@ case class ProtobufDeriver private (
 
   private def getDefaultValue[A](using codec: ProtobufCodec[A]): A =
     codec match {
-      case ProtobufCodec.Primitive(primitiveType)                             =>
+      case ProtobufCodec.Primitive(primitiveType)                                =>
         primitiveType match {
           case _: PrimitiveType.Boolean => false
           case _: PrimitiveType.Float   => 0.0f
@@ -641,7 +664,7 @@ case class ProtobufDeriver private (
           case _: PrimitiveType.String  => ""
           case _                        => throw new ProteusException(s"Unsupported primitive type: $primitiveType")
         }
-      case ProtobufCodec.Message(_, fields, constructor, _, _, _, _, _, _, _) =>
+      case ProtobufCodec.Message(_, fields, constructor, _, _, _, _, _, _, _, _) =>
         val registers = Registers(constructor.usedRegisters)
         fields.foreach {
           case field: SimpleField[?]   =>
@@ -652,20 +675,20 @@ case class ProtobufDeriver private (
             setToRegister(registers, RegisterOffset.Zero, field.register, field.defaultValue)
         }
         constructor.construct(registers, RegisterOffset.Zero)
-      case ProtobufCodec.Optional(_, _)                                       =>
+      case ProtobufCodec.Optional(_, _)                                          =>
         None.asInstanceOf[A]
-      case c: ProtobufCodec.Enum[A]                                           =>
+      case c: ProtobufCodec.Enum[A]                                              =>
         c.valueOrThrow(0)
-      case ProtobufCodec.RepeatedMap(_, constructor, _, _)                    =>
+      case ProtobufCodec.RepeatedMap(_, constructor, _, _)                       =>
         constructor.emptyObject.asInstanceOf[A]
-      case ProtobufCodec.Repeated(_, constructor, _, _, elementClassTag)      =>
+      case ProtobufCodec.Repeated(_, constructor, _, _, elementClassTag)         =>
         constructor.empty(elementClassTag)
-      case ProtobufCodec.Transform(from, _, codec)                            =>
+      case ProtobufCodec.Transform(from, _, codec)                               =>
         try from(getDefaultValue(using codec))
         catch { case _: Exception => null.asInstanceOf[A] }
-      case c: ProtobufCodec.RecursiveMessage[A]                               =>
+      case c: ProtobufCodec.RecursiveMessage[A]                                  =>
         getDefaultValue(using c.codec)
-      case ProtobufCodec.Bytes                                                =>
+      case ProtobufCodec.Bytes                                                   =>
         Array.empty[Byte]
     }
 
@@ -792,5 +815,11 @@ object ProtobufDeriver extends ProtobufDeriver(Set.empty, Vector.empty, Vector.e
       * All types used in oneof fields will be encoded as nested types inside the parent message.
       */
     case NestedOneOf
+
+    /**
+      * When a nested type is referenced from a message that is not its canonical parent,
+      * the type will be referenced by its qualified path instead of being re-nested.
+      */
+    case AutoRefOneOf
   }
 }

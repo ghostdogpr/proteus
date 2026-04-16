@@ -42,13 +42,17 @@ extension (field: ProtoIR.Field) {
     def makeFqn(name: String): String =
       s".${topLevelFqns.getOrElse(name, s"$parentFqn.$name")}"
 
+    def makeRefFqn(ref: ProtoIR.Type.RefType): String =
+      if (ref.qualifiers.isEmpty) makeFqn(ref.name)
+      else s"${makeFqn(ref.qualifiers.head)}.${(ref.qualifiers.tail :+ ref.name).mkString(".")}"
+
     field.ty match {
       case listType: ProtoIR.Type.ListType    =>
         fieldBuilder.setLabel(FieldDescriptorProto.Label.LABEL_REPEATED)
         fieldBuilder.setType(listType.valueType.toDescriptorType)
         listType.valueType match {
           case enumType: ProtoIR.Type.EnumRefType => fieldBuilder.setTypeName(makeFqn(enumType.name))
-          case messageType: ProtoIR.Type.RefType  => fieldBuilder.setTypeName(makeFqn(messageType.name))
+          case messageType: ProtoIR.Type.RefType  => fieldBuilder.setTypeName(makeRefFqn(messageType))
           case _                                  =>
         }
       case mapType: ProtoIR.Type.MapType      =>
@@ -64,7 +68,7 @@ extension (field: ProtoIR.Field) {
           .setType(mapType.keyType.toDescriptorType)
         mapType.keyType match {
           case enumType: ProtoIR.Type.EnumRefType => mapKeyFieldBuilder.setTypeName(makeFqn(enumType.name))
-          case messageType: ProtoIR.Type.RefType  => mapKeyFieldBuilder.setTypeName(makeFqn(messageType.name))
+          case messageType: ProtoIR.Type.RefType  => mapKeyFieldBuilder.setTypeName(makeRefFqn(messageType))
           case _                                  =>
         }
         mapEntryBuilder.addField(mapKeyFieldBuilder.build())
@@ -75,7 +79,7 @@ extension (field: ProtoIR.Field) {
           .setType(mapType.valueType.toDescriptorType)
         mapType.valueType match {
           case enumType: ProtoIR.Type.EnumRefType => mapValueFieldBuilder.setTypeName(makeFqn(enumType.name))
-          case messageType: ProtoIR.Type.RefType  => mapValueFieldBuilder.setTypeName(makeFqn(messageType.name))
+          case messageType: ProtoIR.Type.RefType  => mapValueFieldBuilder.setTypeName(makeRefFqn(messageType))
           case _                                  =>
         }
         mapEntryBuilder.addField(mapValueFieldBuilder.build())
@@ -85,7 +89,7 @@ extension (field: ProtoIR.Field) {
         fieldBuilder.setTypeName(makeFqn(enumType.name))
       case messageType: ProtoIR.Type.RefType  =>
         fieldBuilder.setType(FieldDescriptorProto.Type.TYPE_MESSAGE)
-        fieldBuilder.setTypeName(makeFqn(messageType.name))
+        fieldBuilder.setTypeName(makeRefFqn(messageType))
       case _                                  =>
         fieldBuilder.setType(field.ty.toDescriptorType)
     }

@@ -218,7 +218,8 @@ object ProtobufCodec {
       register: Register[Any],
       defaultValue: A,
       comment: Option[String] = None,
-      deprecated: Boolean = false
+      deprecated: Boolean = false,
+      refQualifiers: Option[List[String]] = None
     ) extends MessageField[A] {
 
       /**
@@ -226,7 +227,8 @@ object ProtobufCodec {
         */
       def toProtoIR: ProtoIR.MessageElement.FieldElement = {
         val opts  = ProtoIR.OptionValue.deprecatedOpts(deprecated)
-        val field = ProtoIR.Field(toProtoType(codec), name, id, optional = isOptional(using codec), comment = comment, options = opts)
+        val ty    = refQualifiers.fold(toProtoType(codec))(qs => ProtoIR.Type.RefType(qs, codec.getName))
+        val field = ProtoIR.Field(ty, name, id, optional = isOptional(using codec), comment = comment, options = opts)
         ProtoIR.MessageElement.FieldElement(field)
       }
 
@@ -518,7 +520,8 @@ object ProtobufCodec {
     inline: Boolean,
     nested: Option[Boolean],
     comment: Option[String] = None,
-    customizeIR: ProtoIR.Message => ProtoIR.Message = identity
+    customizeIR: ProtoIR.Message => ProtoIR.Message = identity,
+    canonicalParent: Option[String] = None
   ) extends ProtobufCodec[A] {
 
     /**
@@ -651,12 +654,34 @@ object ProtobufCodec {
       * Converts the message to its protobuf IR representation.
       */
     def toProtoIR: ProtoIR.Message = {
-      val elements = fields.map(_.toProtoIR)
+      def resolveRefPrefix[A](codec: ProtobufCodec[A]): Option[String] =
+        codec match {
+          case c: Message[_]          =>
+            if (c.nested.getOrElse(false) && c.canonicalParent.exists(_ != name)) c.canonicalParent else None
+          case c: Transform[_, _]     => resolveRefPrefix(c.codec)
+          case c: Optional[_]         => resolveRefPrefix(c.codec)
+          case c: RecursiveMessage[_] => resolveRefPrefix(c.codec)
+          case _                      => None
+        }
+
+      val elements: IArray[ProtoIR.MessageElement.FieldElement | ProtoIR.MessageElement.OneOfElement] = fields.map {
+        case f: SimpleField[?] if f.refQualifiers.isEmpty =>
+          resolveRefPrefix(f.codec) match {
+            case Some(prefix) => f.copy(refQualifiers = Some(List(prefix))).toProtoIR
+            case None         => f.toProtoIR
+          }
+        case f: SimpleField[?]                            => f.toProtoIR
+        case f: OneOfField[?]                             => f.toProtoIR
+        case f: ExcludedField[?]                          => f.toProtoIR
+      }
 
       def findNested[A](codec: ProtobufCodec[A], goDeep: Boolean = false): List[ProtoIR.MessageElement] =
         codec match {
           case c: Message[_]           =>
-            if (c.nested.getOrElse(false)) List(ProtoIR.MessageElement.NestedMessageElement(c.toProtoIR))
+            val isNested          = c.nested.getOrElse(false)
+            val isCanonicalParent = c.canonicalParent.forall(_ == name)
+            if (isNested && isCanonicalParent) List(ProtoIR.MessageElement.NestedMessageElement(c.toProtoIR))
+            else if (isNested) Nil
             else if (goDeep) c.simpleFields.collect(field => findNested(field.codec)).flatten.distinct
             else Nil
           case c: Enum[_]              => if (c.nested) List(ProtoIR.MessageElement.NestedEnumElement(c.toProtoIR)) else Nil
@@ -668,7 +693,7 @@ object ProtobufCodec {
           case _                       => Nil
         }
 
-      val nestedMessageElements = simpleFields.collect(field => findNested(field.codec)).flatten.distinct
+      val nestedMessageElements = simpleFields.filter(_.refQualifiers.isEmpty).collect(field => findNested(field.codec)).flatten.distinct
 
       val sortedAllElements = elements.sortBy {
         case c: ProtoIR.MessageElement.OneOfElement => c.oneOf.fields.head.number
@@ -1138,7 +1163,7 @@ object ProtobufCodec {
           case _: PrimitiveType.Float   => ProtoIR.Type.Float
           case _                        => throw new ProteusException(s"Unsupported primitive type: $c")
         }
-      case c: Message[_]           => ProtoIR.Type.RefType(c.name)
+      case c: Message[_]           => ProtoIR.Type.RefType(Nil, c.name)
       case c: Enum[_]              => ProtoIR.Type.EnumRefType(c.name)
       case c: Repeated[_, _]       => ProtoIR.Type.ListType(toProtoType(c.element))
       case c: RepeatedMap[_, _, _] =>

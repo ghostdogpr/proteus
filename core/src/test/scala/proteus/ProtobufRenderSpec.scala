@@ -1205,6 +1205,142 @@ message Email {
 
         assertTrue(nestedRendered == expectedNested)
       },
+      test("NestedOneOf variant referenced directly from another message should not be re-nested") {
+        sealed trait Action derives Schema
+        object Action {
+          case class Create(name: String) extends Action derives Schema
+        }
+        case class Req(create: Action.Create) derives Schema
+
+        val d              = deriver.enable(ProtobufDeriver.DerivationFlag.AutoRefOneOf).modifier[Action.Create](nested)
+        val actionCodec    = Schema[Action].derive(d)
+        val actionRendered = renderCodec(actionCodec)
+        val reqCodec       = Schema[Req].derive(d)
+        val reqRendered    = renderCodec(reqCodec)
+
+        val expectedAction = """syntax = "proto3";
+
+package test;
+
+message Action {
+    message Create {
+        string name = 1;
+    }
+
+    oneof value {
+        Create create = 1;
+    }
+}
+"""
+
+        val expectedReq = """syntax = "proto3";
+
+package test;
+
+message Req {
+    Action.Create create = 1;
+}
+"""
+
+        assertTrue(actionRendered == expectedAction, reqRendered == expectedReq)
+      },
+      test("NestedOneOf variant referenced directly with explicit ref modifier") {
+        sealed trait Action derives Schema
+        object Action {
+          case class Create(name: String) extends Action derives Schema
+        }
+        case class Req(create: Action.Create) derives Schema
+
+        val d              = deriver.modifier[Action.Create](nested).modifier[Req]("create", ref("Action"))
+        val actionCodec    = Schema[Action].derive(d)
+        val actionRendered = renderCodec(actionCodec)
+        val reqCodec       = Schema[Req].derive(d)
+        val reqRendered    = renderCodec(reqCodec)
+
+        val expectedAction = """syntax = "proto3";
+
+package test;
+
+message Action {
+    message Create {
+        string name = 1;
+    }
+
+    oneof value {
+        Create create = 1;
+    }
+}
+"""
+
+        val expectedReq = """syntax = "proto3";
+
+package test;
+
+message Req {
+    Action.Create create = 1;
+}
+"""
+
+        assertTrue(actionRendered == expectedAction, reqRendered == expectedReq)
+      },
+      test("NestedOneOf variant referenced directly with parameterless ref modifier") {
+        sealed trait Action derives Schema
+        object Action {
+          case class Create(name: String) extends Action derives Schema
+        }
+        case class Req(create: Action.Create) derives Schema
+
+        val d              = deriver.modifier[Action.Create](nested).modifier[Req]("create", ref)
+        val actionCodec    = Schema[Action].derive(d)
+        val actionRendered = renderCodec(actionCodec)
+        val reqCodec       = Schema[Req].derive(d)
+        val reqRendered    = renderCodec(reqCodec)
+
+        val expectedAction = """syntax = "proto3";
+
+package test;
+
+message Action {
+    message Create {
+        string name = 1;
+    }
+
+    oneof value {
+        Create create = 1;
+    }
+}
+"""
+
+        val expectedReq = """syntax = "proto3";
+
+package test;
+
+message Req {
+    Action.Create create = 1;
+}
+"""
+
+        assertTrue(actionRendered == expectedAction, reqRendered == expectedReq)
+      },
+      test("ref modifier with multi-level qualifiers") {
+        case class Inner(value: String) derives Schema
+        case class Req(inner: Inner) derives Schema
+
+        val d        = deriver.modifier[Inner](nested).modifier[Req]("inner", ref("Outer", "Middle"))
+        val codec    = Schema[Req].derive(d)
+        val rendered = renderCodec(codec)
+
+        val expected = """syntax = "proto3";
+
+package test;
+
+message Req {
+    Outer.Middle.Inner inner = 1;
+}
+"""
+
+        assertTrue(rendered == expected)
+      },
       test("AutoPrefixEnums flag adds type name as prefix to enum members") {
         enum Status derives Schema { case Active, Inactive, Pending }
         case class StatusMessage(status: Status) derives Schema

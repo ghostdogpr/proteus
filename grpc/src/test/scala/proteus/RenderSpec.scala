@@ -486,6 +486,63 @@ message ServiceResponse {
 
         assertTrue(error.contains("Conflicts found in service TestService")) &&
           assertTrue(error.contains("Type `User` is defined in different ways"))
+      },
+      test("should detect invalid qualified ref pointing to non-existent parent message") {
+        case class Inner(value: String) derives Schema
+        case class Request(inner: Inner) derives Schema
+        case class Response(ok: Boolean) derives Schema
+
+        val deriver = ProtobufDeriver
+          .modifier[Inner](Modifiers.nested)
+          .modifier[Request]("inner", Modifiers.ref("NonExistent"))
+
+        given ProtobufCodec[Request]  = Schema[Request].derive(deriver)
+        given ProtobufCodec[Response] = Schema[Response].derive(deriver)
+
+        val rpc     = Rpc.unary[Request, Response]("TestMethod")
+        val service = Service("TestService").rpc(rpc)
+
+        val error =
+          try {
+            service.render(options)
+            ""
+          } catch {
+            case e: Exception => e.getMessage
+          }
+
+        assertTrue(error.contains("Invalid qualified type references in service TestService")) &&
+          assertTrue(error.contains("NonExistent.Inner"))
+      },
+      test("should detect invalid qualified ref pointing to existing parent but non-existent nested message") {
+        sealed trait Action derives Schema
+        object Action {
+          case class Create(name: String) extends Action derives Schema
+        }
+        case class Unrelated(id: Int) derives Schema
+        case class Request(action: Action, unrelated: Unrelated) derives Schema
+        case class Response(ok: Boolean) derives Schema
+
+        val deriver = ProtobufDeriver
+          .modifier[Action.Create](Modifiers.nested)
+          .modifier[Unrelated](Modifiers.nested)
+          .modifier[Request]("unrelated", Modifiers.ref("Action"))
+
+        given ProtobufCodec[Request]  = Schema[Request].derive(deriver)
+        given ProtobufCodec[Response] = Schema[Response].derive(deriver)
+
+        val rpc     = Rpc.unary[Request, Response]("TestMethod")
+        val service = Service("TestService").rpc(rpc)
+
+        val error =
+          try {
+            service.render(options)
+            ""
+          } catch {
+            case e: Exception => e.getMessage
+          }
+
+        assertTrue(error.contains("Invalid qualified type references in service TestService")) &&
+          assertTrue(error.contains("Action.Unrelated"))
       }
     ),
     suite("Dependency Rendering")(

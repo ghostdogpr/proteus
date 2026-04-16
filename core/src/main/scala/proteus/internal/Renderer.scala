@@ -300,7 +300,7 @@ private[proteus] object Renderer {
       case MapType(keyType, valueType) =>
         s"map<${renderType(keyType)}, ${renderType(valueType)}>"
       case ListType(valueType)         => s"repeated ${renderType(valueType)}"
-      case RefType(name)               => name
+      case r: RefType                  => r.qualifiedName
       case EnumRefType(name)           => name
     }
   }

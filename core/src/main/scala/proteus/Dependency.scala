@@ -58,10 +58,16 @@ final case class Dependency(
     * @param options options to write at the top of the .proto file.
     */
   def render(options: List[ProtoIR.TopLevelOption]): String = {
-    val conflicts = findConflicts
+    val conflicts   = findConflicts
     if (conflicts.nonEmpty) {
       throw new ProteusException(
         s"Conflicts found in dependency $dependencyName:\n ${conflicts.map { case (name, defs) => s"- Type `$name` is defined in different ways: \n${defs.mkString("\n")}" }.mkString("\n")}\n"
+      )
+    }
+    val invalidRefs = ProtoIR.findInvalidRefs(filteredTypes ++ filteredDependencies.flatMap(_.types))
+    if (invalidRefs.nonEmpty) {
+      throw new ProteusException(
+        s"Invalid qualified type references in dependency $dependencyName:\n${invalidRefs.map(r => s"- `$r` does not resolve to an existing nested message").mkString("\n")}\n"
       )
     }
     Renderer.render(
