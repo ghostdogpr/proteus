@@ -85,7 +85,7 @@ object ProtoDiff {
   }
 
   /**
-    * Computes all changes between two [[CompilationUnit]] definitions.
+    * Computes all changes between two [[ProtoIR.CompilationUnit]] definitions.
     *
     * @param oldUnit the original compilation unit.
     * @param newUnit the updated compilation unit.
