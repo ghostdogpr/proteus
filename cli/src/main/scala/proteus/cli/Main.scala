@@ -14,8 +14,8 @@ object Main {
     @arg(positional = true, doc = "new proto file or directory") `new`: String,
     @arg(short = 'm', doc = "compat mode: wire | source | strictest (default: strictest)")
     mode: CompatMode = CompatMode.Strictest,
-    @arg(short = 's', doc = "minimum severity: error | warning | info (default: error)")
-    severity: Severity = Severity.Error,
+    @arg(short = 's', doc = "minimum severity: error | warning | info (default: warning)")
+    severity: Severity = Severity.Warning,
     @arg(short = 'o', doc = "severity override: mode.ChangeType=severity (e.g. wire.FieldRemoved=info)")
     `override`: List[String] = Nil,
     @arg(short = 'f', doc = "output format: text | json (default: text)")
@@ -78,7 +78,7 @@ object Main {
       |
       |Options:
       |  -m, --mode <mode>          compat mode: wire | source | strictest (default: strictest)
-      |  -s, --severity <severity>  minimum severity to display: error | warning | info (default: error)
+      |  -s, --severity <severity>  minimum severity to display: error | warning | info (default: warning)
       |  -f, --format <format>      output format: text | json (default: text)
       |  --fail-on <severity>       exit 1 at this severity or above: error | warning | info (default: error)
       |  -o, --override <override>  severity override: mode.ChangeType=severity (repeatable)

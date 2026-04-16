@@ -1,8 +1,5 @@
-Errors (1)
-  FieldTypeChanged (1)
-    User: field 'id' type changed from int32 to int64
-
-Info (1)
+Changes (2)
   FieldAdded (1)
-    User: field 'email' added
-
+    info: User: field 'email' added
+  FieldTypeChanged (1)
+    error: User: field 'id' type changed from int32 to int64

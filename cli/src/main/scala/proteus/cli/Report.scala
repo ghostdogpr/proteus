@@ -4,8 +4,6 @@ import proteus.{Change, CompatMode, ProtoDiff, Severity, SeverityOverrides}
 
 object Report {
 
-  private val severityOrder: List[Severity] = List(Severity.Error, Severity.Warning, Severity.Info)
-
   def format(
     changes: List[Change],
     mode: CompatMode,
@@ -15,28 +13,17 @@ object Report {
   ): String =
     if (changes.isEmpty) "No changes detected.\n"
     else {
-      val c          = if (color) Colors.on else Colors.off
-      val sb         = new StringBuilder
-      val bySeverity = changes.groupBy(ch => ProtoDiff.severity(ch, mode, overrides))
-      severityOrder.foreach { sev =>
-        bySeverity.get(sev).foreach { sevChanges =>
-          val label = sev match {
-            case Severity.Error   => s"${c.red}Errors${c.reset}"
-            case Severity.Warning => s"${c.yellow}Warnings${c.reset}"
-            case Severity.Info    => s"${c.blue}Info${c.reset}"
-          }
-          sb.append(s"$label (${sevChanges.size})\n")
-          if (byFile) {
-            val byFileGroup = sevChanges.groupBy(ch => ch.path.headOption.getOrElse("<root>"))
-            byFileGroup.toList.sortBy(_._1).foreach { case (file, fileChanges) =>
-              sb.append(s"  $file\n")
-              appendByType(sb, fileChanges, indent = "    ", stripFile = true)
-            }
-          } else {
-            appendByType(sb, sevChanges, indent = "  ", stripFile = false)
-          }
-          sb.append('\n')
+      val c  = if (color) Colors.on else Colors.off
+      val sb = new StringBuilder
+      sb.append(s"Changes (${changes.size})\n")
+      if (byFile) {
+        val byFileGroup = changes.groupBy(ch => ch.path.headOption.getOrElse("<root>"))
+        byFileGroup.toList.sortBy(_._1).foreach { case (file, fileChanges) =>
+          sb.append(s"  $file\n")
+          appendByType(sb, fileChanges, mode, overrides, indent = "    ", stripFile = true, c)
         }
+      } else {
+        appendByType(sb, changes, mode, overrides, indent = "  ", stripFile = false, c)
       }
       sb.toString
     }
@@ -54,15 +41,31 @@ object Report {
     entries.mkString("[\n", ",\n", "\n]\n")
   }
 
-  private def appendByType(sb: StringBuilder, changes: List[Change], indent: String, stripFile: Boolean): Unit = {
+  private def appendByType(
+    sb: StringBuilder,
+    changes: List[Change],
+    mode: CompatMode,
+    overrides: SeverityOverrides,
+    indent: String,
+    stripFile: Boolean,
+    c: Colors
+  ): Unit = {
     val byType = changes.groupBy(changeTypeName).toList.sortBy(_._1)
     byType.foreach { case (typeName, group) =>
       sb.append(s"$indent$typeName (${group.size})\n")
       group.foreach { ch =>
+        val sev      = ProtoDiff.severity(ch, mode, overrides)
+        val label    = sevLabel(sev, c)
         val rendered = if (stripFile) renderWithoutFile(ch) else ch.toString
-        sb.append(s"$indent  $rendered\n")
+        sb.append(s"$indent  $label $rendered\n")
       }
     }
+  }
+
+  private def sevLabel(sev: Severity, c: Colors): String = sev match {
+    case Severity.Error   => s"${c.red}error:${c.reset}"
+    case Severity.Warning => s"${c.yellow}warning:${c.reset}"
+    case Severity.Info    => s"${c.blue}info:${c.reset}"
   }
 
   private def changeTypeName(c: Change): String = c.productPrefix
