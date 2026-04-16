@@ -94,6 +94,7 @@ lazy val cli = project
     nativeImageVersion   := "25.0.1",
     nativeImageJvm       := "graalvm-community",
     nativeImageJvmIndex  := "cs",
+    Global / excludeLintKeys ++= Set(nativeImageVersion, nativeImageJvm, nativeImageJvmIndex),
     nativeImageOptions ++= Seq(
       "--no-fallback",
       "--initialize-at-build-time",
