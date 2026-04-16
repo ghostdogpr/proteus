@@ -272,7 +272,7 @@ object ProtoParser {
   }
 
   private def oneOf[$: P]: P[OneOf] = P(
-    commentBlock ~ ws ~ "oneof" ~ ws ~ ident ~ ws ~ "{" ~ oneOfBody ~ padding ~ "}"
+    commentBlock ~ ws ~ "oneof" ~ ws ~ ident ~ ws ~ "{" ~ oneOfBody ~ ws ~ "}"
   ).map { case (comment, name, (options, fields)) =>
     OneOf(name, fields, comment = comment, options = options)
   }
