@@ -56,7 +56,7 @@ object Report {
     }
   }
 
-  private def changeTypeName(c: Change): String = c.getClass.getSimpleName.stripSuffix("$1")
+  private def changeTypeName(c: Change): String = c.productPrefix
 
   /**
     * Renders a change using its tail-of-path (drops the file segment, since file is shown as a header).

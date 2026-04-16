@@ -87,10 +87,19 @@ lazy val cli = project
       "dev.zio"     %% "zio-test-sbt" % zioTestVersion % Test
     )
   )
-  .enablePlugins(JavaAppPackaging)
+  .enablePlugins(JavaAppPackaging, NativeImagePlugin)
   .settings(
     Compile / mainClass  := Some("proteus.cli.Main"),
-    executableScriptName := "proteus-diff"
+    executableScriptName := "proteus-diff",
+    nativeImageVersion   := "25.0.1",
+    nativeImageJvm       := "graalvm-community",
+    nativeImageJvmIndex  := "cs",
+    nativeImageOptions ++= Seq(
+      "--no-fallback",
+      "--initialize-at-build-time",
+      "--gc=epsilon",
+      "-O2"
+    )
   )
   .dependsOn(tools.jvm)
 

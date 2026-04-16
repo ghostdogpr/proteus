@@ -1,0 +1,42 @@
+name: Release Native Binaries
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  native-image:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            artifact: proteus-diff-linux-x86_64
+          - os: macos-13
+            artifact: proteus-diff-macos-x86_64
+          - os: macos-14
+            artifact: proteus-diff-macos-aarch64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Setup GraalVM
+        uses: coursier/setup-action@v3
+        with:
+          jvm: graalvm-community:25
+          apps: sbt
+      - name: Cache scala dependencies
+        uses: coursier/cache-action@v8
+      - name: Build native image
+        run: sbt 'cli/nativeImage'
+      - name: Rename binary
+        run: mv cli/target/native-image/proteus-cli "${{ matrix.artifact }}"
+      - name: Upload release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ matrix.artifact }}
