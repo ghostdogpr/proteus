@@ -462,6 +462,14 @@ object ProtoDiffSpec extends ZIOSpecDefault {
           ProtoDiff.severity(change, CompatMode.Wire) == Severity.Error,
           ProtoDiff.severity(change, CompatMode.Source) == Severity.Error
         )
+      },
+      test("field type ref renamed: Info in wire, Error in source") {
+        val change = FieldTypeRefRenamed(List("Foo"), "x", 1, Type.RefType("A.B"), Type.RefType("B"))
+        assertTrue(
+          ProtoDiff.severity(change, CompatMode.Wire) == Severity.Info,
+          ProtoDiff.severity(change, CompatMode.Source) == Severity.Error,
+          ProtoDiff.severity(change, CompatMode.Strictest) == Severity.Error
+        )
       }
     ),
     suite("Type normalization")(
@@ -553,6 +561,92 @@ object ProtoDiffSpec extends ZIOSpecDefault {
         val changes = ProtoDiff.diffFiles(old, nw)
         assertTrue(changes == List(MessageRenamed(List("a.proto"), "Foo", "Bar")))
       }
+    ),
+    suite("Type ref resolution")(
+      test("single file: nested type extracted to top-level is FieldTypeRefRenamed, not FieldTypeChanged") {
+        val old     = parse(
+          """syntax = "proto3";
+            |message Outer {
+            |  message Inner { string name = 1; }
+            |  Inner inner = 1;
+            |}
+            |message Foo { Outer.Inner x = 1; }
+            |""".stripMargin
+        )
+        val nw      = parse(
+          """syntax = "proto3";
+            |message Outer {
+            |  Inner inner = 1;
+            |}
+            |message Inner { string name = 1; }
+            |message Foo { Inner x = 1; }
+            |""".stripMargin
+        )
+        val changes = ProtoDiff.diff(old, nw)
+        assertTrue(
+          changes.contains(FieldTypeRefRenamed(List("Foo"), "x", 1, Type.RefType("Outer.Inner"), Type.RefType("Inner")))
+        )
+      },
+      test("single file: structurally different types remain FieldTypeChanged") {
+        val old     = parse(
+          """syntax = "proto3";
+            |message A { string name = 1; }
+            |message Foo { A x = 1; }
+            |""".stripMargin
+        )
+        val nw      = parse(
+          """syntax = "proto3";
+            |message B { string name = 1; int32 id = 2; }
+            |message Foo { B x = 1; }
+            |""".stripMargin
+        )
+        val changes = ProtoDiff.diff(old, nw)
+        assertTrue(
+          changes.contains(FieldTypeChanged(List("Foo"), "x", 1, Type.RefType("A"), Type.RefType("B")))
+        )
+      },
+      test("single file: repeated type ref renamed") {
+        val old     = parse(
+          """syntax = "proto3";
+            |message Parent { message Child { int32 id = 1; } }
+            |message Foo { repeated Parent.Child items = 1; }
+            |""".stripMargin
+        )
+        val nw      = parse(
+          """syntax = "proto3";
+            |message Child { int32 id = 1; }
+            |message Foo { repeated Child items = 1; }
+            |""".stripMargin
+        )
+        val changes = ProtoDiff.diff(old, nw)
+        assertTrue(
+          changes.contains(
+            FieldTypeRefRenamed(List("Foo"), "items", 1, Type.ListType(Type.RefType("Parent.Child")), Type.ListType(Type.RefType("Child")))
+          )
+        )
+      },
+      test("multi-file: type ref resolved across files") {
+        val old     = Map(
+          "types.proto" -> parse("""syntax = "proto3"; message Wrapper { message Inner { int32 id = 1; } }"""),
+          "api.proto"   -> parse("""syntax = "proto3"; message Req { Wrapper.Inner x = 1; }""")
+        )
+        val nw      = Map(
+          "types.proto" -> parse("""syntax = "proto3"; message WrapperInner { int32 id = 1; }"""),
+          "api.proto"   -> parse("""syntax = "proto3"; message Req { WrapperInner x = 1; }""")
+        )
+        val changes = ProtoDiff.diffFiles(old, nw)
+        assertTrue(
+          changes.contains(FieldTypeRefRenamed(List("api.proto", "Req"), "x", 1, Type.RefType("Wrapper.Inner"), Type.RefType("WrapperInner")))
+        )
+      },
+      test("multi-file: unresolvable type ref stays FieldTypeChanged") {
+        val old     = Map("api.proto" -> parse("""syntax = "proto3"; message Req { SomeExternal x = 1; }"""))
+        val nw      = Map("api.proto" -> parse("""syntax = "proto3"; message Req { OtherExternal x = 1; }"""))
+        val changes = ProtoDiff.diffFiles(old, nw)
+        assertTrue(
+          changes.contains(FieldTypeChanged(List("api.proto", "Req"), "x", 1, Type.RefType("SomeExternal"), Type.RefType("OtherExternal")))
+        )
+      },
     )
   )
 }

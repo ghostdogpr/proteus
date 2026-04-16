@@ -46,6 +46,7 @@ object ProtoDiff {
       case _: FieldNumberChanged      => (Error, Info)
       case _: FieldRenamed            => (Info, Error)
       case _: FieldTypeChanged        => (Error, Error)
+      case _: FieldTypeRefRenamed     => (Info, Error)
       case _: FieldOptionalityChanged => (Warning, Warning)
       case _: FieldOrderChanged       => (Info, Warning)
       case _: FieldOneOfChanged       => (Error, Error)
@@ -86,7 +87,12 @@ object ProtoDiff {
     * @param path optional initial path prefix (e.g. `List("foo.proto")` when diffing files inside a multi-file diff).
     * @return a list of mode-independent changes; use [[severity]] to classify them.
     */
-  def diff(oldUnit: CompilationUnit, newUnit: CompilationUnit, path: List[String] = Nil): List[Change] =
+  def diff(oldUnit: CompilationUnit, newUnit: CompilationUnit, path: List[String] = Nil): List[Change] = {
+    val raw = diffRaw(oldUnit, newUnit, path)
+    resolveTypeRefChanges(raw, buildTypeRegistry(List(oldUnit)), buildTypeRegistry(List(newUnit)))
+  }
+
+  private def diffRaw(oldUnit: CompilationUnit, newUnit: CompilationUnit, path: List[String]): List[Change] =
     diffPackage(oldUnit.packageName, newUnit.packageName, path) ++
       diffImports(oldUnit.statements, newUnit.statements, path) ++
       diffTopLevelOptions(oldUnit.options, newUnit.options, path) ++
@@ -104,14 +110,18 @@ object ProtoDiff {
     * @return a list of mode-independent changes; use [[severity]] to classify them.
     */
   def diffFiles(oldFiles: Map[String, CompilationUnit], newFiles: Map[String, CompilationUnit]): List[Change] = {
+    val oldRegistry = buildTypeRegistry(oldFiles.values)
+    val newRegistry = buildTypeRegistry(newFiles.values)
     val common      = (oldFiles.keySet & newFiles.keySet).toList.sorted
     val onlyOld     = (oldFiles.keySet -- newFiles.keySet).toList.sorted
     val onlyNew     = (newFiles.keySet -- oldFiles.keySet).toList.sorted
-    val matched     = common.flatMap(f => diff(oldFiles(f), newFiles(f), List(f)))
+    // Resolve type refs against the full multi-file registry below, not per-file.
+    val matched     = common.flatMap(f => diffRaw(oldFiles(f), newFiles(f), List(f)))
     val fileRemoved = onlyOld.map(f => FileRemoved(List(f)))
     val fileAdded   = onlyNew.map(f => FileAdded(List(f)))
     val baseChanges = fileRemoved ++ fileAdded ++ matched
-    detectCrossFileMoves(baseChanges, oldFiles, newFiles)
+    val afterMoves  = detectCrossFileMoves(baseChanges, oldFiles, newFiles)
+    resolveTypeRefChanges(afterMoves, oldRegistry, newRegistry)
   }
 
   /**
@@ -189,6 +199,55 @@ object ProtoDiff {
 
     filtered ++ moves
   }
+
+  private type TypeEntry = Either[Message, Enum]
+
+  private def buildTypeRegistry(units: Iterable[CompilationUnit]): Map[String, TypeEntry] = {
+    def collectFromMessage(msg: Message, prefix: String): List[(String, TypeEntry)] = {
+      val fqn    = if (prefix.isEmpty) msg.name else s"$prefix.${msg.name}"
+      val self   = fqn -> Left(msg)
+      val nested = msg.elements.flatMap {
+        case MessageElement.NestedMessageElement(m) => collectFromMessage(m, fqn)
+        case MessageElement.NestedEnumElement(e)    => List(s"$fqn.${e.name}" -> Right(e))
+        case _                                      => Nil
+      }
+      self :: nested
+    }
+
+    units.flatMap { unit =>
+      unit.statements.flatMap {
+        case Statement.TopLevelStatement(TopLevelDef.MessageDef(m)) => collectFromMessage(m, "")
+        case Statement.TopLevelStatement(TopLevelDef.EnumDef(e))    => List(e.name -> Right(e))
+        case _                                                      => Nil
+      }
+    }.toMap
+  }
+
+  private def areWireEquivalent(oldType: Type, newType: Type, oldRegistry: Map[String, TypeEntry], newRegistry: Map[String, TypeEntry]): Boolean = {
+    val oldNorm = normalizeType(oldType)
+    val newNorm = normalizeType(newType)
+    if (oldNorm == newNorm) true
+    else
+      (oldNorm, newNorm) match {
+        case (Type.RefType(oldName), Type.RefType(newName)) =>
+          (oldRegistry.get(oldName), newRegistry.get(newName)) match {
+            case (Some(Left(oldMsg)), Some(Left(newMsg)))     => messageFingerprint(oldMsg) == messageFingerprint(newMsg)
+            case (Some(Right(oldEnum)), Some(Right(newEnum))) => enumFingerprint(oldEnum) == enumFingerprint(newEnum)
+            case _                                            => false
+          }
+        case (Type.ListType(v1), Type.ListType(v2))         => areWireEquivalent(v1, v2, oldRegistry, newRegistry)
+        case (Type.MapType(k1, v1), Type.MapType(k2, v2))   =>
+          areWireEquivalent(k1, k2, oldRegistry, newRegistry) && areWireEquivalent(v1, v2, oldRegistry, newRegistry)
+        case _                                              => false
+      }
+  }
+
+  private def resolveTypeRefChanges(changes: List[Change], oldRegistry: Map[String, TypeEntry], newRegistry: Map[String, TypeEntry]): List[Change] =
+    changes.map {
+      case FieldTypeChanged(path, name, number, oldType, newType) if areWireEquivalent(oldType, newType, oldRegistry, newRegistry) =>
+        FieldTypeRefRenamed(path, name, number, oldType, newType)
+      case c                                                                                                                       => c
+    }
 
   private def normalizeType(ty: Type): Type = ty match {
     case Type.RefType(name)     => Type.RefType(name.stripPrefix("."))

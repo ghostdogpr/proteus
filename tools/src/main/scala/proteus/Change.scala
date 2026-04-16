@@ -27,6 +27,7 @@ enum Change {
   case FieldNumberChanged(path: List[String], name: String, oldNumber: Int, newNumber: Int)
   case FieldRenamed(path: List[String], number: Int, oldName: String, newName: String)
   case FieldTypeChanged(path: List[String], name: String, number: Int, oldType: Type, newType: Type)
+  case FieldTypeRefRenamed(path: List[String], name: String, number: Int, oldType: Type, newType: Type)
   case FieldOptionalityChanged(path: List[String], name: String, number: Int, wasOptional: Boolean)
   case FieldOrderChanged(path: List[String])
   case FieldOneOfChanged(path: List[String], name: String, number: Int, oldOneOf: Option[String], newOneOf: Option[String])
@@ -73,6 +74,8 @@ enum Change {
       case FieldRenamed(_, _, oldName, newName)                  => s"field '$oldName' renamed to '$newName'"
       case FieldTypeChanged(_, name, _, oldType, newType)        =>
         s"field '$name' type changed from ${Renderer.renderType(oldType)} to ${Renderer.renderType(newType)}"
+      case FieldTypeRefRenamed(_, name, _, oldType, newType)     =>
+        s"field '$name' type ref renamed from ${Renderer.renderType(oldType)} to ${Renderer.renderType(newType)}"
       case FieldOptionalityChanged(_, name, _, wasOptional)      =>
         s"field '$name' ${if (wasOptional) "optional removed" else "made optional"}"
       case FieldOrderChanged(_)                                  => "field order changed"
