@@ -26,9 +26,11 @@ object ProtoDiff {
     *
     * @param change the change to classify.
     * @param mode the compatibility mode to evaluate against.
+    * @param overrides optional severity overrides.
     */
-  def severity(change: Change, mode: CompatMode): Severity = {
+  def severity(change: Change, mode: CompatMode, overrides: SeverityOverrides = SeverityOverrides.empty): Severity = {
     import Severity.*
+    val name           = change.productPrefix
     val (wire, source) = change match {
       case _: PackageChanged          => (Info, Error)
       case _: FileAdded               => (Info, Info)
@@ -73,10 +75,12 @@ object ProtoDiff {
       case _: CommentRemoved          => (Info, Info)
       case _: CommentChanged          => (Info, Info)
     }
+    val w              = overrides.wire.getOrElse(name, wire)
+    val s              = overrides.source.getOrElse(name, source)
     mode match {
-      case CompatMode.Wire      => wire
-      case CompatMode.Source    => source
-      case CompatMode.Strictest => if (wire.level >= source.level) wire else source
+      case CompatMode.Wire      => w
+      case CompatMode.Source    => s
+      case CompatMode.Strictest => if (w.level >= s.level) w else s
     }
   }
 

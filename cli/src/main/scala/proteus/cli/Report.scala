@@ -1,6 +1,6 @@
 package proteus.cli
 
-import proteus.{Change, CompatMode, ProtoDiff, Severity}
+import proteus.{Change, CompatMode, ProtoDiff, Severity, SeverityOverrides}
 
 /**
   * Formats a list of [[Change]]s into a human-readable report.
@@ -17,11 +17,16 @@ object Report {
     * Renders the report as a single string (with a trailing newline). Returns `"No changes detected.\n"`
     * when the input is empty.
     */
-  def format(changes: List[Change], mode: CompatMode, byFile: Boolean): String =
+  def format(
+    changes: List[Change],
+    mode: CompatMode,
+    byFile: Boolean,
+    overrides: SeverityOverrides = SeverityOverrides.empty
+  ): String =
     if (changes.isEmpty) "No changes detected.\n"
     else {
       val sb         = new StringBuilder
-      val bySeverity = changes.groupBy(c => ProtoDiff.severity(c, mode))
+      val bySeverity = changes.groupBy(c => ProtoDiff.severity(c, mode, overrides))
       severityOrder.foreach { sev =>
         bySeverity.get(sev).foreach { sevChanges =>
           val label = sev match {

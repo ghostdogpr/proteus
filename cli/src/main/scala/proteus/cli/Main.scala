@@ -4,7 +4,7 @@ import java.nio.file.{Files, Paths}
 
 import mainargs.{arg, main, ParserForMethods, TokensReader}
 
-import proteus.{CompatMode, ProtoDiff, Severity}
+import proteus.{CompatMode, ProtoDiff, Severity, SeverityOverrides}
 
 object Main {
 
@@ -21,11 +21,15 @@ object Main {
     @arg(short = 'm', doc = "compat mode: wire | source | strictest (default: strictest)")
     mode: CompatMode = CompatMode.Strictest,
     @arg(short = 's', doc = "minimum severity: error | warning | info (default: error)")
-    severity: Severity = Severity.Error
+    severity: Severity = Severity.Error,
+    @arg(short = 'o', doc = "severity override: mode.ChangeType=severity (e.g. wire.FieldRemoved=info)")
+    `override`: List[String] = Nil
   ): Unit = {
     val oldPath               = Paths.get(old)
     val newPath               = Paths.get(`new`)
     val isDirectoryComparison = Files.isDirectory(oldPath) || Files.isDirectory(newPath)
+
+    val overrides = SeverityOverrides.parse(`override`).fold(err => fail(err), identity)
 
     val changes  =
       if (isDirectoryComparison) {
@@ -37,11 +41,11 @@ object Main {
         val newUnit = ProtoFiles.loadFile(newPath).fold(err => fail(err), identity)
         ProtoDiff.diff(oldUnit, newUnit)
       }
-    val filtered = changes.filter(c => ProtoDiff.severity(c, mode).level >= severity.level)
+    val filtered = changes.filter(c => ProtoDiff.severity(c, mode, overrides).level >= severity.level)
 
-    val output    = Report.format(filtered, mode, isDirectoryComparison)
+    val output    = Report.format(filtered, mode, isDirectoryComparison, overrides)
     print(output)
-    val hasErrors = filtered.exists(c => ProtoDiff.severity(c, mode) == Severity.Error)
+    val hasErrors = filtered.exists(c => ProtoDiff.severity(c, mode, overrides) == Severity.Error)
     sys.exit(if (hasErrors) 1 else 0)
   }
 
