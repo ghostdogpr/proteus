@@ -1341,6 +1341,44 @@ message Req {
 
         assertTrue(rendered == expected)
       },
+      test("ref modifier with repeated field") {
+        case class Inner(value: String) derives Schema
+        case class Req(items: List[Inner]) derives Schema
+
+        val d        = deriver.modifier[Inner](nested).modifier[Req]("items", ref("Parent"))
+        val codec    = Schema[Req].derive(d)
+        val rendered = renderCodec(codec)
+
+        val expected = """syntax = "proto3";
+
+package test;
+
+message Req {
+    repeated Parent.Inner items = 1;
+}
+"""
+
+        assertTrue(rendered == expected)
+      },
+      test("ref modifier with map field") {
+        case class Inner(value: String) derives Schema
+        case class Req(items: Map[Int, Inner]) derives Schema
+
+        val d        = deriver.modifier[Inner](nested).modifier[Req]("items", ref("Parent"))
+        val codec    = Schema[Req].derive(d)
+        val rendered = renderCodec(codec)
+
+        val expected = """syntax = "proto3";
+
+package test;
+
+message Req {
+    map<int32, Parent.Inner> items = 1;
+}
+"""
+
+        assertTrue(rendered == expected)
+      },
       test("NestedOneOf with AutoRefOneOf flags should not re-nest variant referenced from another message") {
         sealed trait Action derives Schema
         object Action {

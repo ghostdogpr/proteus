@@ -226,8 +226,20 @@ object ProtobufCodec {
         * Converts the message field to its protobuf IR representation.
         */
       def toProtoIR: ProtoIR.MessageElement.FieldElement = {
+        def qualifyRef(qs: List[String], ty: ProtoIR.Type): ProtoIR.Type =
+          ty match {
+            case ProtoIR.Type.RefType(_, n) => ProtoIR.Type.RefType(qs, n)
+            case other                      => other
+          }
+
         val opts  = ProtoIR.OptionValue.deprecatedOpts(deprecated)
-        val ty    = refQualifiers.fold(toProtoType(codec))(qs => ProtoIR.Type.RefType(qs, codec.getName))
+        val ty    = refQualifiers.fold(toProtoType(codec)) { qs =>
+          toProtoType(codec) match {
+            case ProtoIR.Type.ListType(valueType)         => ProtoIR.Type.ListType(qualifyRef(qs, valueType))
+            case ProtoIR.Type.MapType(keyType, valueType) => ProtoIR.Type.MapType(keyType, qualifyRef(qs, valueType))
+            case other                                    => qualifyRef(qs, other)
+          }
+        }
         val field = ProtoIR.Field(ty, name, id, optional = isOptional(using codec), comment = comment, options = opts)
         ProtoIR.MessageElement.FieldElement(field)
       }
@@ -263,17 +275,7 @@ object ProtobufCodec {
         val fields = cases
           .flatMap {
             case field: SimpleField[?]   =>
-              val opts = ProtoIR.OptionValue.deprecatedOpts(field.deprecated)
-              Some(
-                ProtoIR.Field(
-                  toProtoType(field.codec),
-                  field.name,
-                  field.id,
-                  optional = isOptional(using field.codec),
-                  comment = field.comment,
-                  options = opts
-                )
-              )
+              Some(field.toProtoIR.field)
             case field: ExcludedField[?] => None
           }
           .toList
@@ -656,12 +658,16 @@ object ProtobufCodec {
     def toProtoIR: ProtoIR.Message = {
       def resolveRefPrefix[A](codec: ProtobufCodec[A]): Option[String] =
         codec match {
-          case c: Message[_]          =>
+          case c: Message[_]           =>
             if (c.nested.getOrElse(false) && c.canonicalParent.exists(_ != name)) c.canonicalParent else None
-          case c: Transform[_, _]     => resolveRefPrefix(c.codec)
-          case c: Optional[_]         => resolveRefPrefix(c.codec)
-          case c: RecursiveMessage[_] => resolveRefPrefix(c.codec)
-          case _                      => None
+          case c: Transform[_, _]      => resolveRefPrefix(c.codec)
+          case c: Optional[_]          => resolveRefPrefix(c.codec)
+          case c: RecursiveMessage[_]  => resolveRefPrefix(c.codec)
+          case c: Repeated[_, _]       => resolveRefPrefix(c.element)
+          case c: RepeatedMap[_, _, _] =>
+            if (c.mapInProto) resolveRefPrefix(c.element.simpleFields(1).codec)
+            else resolveRefPrefix(c.element)
+          case _                       => None
         }
 
       val elements: IArray[ProtoIR.MessageElement.FieldElement | ProtoIR.MessageElement.OneOfElement] = fields.map {
@@ -671,7 +677,16 @@ object ProtobufCodec {
             case None         => f.toProtoIR
           }
         case f: SimpleField[?]                            => f.toProtoIR
-        case f: OneOfField[?]                             => f.toProtoIR
+        case f: OneOfField[?]                             =>
+          val updatedCases = f.cases.map {
+            case sf: SimpleField[?] if sf.refQualifiers.isEmpty =>
+              resolveRefPrefix(sf.codec) match {
+                case Some(prefix) => sf.copy(refQualifiers = Some(List(prefix)))
+                case None         => sf
+              }
+            case other                                          => other
+          }
+          f.copy(cases = updatedCases).toProtoIR
         case f: ExcludedField[?]                          => f.toProtoIR
       }
 
