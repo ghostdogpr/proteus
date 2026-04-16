@@ -13,6 +13,7 @@ val circeVersion                = "0.14.15"
 val zioSchemaVersion            = "1.8.3"
 val upickleVersion              = "4.4.3"
 val borerVersion                = "1.16.2"
+val mainargsVersion             = "0.7.8"
 
 inThisBuild(
   List(
@@ -34,7 +35,7 @@ addCommandAlias("check", "all scalafmtSbtCheck scalafmtCheck test:scalafmtCheck"
 lazy val root = project
   .in(file("."))
   .settings(publish / skip := true)
-  .aggregate(core.jvm, core.js, tools.jvm, tools.js, grpc, zioGrpc, fs2Grpc, oxGrpc, json.jvm, json.js, benchmarks, examples)
+  .aggregate(core.jvm, core.js, tools.jvm, tools.js, cli, grpc, zioGrpc, fs2Grpc, oxGrpc, json.jvm, json.js, benchmarks, examples)
 
 lazy val core = crossProject(JSPlatform, JVMPlatform)
   .crossType(CrossType.Pure)
@@ -73,6 +74,25 @@ lazy val tools = crossProject(JSPlatform, JVMPlatform)
   )
   .dependsOn(core % "compile->compile;test->test")
   .jsSettings(Test / fork := false)
+
+lazy val cli = project
+  .in(file("cli"))
+  .settings(name := "proteus-cli")
+  .settings(commonSettings)
+  .settings(publish / skip := true)
+  .settings(
+    libraryDependencies ++= Seq(
+      "com.lihaoyi" %% "mainargs"     % mainargsVersion,
+      "dev.zio"     %% "zio-test"     % zioTestVersion % Test,
+      "dev.zio"     %% "zio-test-sbt" % zioTestVersion % Test
+    )
+  )
+  .enablePlugins(JavaAppPackaging)
+  .settings(
+    Compile / mainClass  := Some("proteus.cli.Main"),
+    executableScriptName := "proteus-diff"
+  )
+  .dependsOn(tools.jvm)
 
 lazy val grpc = project
   .in(file("grpc"))

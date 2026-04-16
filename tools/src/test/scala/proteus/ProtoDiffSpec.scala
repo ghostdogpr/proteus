@@ -480,6 +480,79 @@ object ProtoDiffSpec extends ZIOSpecDefault {
         )
         assertTrue(ProtoDiff.diff(old, nw) == Nil)
       }
+    ),
+    suite("Multi-file diff")(
+      test("file added") {
+        val old     = Map.empty[String, CompilationUnit]
+        val nw      = Map("foo.proto" -> parse("""syntax = "proto3"; message Foo {}"""))
+        val changes = ProtoDiff.diffFiles(old, nw)
+        assertTrue(changes == List(FileAdded(List("foo.proto"))))
+      },
+      test("file removed") {
+        val old     = Map("foo.proto" -> parse("""syntax = "proto3"; message Foo {}"""))
+        val nw      = Map.empty[String, CompilationUnit]
+        val changes = ProtoDiff.diffFiles(old, nw)
+        assertTrue(changes == List(FileRemoved(List("foo.proto"))))
+      },
+      test("matched file: changes are prefixed with file path") {
+        val old     = Map("foo.proto" -> parse("""syntax = "proto3"; message Foo { string name = 1; }"""))
+        val nw      = Map("foo.proto" -> parse("""syntax = "proto3"; message Foo { string name = 1; int32 id = 2; }"""))
+        val changes = ProtoDiff.diffFiles(old, nw)
+        assertTrue(changes == List(FieldAdded(List("foo.proto", "Foo"), "id", 2)))
+      },
+      test("identical multi-file diff produces empty list") {
+        val a       = parse("""syntax = "proto3"; message Foo { string name = 1; }""")
+        val b       = parse("""syntax = "proto3"; message Bar { string name = 1; }""")
+        val files   = Map("a.proto" -> a, "b.proto" -> b)
+        val changes = ProtoDiff.diffFiles(files, files)
+        assertTrue(changes == Nil)
+      },
+      test("cross-file message move: detected when name and structure match") {
+        val old     = Map(
+          "a.proto" -> parse("""syntax = "proto3"; message Common { string name = 1; int32 id = 2; }"""),
+          "b.proto" -> parse("""syntax = "proto3"; message Other {}""")
+        )
+        val nw      = Map(
+          "a.proto" -> parse("""syntax = "proto3";"""),
+          "b.proto" -> parse("""syntax = "proto3"; message Other {} message Common { string name = 1; int32 id = 2; }""")
+        )
+        val changes = ProtoDiff.diffFiles(old, nw)
+        assertTrue(changes == List(MessageMoved(List("b.proto"), "Common", "a.proto", "b.proto")))
+      },
+      test("cross-file enum move: detected when name and structure match") {
+        val old     = Map(
+          "a.proto" -> parse("""syntax = "proto3"; enum Status { UNKNOWN = 0; ACTIVE = 1; }"""),
+          "b.proto" -> parse("""syntax = "proto3";""")
+        )
+        val nw      = Map(
+          "a.proto" -> parse("""syntax = "proto3";"""),
+          "b.proto" -> parse("""syntax = "proto3"; enum Status { UNKNOWN = 0; ACTIVE = 1; }""")
+        )
+        val changes = ProtoDiff.diffFiles(old, nw)
+        assertTrue(changes == List(EnumMoved(List("b.proto"), "Status", "a.proto", "b.proto")))
+      },
+      test("cross-file move not detected when structure differs: falls back to remove + add") {
+        val old     = Map(
+          "a.proto" -> parse("""syntax = "proto3"; message Common { string name = 1; }"""),
+          "b.proto" -> parse("""syntax = "proto3";""")
+        )
+        val nw      = Map(
+          "a.proto" -> parse("""syntax = "proto3";"""),
+          "b.proto" -> parse("""syntax = "proto3"; message Common { string name = 1; int32 id = 2; }""")
+        )
+        val changes = ProtoDiff.diffFiles(old, nw)
+        assertTrue(
+          changes.contains(MessageRemoved(List("a.proto"), "Common")),
+          changes.contains(MessageAdded(List("b.proto"), "Common")),
+          changes.collect { case _: MessageMoved => true }.isEmpty
+        )
+      },
+      test("cross-file move not detected when name moves to same file (just rename detection within file)") {
+        val old     = Map("a.proto" -> parse("""syntax = "proto3"; message Foo { string name = 1; }"""))
+        val nw      = Map("a.proto" -> parse("""syntax = "proto3"; message Bar { string name = 1; }"""))
+        val changes = ProtoDiff.diffFiles(old, nw)
+        assertTrue(changes == List(MessageRenamed(List("a.proto"), "Foo", "Bar")))
+      }
     )
   )
 }

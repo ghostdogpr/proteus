@@ -31,6 +31,10 @@ object ProtoDiff {
     import Severity.*
     val (wire, source) = change match {
       case _: PackageChanged          => (Info, Error)
+      case _: FileAdded               => (Info, Info)
+      case _: FileRemoved             => (Error, Error)
+      case _: MessageMoved            => (Info, Warning)
+      case _: EnumMoved               => (Info, Warning)
       case _: ImportAdded             => (Info, Info)
       case _: ImportRemoved           => (Info, Info)
       case _: ImportModifierChanged   => (Info, Warning)
@@ -79,13 +83,112 @@ object ProtoDiff {
     *
     * @param oldUnit the original compilation unit.
     * @param newUnit the updated compilation unit.
+    * @param path optional initial path prefix (e.g. `List("foo.proto")` when diffing files inside a multi-file diff).
     * @return a list of mode-independent changes; use [[severity]] to classify them.
     */
-  def diff(oldUnit: CompilationUnit, newUnit: CompilationUnit): List[Change] =
-    diffPackage(oldUnit.packageName, newUnit.packageName) ++
-      diffImports(oldUnit.statements, newUnit.statements) ++
-      diffTopLevelOptions(oldUnit.options, newUnit.options, Nil) ++
-      diffTopLevelDefs(oldUnit.statements, newUnit.statements, Nil)
+  def diff(oldUnit: CompilationUnit, newUnit: CompilationUnit, path: List[String] = Nil): List[Change] =
+    diffPackage(oldUnit.packageName, newUnit.packageName, path) ++
+      diffImports(oldUnit.statements, newUnit.statements, path) ++
+      diffTopLevelOptions(oldUnit.options, newUnit.options, path) ++
+      diffTopLevelDefs(oldUnit.statements, newUnit.statements, path)
+
+  /**
+    * Computes all changes between two groups of proto files keyed by relative path.
+    *
+    * Top-level messages and enums that appear in different files between old and new but have the
+    * same name and identical structure are reported as [[Change.MessageMoved]] / [[Change.EnumMoved]]
+    * instead of remove + add.
+    *
+    * @param oldFiles old file map (relative path -> compilation unit).
+    * @param newFiles new file map.
+    * @return a list of mode-independent changes; use [[severity]] to classify them.
+    */
+  def diffFiles(oldFiles: Map[String, CompilationUnit], newFiles: Map[String, CompilationUnit]): List[Change] = {
+    val common      = (oldFiles.keySet & newFiles.keySet).toList.sorted
+    val onlyOld     = (oldFiles.keySet -- newFiles.keySet).toList.sorted
+    val onlyNew     = (newFiles.keySet -- oldFiles.keySet).toList.sorted
+    val matched     = common.flatMap(f => diff(oldFiles(f), newFiles(f), List(f)))
+    val fileRemoved = onlyOld.map(f => FileRemoved(List(f)))
+    val fileAdded   = onlyNew.map(f => FileAdded(List(f)))
+    val baseChanges = fileRemoved ++ fileAdded ++ matched
+    detectCrossFileMoves(baseChanges, oldFiles, newFiles)
+  }
+
+  /**
+    * Detects top-level message/enum moves across files: if a top-level type with the same name and
+    * identical structure was removed from old-file-A and added in new-file-B, replace the pair with
+    * a single Move change.
+    */
+  private def detectCrossFileMoves(
+    changes: List[Change],
+    oldFiles: Map[String, CompilationUnit],
+    newFiles: Map[String, CompilationUnit]
+  ): List[Change] = {
+    def topMessages(unit: CompilationUnit): Map[String, Message] =
+      unit.statements.collect { case Statement.TopLevelStatement(TopLevelDef.MessageDef(m)) => m.name -> m }.toMap
+    def topEnums(unit: CompilationUnit): Map[String, Enum]       =
+      unit.statements.collect { case Statement.TopLevelStatement(TopLevelDef.EnumDef(e)) => e.name -> e }.toMap
+
+    val removedFiles = changes.collect { case FileRemoved(file :: Nil) => file }
+    val addedFiles   = changes.collect { case FileAdded(file :: Nil) => file }
+
+    // Direct removals/additions (file kept, but type added/removed inside it)
+    val msgRemovedDirect  = changes.collect { case MessageRemoved(file :: Nil, name) => (file, name) }
+    val msgAddedDirect    = changes.collect { case MessageAdded(file :: Nil, name) => (file, name) }
+    val enumRemovedDirect = changes.collect { case EnumRemoved(file :: Nil, name) => (file, name) }
+    val enumAddedDirect   = changes.collect { case EnumAdded(file :: Nil, name) => (file, name) }
+
+    // Implicit removals/additions from whole-file changes
+    val msgRemovedFromFile  = removedFiles.flatMap(f => topMessages(oldFiles(f)).keys.map(n => (f, n)))
+    val msgAddedFromFile    = addedFiles.flatMap(f => topMessages(newFiles(f)).keys.map(n => (f, n)))
+    val enumRemovedFromFile = removedFiles.flatMap(f => topEnums(oldFiles(f)).keys.map(n => (f, n)))
+    val enumAddedFromFile   = addedFiles.flatMap(f => topEnums(newFiles(f)).keys.map(n => (f, n)))
+
+    val msgRemovedRaw  = msgRemovedDirect ++ msgRemovedFromFile
+    val msgAddedRaw    = msgAddedDirect ++ msgAddedFromFile
+    val enumRemovedRaw = enumRemovedDirect ++ enumRemovedFromFile
+    val enumAddedRaw   = enumAddedDirect ++ enumAddedFromFile
+
+    val msgMoves: List[(String, String, String)] = msgRemovedRaw.flatMap { case (oldFile, name) =>
+      msgAddedRaw.find { case (newFile, n) => n == name && newFile != oldFile }.flatMap { case (newFile, _) =>
+        for {
+          oldMsg <- topMessages(oldFiles(oldFile)).get(name)
+          newMsg <- topMessages(newFiles(newFile)).get(name)
+          if messageFingerprint(oldMsg) == messageFingerprint(newMsg)
+        } yield (oldFile, newFile, name)
+      }
+    }
+
+    val enumMoves: List[(String, String, String)] = enumRemovedRaw.flatMap { case (oldFile, name) =>
+      enumAddedRaw.find { case (newFile, n) => n == name && newFile != oldFile }.flatMap { case (newFile, _) =>
+        for {
+          oldEnum <- topEnums(oldFiles(oldFile)).get(name)
+          newEnum <- topEnums(newFiles(newFile)).get(name)
+          if enumFingerprint(oldEnum) == enumFingerprint(newEnum)
+        } yield (oldFile, newFile, name)
+      }
+    }
+
+    val removedMovedMsg  = msgMoves.map { case (of, _, n) => (of, n) }.toSet
+    val addedMovedMsg    = msgMoves.map { case (_, nf, n) => (nf, n) }.toSet
+    val removedMovedEnum = enumMoves.map { case (of, _, n) => (of, n) }.toSet
+    val addedMovedEnum   = enumMoves.map { case (_, nf, n) => (nf, n) }.toSet
+
+    val filtered = changes.filterNot {
+      case MessageRemoved(file :: Nil, name) => removedMovedMsg.contains((file, name))
+      case MessageAdded(file :: Nil, name)   => addedMovedMsg.contains((file, name))
+      case EnumRemoved(file :: Nil, name)    => removedMovedEnum.contains((file, name))
+      case EnumAdded(file :: Nil, name)      => addedMovedEnum.contains((file, name))
+      case _                                 => false
+    }
+
+    // Group the move under the destination file so it appears alongside changes in that file.
+    val moves: List[Change] =
+      msgMoves.map { case (of, nf, n) => MessageMoved(List(nf), n, of, nf) } ++
+        enumMoves.map { case (of, nf, n) => EnumMoved(List(nf), n, of, nf) }
+
+    filtered ++ moves
+  }
 
   private def normalizeType(ty: Type): Type = ty match {
     case Type.RefType(name)     => Type.RefType(name.stripPrefix("."))
@@ -115,20 +218,20 @@ object ProtoDiff {
   private def stripEnumCosmetics(e: Enum): Enum =
     e.copy(comment = None, options = Nil, nested = false, values = e.values.map(v => v.copy(comment = None, options = Nil)))
 
-  private def diffPackage(oldPkg: Option[String], newPkg: Option[String]): List[Change] =
-    if (oldPkg == newPkg) Nil else List(PackageChanged(Nil, oldPkg, newPkg))
+  private def diffPackage(oldPkg: Option[String], newPkg: Option[String], path: List[String]): List[Change] =
+    if (oldPkg == newPkg) Nil else List(PackageChanged(path, oldPkg, newPkg))
 
-  private def diffImports(oldStmts: List[Statement], newStmts: List[Statement]): List[Change] = {
+  private def diffImports(oldStmts: List[Statement], newStmts: List[Statement], path: List[String]): List[Change] = {
     val oldImports = oldStmts.collect { case i: Statement.ImportStatement => i }
     val newImports = newStmts.collect { case i: Statement.ImportStatement => i }
     val oldByPath  = oldImports.map(i => i.path -> i).toMap
     val newByPath  = newImports.map(i => i.path -> i).toMap
-    val removed    = (oldByPath.keySet -- newByPath.keySet).toList.map(p => ImportRemoved(Nil, p))
-    val added      = (newByPath.keySet -- oldByPath.keySet).toList.map(p => ImportAdded(Nil, p))
+    val removed    = (oldByPath.keySet -- newByPath.keySet).toList.map(p => ImportRemoved(path, p))
+    val added      = (newByPath.keySet -- oldByPath.keySet).toList.map(p => ImportAdded(path, p))
     val changed    = (oldByPath.keySet & newByPath.keySet).toList.flatMap { p =>
       val oldMod = oldByPath(p).modifier
       val newMod = newByPath(p).modifier
-      if (oldMod == newMod) Nil else List(ImportModifierChanged(Nil, p, oldMod, newMod))
+      if (oldMod == newMod) Nil else List(ImportModifierChanged(path, p, oldMod, newMod))
     }
     removed ++ added ++ changed
   }

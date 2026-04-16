@@ -1,0 +1,8 @@
+Errors (1)
+  FieldTypeChanged (1)
+    User: field 'id' type changed from int32 to int64
+
+Info (1)
+  FieldAdded (1)
+    User: field 'email' added
+

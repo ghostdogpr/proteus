@@ -1,0 +1,13 @@
+Errors (2)
+  common.proto
+    FileRemoved (1)
+      file removed
+  users.proto
+    FieldRenamed (1)
+      User: field 'user_id' renamed to 'id'
+
+Warnings (1)
+  users.proto
+    MessageMoved (1)
+      message 'Address' moved from common.proto to users.proto
+
