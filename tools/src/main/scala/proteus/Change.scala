@@ -31,8 +31,6 @@ enum Change {
   case FieldOptionalityChanged(path: List[String], name: String, number: Int, wasOptional: Boolean)
   case FieldOrderChanged(path: List[String])
   case FieldOneOfChanged(path: List[String], name: String, number: Int, oldOneOf: Option[String], newOneOf: Option[String])
-  case OneOfAdded(path: List[String], name: String)
-  case OneOfRemoved(path: List[String], name: String)
   case EnumAdded(path: List[String], name: String)
   case EnumRemoved(path: List[String], name: String)
   case EnumRenamed(path: List[String], oldName: String, newName: String)
@@ -83,8 +81,6 @@ enum Change {
         val from = oldOneOf.map(o => s"oneof '$o'").getOrElse("top-level")
         val to   = newOneOf.map(o => s"oneof '$o'").getOrElse("top-level")
         s"field '$name' moved from $from to $to"
-      case OneOfAdded(_, name)                                   => s"oneof '$name' added"
-      case OneOfRemoved(_, name)                                 => s"oneof '$name' removed"
       case EnumAdded(_, name)                                    => s"enum '$name' added"
       case EnumRemoved(_, name)                                  => s"enum '$name' removed"
       case EnumRenamed(_, oldName, newName)                      => s"enum renamed from '$oldName' to '$newName'"

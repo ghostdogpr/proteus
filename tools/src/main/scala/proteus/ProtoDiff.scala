@@ -50,8 +50,6 @@ object ProtoDiff {
       case _: FieldOptionalityChanged => (Warning, Warning)
       case _: FieldOrderChanged       => (Info, Warning)
       case _: FieldOneOfChanged       => (Error, Error)
-      case _: OneOfAdded              => (Info, Info)
-      case _: OneOfRemoved            => (Error, Error)
       case _: EnumAdded               => (Info, Info)
       case _: EnumRemoved             => (Error, Error)
       case _: EnumRenamed             => (Info, Error)
@@ -458,10 +456,7 @@ object ProtoDiff {
     val newOneOfs = newMsg.elements.collect { case MessageElement.OneOfElement(o) => o }
     val oldByName = oldOneOfs.map(o => o.name -> o).toMap
     val newByName = newOneOfs.map(o => o.name -> o).toMap
-    val removed   = (oldByName.keySet -- newByName.keySet).toList.map(n => OneOfRemoved(path, n))
-    val added     = (newByName.keySet -- oldByName.keySet).toList.map(n => OneOfAdded(path, n))
-    val optDiffs  = (oldByName.keySet & newByName.keySet).toList.flatMap(n => diffOptions(oldByName(n).options, newByName(n).options, path :+ n))
-    removed ++ added ++ optDiffs
+    (oldByName.keySet & newByName.keySet).toList.flatMap(n => diffOptions(oldByName(n).options, newByName(n).options, path :+ n))
   }
 
   private def diffEnums(oldEnums: List[Enum], newEnums: List[Enum], path: List[String]): List[Change] = {

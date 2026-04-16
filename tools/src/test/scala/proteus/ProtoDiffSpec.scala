@@ -176,7 +176,6 @@ object ProtoDiffSpec extends ZIOSpecDefault {
         )
         val changes = ProtoDiff.diff(old, nw)
         assertTrue(
-          changes.contains(OneOfAdded(List("Foo"), "contact")),
           changes.contains(FieldAdded(List("Foo"), "email", 2)),
           changes.contains(FieldAdded(List("Foo"), "phone", 3))
         )
@@ -193,7 +192,6 @@ object ProtoDiffSpec extends ZIOSpecDefault {
         val nw      = parse("""syntax = "proto3"; message Foo { string name = 1; }""")
         val changes = ProtoDiff.diff(old, nw)
         assertTrue(
-          changes.contains(OneOfRemoved(List("Foo"), "contact")),
           changes.contains(FieldRemoved(List("Foo"), "email", 2, numberReserved = false)),
           changes.contains(FieldRemoved(List("Foo"), "phone", 3, numberReserved = false))
         )
@@ -217,8 +215,7 @@ object ProtoDiffSpec extends ZIOSpecDefault {
         )
         val changes = ProtoDiff.diff(old, nw)
         assertTrue(
-          changes.contains(FieldOneOfChanged(List("Foo"), "email", 2, None, Some("contact"))),
-          changes.contains(OneOfAdded(List("Foo"), "contact"))
+          changes == List(FieldOneOfChanged(List("Foo"), "email", 2, None, Some("contact")))
         )
       },
       test("field moved between oneofs") {
@@ -646,7 +643,7 @@ object ProtoDiffSpec extends ZIOSpecDefault {
         assertTrue(
           changes.contains(FieldTypeChanged(List("api.proto", "Req"), "x", 1, Type.RefType("SomeExternal"), Type.RefType("OtherExternal")))
         )
-      },
+      }
     )
   )
 }
