@@ -77,7 +77,7 @@ lazy val tools = crossProject(JSPlatform, JVMPlatform)
 
 lazy val cli = project
   .in(file("cli"))
-  .settings(name := "proteus-cli")
+  .settings(name := "proteus-diff")
   .settings(commonSettings)
   .settings(publish / skip := true)
   .settings(

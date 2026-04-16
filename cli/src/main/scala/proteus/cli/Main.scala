@@ -69,6 +69,23 @@ object Main {
     sys.exit(2)
   }
 
+  private val helpText: String =
+    """Usage: proteus-diff [options] <old> <new>
+      |
+      |Arguments:
+      |  old                        old proto file or directory
+      |  new                        new proto file or directory
+      |
+      |Options:
+      |  -m, --mode <mode>          compat mode: wire | source | strictest (default: strictest)
+      |  -s, --severity <severity>  minimum severity to display: error | warning | info (default: error)
+      |  -f, --format <format>      output format: text | json (default: text)
+      |  --fail-on <severity>       exit 1 at this severity or above: error | warning | info (default: error)
+      |  -o, --override <override>  severity override: mode.ChangeType=severity (repeatable)
+      |  --color <mode>             color output: auto | always | never (default: auto)
+      |  -v, --version              print version and exit
+      |  -h, --help                 print this help""".stripMargin
+
   private val buildVersion: String =
     Option(getClass.getResourceAsStream("/proteus-version.txt"))
       .map(is => new String(is.readAllBytes()).trim)
@@ -103,8 +120,7 @@ object Main {
       println(s"proteus-diff $buildVersion")
       sys.exit(0)
     } else if (args.contains("-h") || args.contains("--help") || args.isEmpty) {
-      println(ParserForMethods(this).helpText())
-      println("  -v --version        print version and exit")
+      println(helpText)
       sys.exit(0)
     } else ParserForMethods(this).runOrExit(args.toIndexedSeq): Unit
 }
