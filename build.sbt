@@ -99,7 +99,12 @@ lazy val cli = project
       "--initialize-at-build-time",
       "--gc=epsilon",
       "-O2"
-    )
+    ),
+    Compile / resourceGenerators += Def.task {
+      val file = (Compile / resourceManaged).value / "proteus-version.txt"
+      IO.write(file, version.value)
+      Seq(file)
+    }
   )
   .dependsOn(tools.jvm)
 

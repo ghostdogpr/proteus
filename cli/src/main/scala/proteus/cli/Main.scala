@@ -8,12 +8,6 @@ import proteus.{CompatMode, ProtoDiff, Severity, SeverityOverrides}
 
 object Main {
 
-  /**
-    * Compares two `.proto` files (or two directories of `.proto` files) and prints the changes,
-    * grouped by severity, then by file (when comparing directories), then by change type.
-    *
-    * Exits with code 1 if any Error-severity change is reported after filtering, 0 otherwise.
-    */
   @main
   def run(
     @arg(positional = true, doc = "old proto file or directory") old: String,
@@ -23,8 +17,26 @@ object Main {
     @arg(short = 's', doc = "minimum severity: error | warning | info (default: error)")
     severity: Severity = Severity.Error,
     @arg(short = 'o', doc = "severity override: mode.ChangeType=severity (e.g. wire.FieldRemoved=info)")
-    `override`: List[String] = Nil
+    `override`: List[String] = Nil,
+    @arg(short = 'f', doc = "output format: text | json (default: text)")
+    format: String = "text",
+    @arg(doc = "exit 1 if any change at this severity or above: error | warning | info (default: error)")
+    failOn: Severity = Severity.Error,
+    @arg(doc = "color output: auto | always | never (default: auto)")
+    color: String = "auto"
   ): Unit = {
+    val useColor = color match {
+      case "always" => true
+      case "never"  => false
+      case _        => System.console() != null
+    }
+
+    val outputFormat = format.toLowerCase match {
+      case "json" => "json"
+      case "text" => "text"
+      case other  => fail(s"unknown format '$other' (expected: text | json)")
+    }
+
     val oldPath               = Paths.get(old)
     val newPath               = Paths.get(`new`)
     val isDirectoryComparison = Files.isDirectory(oldPath) || Files.isDirectory(newPath)
@@ -43,16 +55,24 @@ object Main {
       }
     val filtered = changes.filter(c => ProtoDiff.severity(c, mode, overrides).level >= severity.level)
 
-    val output    = Report.format(filtered, mode, isDirectoryComparison, overrides)
+    val output     = outputFormat match {
+      case "json" => Report.formatJson(filtered, mode, overrides)
+      case _      => Report.format(filtered, mode, isDirectoryComparison, overrides, useColor)
+    }
     print(output)
-    val hasErrors = filtered.exists(c => ProtoDiff.severity(c, mode, overrides) == Severity.Error)
-    sys.exit(if (hasErrors) 1 else 0)
+    val shouldFail = filtered.exists(c => ProtoDiff.severity(c, mode, overrides).level >= failOn.level)
+    sys.exit(if (shouldFail) 1 else 0)
   }
 
   private def fail(message: String): Nothing = {
     System.err.println(message)
     sys.exit(2)
   }
+
+  private val buildVersion: String =
+    Option(getClass.getResourceAsStream("/proteus-version.txt"))
+      .map(is => new String(is.readAllBytes()).trim)
+      .getOrElse("dev")
 
   // ── mainargs typeclass instances ──────────────────────────────────────
 
@@ -78,5 +98,13 @@ object Main {
       }
   }
 
-  def main(args: Array[String]): Unit = ParserForMethods(this).runOrExit(args.toIndexedSeq): Unit
+  def main(args: Array[String]): Unit =
+    if (args.contains("-v") || args.contains("--version")) {
+      println(s"proteus-diff $buildVersion")
+      sys.exit(0)
+    } else if (args.contains("-h") || args.contains("--help") || args.isEmpty) {
+      println(ParserForMethods(this).helpText())
+      println("  -v --version        print version and exit")
+      sys.exit(0)
+    } else ParserForMethods(this).runOrExit(args.toIndexedSeq): Unit
 }
