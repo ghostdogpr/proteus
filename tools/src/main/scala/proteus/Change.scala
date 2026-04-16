@@ -80,7 +80,9 @@ enum Change {
         s"field '$name' ${if (wasOptional) "optional removed" else "made optional"}"
       case FieldOrderChanged(_)                                  => "field order changed"
       case FieldOneOfChanged(_, name, _, oldOneOf, newOneOf)     =>
-        s"field '$name' moved from ${oldOneOf.getOrElse("top-level")} to ${newOneOf.getOrElse("top-level")}"
+        val from = oldOneOf.map(o => s"oneof '$o'").getOrElse("top-level")
+        val to   = newOneOf.map(o => s"oneof '$o'").getOrElse("top-level")
+        s"field '$name' moved from $from to $to"
       case OneOfAdded(_, name)                                   => s"oneof '$name' added"
       case OneOfRemoved(_, name)                                 => s"oneof '$name' removed"
       case EnumAdded(_, name)                                    => s"enum '$name' added"
