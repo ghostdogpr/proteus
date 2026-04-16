@@ -1212,7 +1212,7 @@ message Email {
         }
         case class Req(create: Action.Create) derives Schema
 
-        val d              = deriver.enable(ProtobufDeriver.DerivationFlag.AutoRefOneOf).modifier[Action.Create](nested)
+        val d              = deriver.modifier[Action.Create](nested).modifier[Req]("create", ref)
         val actionCodec    = Schema[Action].derive(d)
         val actionRendered = renderCodec(actionCodec)
         val reqCodec       = Schema[Req].derive(d)
@@ -1340,6 +1340,131 @@ message Req {
 """
 
         assertTrue(rendered == expected)
+      },
+      test("NestedOneOf with AutoRefOneOf flags should not re-nest variant referenced from another message") {
+        sealed trait Action derives Schema
+        object Action {
+          case class Create(name: String) extends Action derives Schema
+        }
+        case class Req(create: Action.Create) derives Schema
+
+        val d              = deriver
+          .enable(ProtobufDeriver.DerivationFlag.NestedOneOf)
+          .enable(ProtobufDeriver.DerivationFlag.AutoRefOneOf)
+        val actionCodec    = Schema[Action].derive(d)
+        val actionRendered = renderCodec(actionCodec)
+        val reqCodec       = Schema[Req].derive(d)
+        val reqRendered    = renderCodec(reqCodec)
+
+        val expectedAction = """syntax = "proto3";
+
+package test;
+
+message Action {
+    message Create {
+        string name = 1;
+    }
+
+    oneof value {
+        Create create = 1;
+    }
+}
+"""
+
+        val expectedReq = """syntax = "proto3";
+
+package test;
+
+message Req {
+    Action.Create create = 1;
+}
+"""
+
+        assertTrue(actionRendered == expectedAction, reqRendered == expectedReq)
+      },
+      test("ref qualifier uses renamed parent proto name") {
+        sealed trait Event derives Schema
+        object Event {
+          case class Mission(name: String) extends Event derives Schema
+        }
+        case class Req(mission: Event.Mission) derives Schema
+
+        val d             = deriver
+          .modifier[Event](rename("GameEvent"))
+          .modifier[Event.Mission](nested)
+          .modifier[Req]("mission", ref)
+        val eventCodec    = Schema[Event].derive(d)
+        val eventRendered = renderCodec(eventCodec)
+        val reqCodec      = Schema[Req].derive(d)
+        val reqRendered   = renderCodec(reqCodec)
+
+        val expectedEvent = """syntax = "proto3";
+
+package test;
+
+message GameEvent {
+    message Mission {
+        string name = 1;
+    }
+
+    oneof value {
+        Mission mission = 1;
+    }
+}
+"""
+
+        val expectedReq = """syntax = "proto3";
+
+package test;
+
+message Req {
+    GameEvent.Mission mission = 1;
+}
+"""
+
+        assertTrue(eventRendered == expectedEvent, reqRendered == expectedReq)
+      },
+      test("AutoRefOneOf qualifier uses renamed parent proto name") {
+        sealed trait Event derives Schema
+        object Event {
+          case class Mission(name: String) extends Event derives Schema
+        }
+        case class Req(mission: Event.Mission) derives Schema
+
+        val d             = deriver
+          .enable(ProtobufDeriver.DerivationFlag.AutoRefOneOf)
+          .modifier[Event](rename("GameEvent"))
+          .modifier[Event.Mission](nested)
+        val eventCodec    = Schema[Event].derive(d)
+        val eventRendered = renderCodec(eventCodec)
+        val reqCodec      = Schema[Req].derive(d)
+        val reqRendered   = renderCodec(reqCodec)
+
+        val expectedEvent = """syntax = "proto3";
+
+package test;
+
+message GameEvent {
+    message Mission {
+        string name = 1;
+    }
+
+    oneof value {
+        Mission mission = 1;
+    }
+}
+"""
+
+        val expectedReq = """syntax = "proto3";
+
+package test;
+
+message Req {
+    GameEvent.Mission mission = 1;
+}
+"""
+
+        assertTrue(eventRendered == expectedEvent, reqRendered == expectedReq)
       },
       test("AutoPrefixEnums flag adds type name as prefix to enum members") {
         enum Status derives Schema { case Active, Inactive, Pending }

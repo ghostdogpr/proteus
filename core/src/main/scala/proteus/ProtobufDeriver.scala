@@ -159,10 +159,13 @@ case class ProtobufDeriver private (
         val offset             = Reflect.Record.usedRegisters(registers)
         val reservedIndexes    = getReservedIndexes(modifiers).toSet
         val allReservedIndexes = reservedIndexes ++ getReservedIndexes(fields.flatMap(_.modifiers)).toSet
-        val nested             = modifiers.collectFirst { case Modifier.config(`nestedModifier`, value) => value.toBooleanOption }.flatten
+        val nestedFromModifier = modifiers.collectFirst { case Modifier.config(`nestedModifier`, value) => value.toBooleanOption }.flatten
+        val isNested           = nestedFromModifier.getOrElse(flags.contains(DerivationFlag.NestedOneOf))
         val canonicalParent    =
-          if (flags.contains(DerivationFlag.AutoRefOneOf) && nested.contains(true)) getCanonicalParent(typeId)
+          if (flags.contains(DerivationFlag.AutoRefOneOf) && isNested)
+            getCanonicalParent(typeId)
           else None
+        val nested             = if (canonicalParent.isDefined) Some(true) else nestedFromModifier
         val builder            = IArray.newBuilder[ProtobufCodec.MessageField[?]]
         var id                 = 0
 
@@ -628,11 +631,20 @@ case class ProtobufDeriver private (
 
   private def getCanonicalParent(typeId: TypeId[?]): Option[String] = {
     val parentNames = typeId.parents.collect { case TypeRepr.Ref(id) => id.name }.toSet
-    typeId.owner.segments.reverse.collectFirst {
-      case s: Owner.Term if parentNames.contains(s.name) => s.name
-      case s: Owner.Type if parentNames.contains(s.name) => s.name
-    }
+    typeId.owner.segments.reverse
+      .collectFirst {
+        case s: Owner.Term if parentNames.contains(s.name) => s.name
+        case s: Owner.Type if parentNames.contains(s.name) => s.name
+      }
+      .map(resolveProtoName)
   }
+
+  private def resolveProtoName(scalaName: String): String =
+    modifiers
+      .collectFirst {
+        case ModifierReflectOverrideByType(tid, Modifier.config(`renameModifier`, newName)) if tid.name == scalaName => newName
+      }
+      .getOrElse(scalaName)
 
   private def isEnum(cases: IndexedSeq[Term[?, ?, ?]], modifiers: Seq[Modifier]): Boolean =
     cases.forall(c =>
