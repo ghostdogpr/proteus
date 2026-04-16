@@ -401,6 +401,61 @@ object ProtoDiffSpec extends ZIOSpecDefault {
         assertTrue(changes == List(OptionChanged(Nil, "java_package", OptionVal.StringLit("com.old"), OptionVal.StringLit("com.new"))))
       }
     ),
+    suite("Comment changes")(
+      test("comment added on message") {
+        val old = parse("""syntax = "proto3"; message Foo { string name = 1; }""")
+        val nw  = parse(
+          """syntax = "proto3";
+            |// A foo message.
+            |message Foo { string name = 1; }
+            |""".stripMargin
+        )
+        assertTrue(ProtoDiff.diff(old, nw) == List(CommentAdded(Nil, "Foo")))
+      },
+      test("comment removed on field") {
+        val old = parse(
+          """syntax = "proto3";
+            |message Foo {
+            |  // The name.
+            |  string name = 1;
+            |}
+            |""".stripMargin
+        )
+        val nw  = parse("""syntax = "proto3"; message Foo { string name = 1; }""")
+        assertTrue(ProtoDiff.diff(old, nw) == List(CommentRemoved(List("Foo"), "name")))
+      },
+      test("comment changed on enum") {
+        val old = parse(
+          """syntax = "proto3";
+            |// Old comment.
+            |enum Status { UNKNOWN = 0; }
+            |""".stripMargin
+        )
+        val nw  = parse(
+          """syntax = "proto3";
+            |// New comment.
+            |enum Status { UNKNOWN = 0; }
+            |""".stripMargin
+        )
+        assertTrue(ProtoDiff.diff(old, nw) == List(CommentChanged(Nil, "Status")))
+      },
+      test("no comment change when element is added") {
+        val old     = parse("""syntax = "proto3"; message Foo { string name = 1; }""")
+        val nw      = parse(
+          """syntax = "proto3";
+            |message Foo {
+            |  string name = 1;
+            |  // New field.
+            |  int32 id = 2;
+            |}
+            |""".stripMargin
+        )
+        val changes = ProtoDiff.diff(old, nw)
+        assertTrue(
+          changes == List(FieldAdded(List("Foo"), "id", 2))
+        )
+      }
+    ),
     suite("Severity mapping")(
       test("field number change: Error in wire, Info in source") {
         val change = FieldNumberChanged(List("Foo"), "name", 1, 2)

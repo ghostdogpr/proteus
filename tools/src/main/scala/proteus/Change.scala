@@ -50,6 +50,9 @@ enum Change {
   case RpcRequestTypeChanged(path: List[String], name: String, oldType: String, newType: String)
   case RpcResponseTypeChanged(path: List[String], name: String, oldType: String, newType: String)
   case RpcStreamingChanged(path: List[String], name: String, direction: String, wasStreaming: Boolean)
+  case CommentAdded(path: List[String], element: String)
+  case CommentRemoved(path: List[String], element: String)
+  case CommentChanged(path: List[String], element: String)
 
   override def toString: String = {
     val prefix = if (path.isEmpty) "" else path.mkString(".") + ": "
@@ -101,6 +104,9 @@ enum Change {
       case RpcResponseTypeChanged(_, name, oldType, newType)     => s"rpc '$name' response type changed from $oldType to $newType"
       case RpcStreamingChanged(_, name, direction, wasStreaming) =>
         s"rpc '$name' $direction ${if (wasStreaming) "streaming removed" else "made streaming"}"
+      case CommentAdded(_, element)                              => s"comment added on '$element'"
+      case CommentRemoved(_, element)                            => s"comment removed on '$element'"
+      case CommentChanged(_, element)                            => s"comment changed on '$element'"
     })
   }
 }

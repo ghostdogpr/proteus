@@ -69,6 +69,9 @@ object ProtoDiff {
       case _: RpcRequestTypeChanged   => (Error, Error)
       case _: RpcResponseTypeChanged  => (Error, Error)
       case _: RpcStreamingChanged     => (Error, Error)
+      case _: CommentAdded            => (Info, Info)
+      case _: CommentRemoved          => (Info, Info)
+      case _: CommentChanged          => (Info, Info)
     }
     mode match {
       case CompatMode.Wire      => wire
@@ -337,6 +340,14 @@ object ProtoDiff {
   private def messageFingerprint(m: Message): Message =
     stripMessageCosmetics(m).copy(name = "")
 
+  private def diffComment(oldComment: Option[String], newComment: Option[String], path: List[String], element: String): List[Change] =
+    (oldComment, newComment) match {
+      case (None, Some(_))              => List(CommentAdded(path, element))
+      case (Some(_), None)              => List(CommentRemoved(path, element))
+      case (Some(o), Some(n)) if o != n => List(CommentChanged(path, element))
+      case _                            => Nil
+    }
+
   private def diffMessage(oldMsg: Message, newMsg: Message, path: List[String]): List[Change] = {
     val msgPath         = path :+ oldMsg.name
     val oldFlat         = flattenFields(oldMsg)
@@ -351,7 +362,8 @@ object ProtoDiff {
     val nestedEnumDiffs = diffEnums(oldNestedEnums, newNestedEnums, msgPath)
     val reservedDiffs   = diffReserved(oldMsg.reserved, newMsg.reserved, msgPath)
     val optionDiffs     = diffOptions(oldMsg.options, newMsg.options, msgPath)
-    fieldChanges ++ oneOfChanges ++ nestedMsgDiffs ++ nestedEnumDiffs ++ reservedDiffs ++ optionDiffs
+    val commentDiffs    = diffComment(oldMsg.comment, newMsg.comment, path, oldMsg.name)
+    fieldChanges ++ oneOfChanges ++ nestedMsgDiffs ++ nestedEnumDiffs ++ reservedDiffs ++ optionDiffs ++ commentDiffs
   }
 
   private case class ContainedField(field: Field, container: Option[String], index: Int)
@@ -426,6 +438,7 @@ object ProtoDiff {
       if (oldCf.container != newCf.container)
         changes += FieldOneOfChanged(path, oF.name, oF.number, oldCf.container, newCf.container)
       changes ++= diffOptions(oF.options, nF.options, path :+ oF.name)
+      changes ++= diffComment(oF.comment, nF.comment, path, oF.name)
       changes.result()
     }
 
@@ -456,7 +469,10 @@ object ProtoDiff {
     val newOneOfs = newMsg.elements.collect { case MessageElement.OneOfElement(o) => o }
     val oldByName = oldOneOfs.map(o => o.name -> o).toMap
     val newByName = newOneOfs.map(o => o.name -> o).toMap
-    (oldByName.keySet & newByName.keySet).toList.flatMap(n => diffOptions(oldByName(n).options, newByName(n).options, path :+ n))
+    (oldByName.keySet & newByName.keySet).toList.flatMap { n =>
+      diffOptions(oldByName(n).options, newByName(n).options, path :+ n) ++
+        diffComment(oldByName(n).comment, newByName(n).comment, path, n)
+    }
   }
 
   private def diffEnums(oldEnums: List[Enum], newEnums: List[Enum], path: List[String]): List[Change] = {
@@ -480,7 +496,8 @@ object ProtoDiff {
     val enumPath = path :+ oldEnum.name
     diffEnumValues(oldEnum.values, newEnum.values, enumPath, newEnum.reserved) ++
       diffReserved(oldEnum.reserved, newEnum.reserved, enumPath) ++
-      diffOptions(oldEnum.options, newEnum.options, enumPath)
+      diffOptions(oldEnum.options, newEnum.options, enumPath) ++
+      diffComment(oldEnum.comment, newEnum.comment, path, oldEnum.name)
   }
 
   private def diffEnumValues(
@@ -493,7 +510,10 @@ object ProtoDiff {
     val oldByKey   = oldValues.map(v => (v.name, v.intValue) -> v).toMap
     val newByKey   = newValues.map(v => (v.name, v.intValue) -> v).toMap
     val exactKeys  = oldByKey.keySet & newByKey.keySet
-    val exactDiffs = exactKeys.toList.flatMap(k => diffOptions(oldByKey(k).options, newByKey(k).options, path :+ k._1))
+    val exactDiffs = exactKeys.toList.flatMap { k =>
+      diffOptions(oldByKey(k).options, newByKey(k).options, path :+ k._1) ++
+        diffComment(oldByKey(k).comment, newByKey(k).comment, path, k._1)
+    }
     val rem1Old    = oldValues.filterNot(v => exactKeys.contains((v.name, v.intValue)))
     val rem1New    = newValues.filterNot(v => exactKeys.contains((v.name, v.intValue)))
 
@@ -503,7 +523,8 @@ object ProtoDiff {
     val nameKeys  = oldByName.keySet & newByName.keySet
     val nameDiffs = nameKeys.toList.flatMap { n =>
       EnumValueNumberChanged(path, n, oldByName(n).intValue, newByName(n).intValue) ::
-        diffOptions(oldByName(n).options, newByName(n).options, path :+ n)
+        diffOptions(oldByName(n).options, newByName(n).options, path :+ n) ++
+        diffComment(oldByName(n).comment, newByName(n).comment, path, n)
     }
     val rem2Old   = rem1Old.filterNot(v => nameKeys.contains(v.name))
     val rem2New   = rem1New.filterNot(v => nameKeys.contains(v.name))
@@ -514,7 +535,8 @@ object ProtoDiff {
     val numKeys  = oldByNum.keySet & newByNum.keySet
     val numDiffs = numKeys.toList.flatMap { n =>
       EnumValueRenamed(path, n, oldByNum(n).name, newByNum(n).name) ::
-        diffOptions(oldByNum(n).options, newByNum(n).options, path :+ oldByNum(n).name)
+        diffOptions(oldByNum(n).options, newByNum(n).options, path :+ oldByNum(n).name) ++
+        diffComment(oldByNum(n).comment, newByNum(n).comment, path, oldByNum(n).name)
     }
     val rem3Old  = rem2Old.filterNot(v => numKeys.contains(v.intValue))
     val rem3New  = rem2New.filterNot(v => numKeys.contains(v.intValue))
@@ -565,7 +587,9 @@ object ProtoDiff {
 
   private def diffService(oldSvc: Service, newSvc: Service, path: List[String]): List[Change] = {
     val svcPath = path :+ oldSvc.name
-    diffRpcs(oldSvc.rpcs, newSvc.rpcs, svcPath) ++ diffOptions(oldSvc.options, newSvc.options, svcPath)
+    diffRpcs(oldSvc.rpcs, newSvc.rpcs, svcPath) ++
+      diffOptions(oldSvc.options, newSvc.options, svcPath) ++
+      diffComment(oldSvc.comment, newSvc.comment, path, oldSvc.name)
   }
 
   private def diffRpcs(oldRpcs: List[Rpc], newRpcs: List[Rpc], path: List[String]): List[Change] = {
@@ -592,6 +616,7 @@ object ProtoDiff {
     if (oldRpc.streamingResponse != newRpc.streamingResponse)
       changes += RpcStreamingChanged(path, oldRpc.name, "response", oldRpc.streamingResponse)
     changes ++= diffOptions(oldRpc.options, newRpc.options, path :+ oldRpc.name)
+    changes ++= diffComment(oldRpc.comment, newRpc.comment, path, oldRpc.name)
     changes.result()
   }
 }
