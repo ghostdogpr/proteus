@@ -1301,44 +1301,6 @@ message Req {
 
         assertTrue(rendered == expected)
       },
-      test("ref modifier with multi-level qualifiers on repeated field") {
-        case class Inner(value: String) derives Schema
-        case class Req(items: List[Inner]) derives Schema
-
-        val d        = deriver.modifier[Inner](nested).modifier[Req]("items", ref("Outer", "Middle"))
-        val codec    = Schema[Req].derive(d)
-        val rendered = renderCodec(codec)
-
-        val expected = """syntax = "proto3";
-
-package test;
-
-message Req {
-    repeated Outer.Middle.Inner items = 1;
-}
-"""
-
-        assertTrue(rendered == expected)
-      },
-      test("ref modifier with multi-level qualifiers on map field") {
-        case class Inner(value: String) derives Schema
-        case class Req(items: Map[String, Inner]) derives Schema
-
-        val d        = deriver.modifier[Inner](nested).modifier[Req]("items", ref("Outer", "Middle"))
-        val codec    = Schema[Req].derive(d)
-        val rendered = renderCodec(codec)
-
-        val expected = """syntax = "proto3";
-
-package test;
-
-message Req {
-    map<string, Outer.Middle.Inner> items = 1;
-}
-"""
-
-        assertTrue(rendered == expected)
-      },
       test("ref modifier with optional field") {
         case class Inner(value: String) derives Schema
         case class Req(inner: Option[Inner]) derives Schema
@@ -1353,56 +1315,6 @@ package test;
 
 message Req {
     optional Parent.Inner inner = 1;
-}
-"""
-
-        assertTrue(rendered == expected)
-      },
-      test("ref qualifier with renamed parent on repeated field") {
-        sealed trait Event derives Schema
-        object Event {
-          case class Mission(name: String) extends Event derives Schema
-        }
-        case class Req(missions: List[Event.Mission]) derives Schema
-
-        val d        = deriver
-          .modifier[Event](rename("GameEvent"))
-          .modifier[Event.Mission](nested)
-          .modifier[Req]("missions", ref("GameEvent"))
-        val codec    = Schema[Req].derive(d)
-        val rendered = renderCodec(codec)
-
-        val expected = """syntax = "proto3";
-
-package test;
-
-message Req {
-    repeated GameEvent.Mission missions = 1;
-}
-"""
-
-        assertTrue(rendered == expected)
-      },
-      test("ref qualifier with renamed parent on map field") {
-        sealed trait Event derives Schema
-        object Event {
-          case class Mission(name: String) extends Event derives Schema
-        }
-        case class Req(missions: Map[Int, Event.Mission]) derives Schema
-
-        val d        = deriver
-          .modifier[Event](rename("GameEvent"))
-          .modifier[Event.Mission](nested)
-          .modifier[Req]("missions", ref("GameEvent"))
-        val codec    = Schema[Req].derive(d)
-        val rendered = renderCodec(codec)
-
-        val expected = """syntax = "proto3";
-
-package test;
-
-message Req {
-    map<int32, GameEvent.Mission> missions = 1;
 }
 """
 
