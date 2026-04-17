@@ -107,7 +107,8 @@ println(ProtobufCodec.derived[Person](using deriver).render())
 ```
 Here are the different types of modifiers you can apply:
 - `excluded`: Excludes a field or an enum member from the protobuf type.
-- `nested`: Nests a type inside its parent message instead of creating it at the root level.
+- `nested`: Nests a type inside its direct parent message instead of creating it at the root level.
+- `nestedIn[A]`: Nests a type inside a specific ancestor message `A` rather than its direct parent. References from outside `A` are automatically qualified (e.g. `A.Child`). Honors `rename` on `A`. Raises an error at service/dependency render time if `A` is not reachable.
 - `unnested`: Forces a type to be created at the root level and prevent it from being nested by the `OneOfFlag.Nested` flag (see below).
 - `oneOf`: Forces a type to be encoded as a `oneof` rather than an enum.
 - `oneOf(flags: OneOfFlag*)`: Controls how `oneof` types are encoded—see below for more details.
@@ -142,6 +143,38 @@ message Example {
   Address address = 2;
 }
 ```
+
+### Nesting into a specific ancestor
+
+By default, `nested` places a type inside its direct parent. When a type is referenced across several messages and you want it defined under a specific ancestor, use `nestedIn[A]`:
+```scala
+import proteus.Modifiers.*
+
+case class Item(value: String) derives Schema
+case class Basket(item: Item) derives Schema
+case class Order(basket: Basket, item: Item) derives Schema
+
+val deriver = ProtobufDeriver.modifier[Item](nestedIn[Order])
+
+println(ProtobufCodec.derived[Order](using deriver).render())
+// syntax = "proto3";
+//
+// message Order {
+//     message Item {
+//         string value = 1;
+//     }
+//
+//     Basket basket = 1;
+//     Item item = 2;
+// }
+//
+// message Basket {
+//     Order.Item item = 1;
+// }
+```
+References from outside the target are rewritten to their fully-qualified form (`Order.Item` above). Renames applied to the target are honored: if `Order` is renamed to `Cart`, the qualified reference becomes `Cart.Item`.
+
+When used on a service or a dependency, the target must be reachable from one of the RPC codecs or from the dependency's types; otherwise rendering fails with a `ProteusException`.
 
 ## Derivation flags
 

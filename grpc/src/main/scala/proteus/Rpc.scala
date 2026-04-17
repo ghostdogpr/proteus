@@ -59,8 +59,8 @@ sealed trait Rpc[Req, Resp] { self =>
   /**
     * Converts the messages used in the RPC to ProtoIR top-level definitions.
     */
-  lazy val messagesToProtoIR: List[ProtoIR.TopLevelDef] =
-    ProtobufCodec.toProtoIR(requestCodec) ++ ProtobufCodec.toProtoIR(responseCodec)
+  private[proteus] def messagesToProtoIR(resolver: Map[String, String]): List[ProtoIR.TopLevelDef] =
+    ProtobufCodec.toProtoIR(requestCodec, resolver) ++ ProtobufCodec.toProtoIR(responseCodec, resolver)
 
   /**
     * Converts the RPC to a gRPC method descriptor for the reflection service.

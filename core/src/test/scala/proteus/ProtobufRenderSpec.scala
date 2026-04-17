@@ -16,7 +16,7 @@ object ProtobufRenderSpec extends ZIOSpecDefault {
   val deriverWithNestedOneOf     = deriver.enable(ProtobufDeriver.DerivationFlag.NestedOneOf)
 
   def renderCodec[A](codec: ProtobufCodec[A], packageName: String = "test"): String = {
-    val topLevelDefs    = ProtobufCodec.toProtoIR(codec)
+    val topLevelDefs    = ProtobufCodec.qualifyReferences(ProtobufCodec.toProtoIR(codec))
     val statements      = topLevelDefs.map(Statement.TopLevelStatement(_)).distinct
     val compilationUnit = CompilationUnit(Some(packageName), statements, List.empty)
     Renderer.render(compilationUnit)
@@ -253,6 +253,151 @@ message MessageWithNested {
 
     int32 id = 1;
     NestedData data = 2;
+}
+"""
+
+        assertTrue(rendered == expected)
+      },
+      test("proteus nestedIn modifier places type inside chosen ancestor") {
+        case class NestedInnerC(value: String) derives Schema
+        case class NestedMidB(c: NestedInnerC) derives Schema
+        case class NestedOuterA(b: NestedMidB) derives Schema
+
+        val codec    = Schema[NestedOuterA].derive(deriver.modifier[NestedInnerC](nestedIn[NestedOuterA]))
+        val rendered = renderCodec(codec)
+        val expected = """syntax = "proto3";
+
+package test;
+
+message NestedOuterA {
+    message NestedInnerC {
+        string value = 1;
+    }
+
+    NestedMidB b = 1;
+}
+
+message NestedMidB {
+    NestedOuterA.NestedInnerC c = 1;
+}
+"""
+
+        assertTrue(rendered == expected)
+      },
+      test("proteus nestedIn modifier honors rename on the target") {
+        case class RenamedInnerC(value: String) derives Schema
+        case class RenamedMidB(c: RenamedInnerC) derives Schema
+        case class RenamedOuterA(b: RenamedMidB) derives Schema
+
+        val codec    = Schema[RenamedOuterA].derive(
+          deriver
+            .modifier[RenamedOuterA](rename("RealOuter"))
+            .modifier[RenamedInnerC](nestedIn[RenamedOuterA])
+        )
+        val rendered = renderCodec(codec)
+        val expected = """syntax = "proto3";
+
+package test;
+
+message RealOuter {
+    message RenamedInnerC {
+        string value = 1;
+    }
+
+    RenamedMidB b = 1;
+}
+
+message RenamedMidB {
+    RealOuter.RenamedInnerC c = 1;
+}
+"""
+
+        assertTrue(rendered == expected)
+      },
+      test("proteus nestedIn modifier reaches through List") {
+        case class DeepInnerC(value: String) derives Schema
+        case class DeepMidB(c: List[DeepInnerC]) derives Schema
+        case class DeepOuterA(b: DeepMidB) derives Schema
+
+        val codec    = Schema[DeepOuterA].derive(deriver.modifier[DeepInnerC](nestedIn[DeepOuterA]))
+        val rendered = renderCodec(codec)
+        val expected = """syntax = "proto3";
+
+package test;
+
+message DeepOuterA {
+    message DeepInnerC {
+        string value = 1;
+    }
+
+    DeepMidB b = 1;
+}
+
+message DeepMidB {
+    repeated DeepOuterA.DeepInnerC c = 1;
+}
+"""
+
+        assertTrue(rendered == expected)
+      },
+      test("proteus nestedIn chain produces doubly-qualified reference") {
+        case class DoubleLeaf(value: String) derives Schema
+        case class DoubleMid(leaf: DoubleLeaf) derives Schema
+        case class DoubleTop(mid: DoubleMid) derives Schema
+        case class DoubleSibling(leaf: DoubleLeaf) derives Schema
+        case class DoubleRoot(top: DoubleTop, sibling: DoubleSibling) derives Schema
+
+        val codec    = Schema[DoubleRoot].derive(
+          deriver
+            .modifier[DoubleMid](nestedIn[DoubleTop])
+            .modifier[DoubleLeaf](nestedIn[DoubleMid])
+        )
+        val rendered = renderCodec(codec)
+        val expected = """syntax = "proto3";
+
+package test;
+
+message DoubleRoot {
+    DoubleTop top = 1;
+    DoubleSibling sibling = 2;
+}
+
+message DoubleTop {
+    message DoubleMid {
+        message DoubleLeaf {
+            string value = 1;
+        }
+
+        DoubleLeaf leaf = 1;
+    }
+
+    DoubleMid mid = 1;
+}
+
+message DoubleSibling {
+    DoubleTop.DoubleMid.DoubleLeaf leaf = 1;
+}
+"""
+
+        assertTrue(rendered == expected)
+      },
+      test("proteus nestedIn modifier leaves type at top level when target is not reachable") {
+        case class LonelyInner(value: String) derives Schema
+        case class UnrelatedRoot(inner: LonelyInner) derives Schema
+        case class MissingAncestor(x: Int) derives Schema
+
+        val codec    = Schema[UnrelatedRoot].derive(deriver.modifier[LonelyInner](nestedIn[MissingAncestor]))
+        val rendered = renderCodec(codec)
+        val expected = """syntax = "proto3";
+
+package test;
+
+message UnrelatedRoot {
+    LonelyInner inner = 1;
+}
+
+message LonelyInner {
+    string value = 1;
 }
 """
 

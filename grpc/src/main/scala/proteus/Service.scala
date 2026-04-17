@@ -35,9 +35,23 @@ case class Service[Rpcs] private (
   /**
     * Converts the service to a ProtoIR representation.
     */
-  lazy val toProtoIR: List[ProtoIR.TopLevelDef] =
-    (ProtoIR.TopLevelDef.ServiceDef(ProtoIR.Service(name, rpcs.map(_.toProtoIR), comment)) ::
-      rpcs.flatMap(_.messagesToProtoIR)).distinct
+  lazy val toProtoIR: List[ProtoIR.TopLevelDef] = {
+    val resolverBuilder = Map.newBuilder[String, String]
+    rpcs.foreach { rpc =>
+      resolverBuilder ++= ProtobufCodec.collectNames(rpc.requestCodec)
+      resolverBuilder ++= ProtobufCodec.collectNames(rpc.responseCodec)
+    }
+    val resolver        = resolverBuilder.result()
+    val raw             = ProtoIR.TopLevelDef.ServiceDef(ProtoIR.Service(name, rpcs.map(_.toProtoIR), comment)) ::
+      rpcs.flatMap(_.messagesToProtoIR(resolver))
+    val resolved        = ProtobufCodec.relocateNestedIn(raw.distinct)
+    val unresolved      = ProtobufCodec.unresolvedNestedIn(resolved)
+    if (unresolved.nonEmpty)
+      throw new ProteusException(
+        s"Could not resolve `nestedIn` targets in service $name. Ensure the target types are reachable from the service's RPCs or dependencies: ${unresolved.mkString(", ")}"
+      )
+    resolved
+  }
 
   /**
     * All the dependencies of the service (including transitive dependencies).
@@ -104,7 +118,7 @@ case class Service[Rpcs] private (
         packageName = packageName,
         options = options,
         statements = usedDependencies.toList.map(_.toImportStatement) ++
-          filteredTypes.map(ProtoIR.Statement.TopLevelStatement(_))
+          ProtobufCodec.qualifyReferences(filteredTypes).map(ProtoIR.Statement.TopLevelStatement(_))
       )
     )
   }

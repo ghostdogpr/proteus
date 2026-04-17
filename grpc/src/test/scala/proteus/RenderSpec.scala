@@ -486,6 +486,68 @@ message ServiceResponse {
 
         assertTrue(error.contains("Conflicts found in service TestService")) &&
           assertTrue(error.contains("Type `User` is defined in different ways"))
+      },
+      test("nestedIn modifier resolves across request and response codecs") {
+        case class CrossInnerC(value: String) derives Schema
+        case class CrossRequest(c: CrossInnerC) derives Schema
+        case class CrossResponse(ok: Boolean) derives Schema
+
+        given ProtobufDeriver              = ProtobufDeriver.modifier[CrossInnerC](Modifiers.nestedIn[CrossResponse])
+        given ProtobufCodec[CrossRequest]  = Schema[CrossRequest].derive(summon[ProtobufDeriver])
+        given ProtobufCodec[CrossResponse] = Schema[CrossResponse].derive(summon[ProtobufDeriver])
+
+        val rpc           = Rpc.unary[CrossRequest, CrossResponse]("Cross")
+        val service       = Service("test.package", "CrossService").rpc(rpc)
+        val renderedProto = service.render(options)
+        val expected      = """syntax = "proto3";
+
+package test.package;
+
+option java_package = "com.test";
+option csharp_namespace = "Test";
+
+service CrossService {
+    rpc Cross (CrossRequest) returns (CrossResponse) {}
+}
+
+message CrossRequest {
+    CrossResponse.CrossInnerC c = 1;
+}
+
+message CrossResponse {
+    message CrossInnerC {
+        string value = 1;
+    }
+
+    bool ok = 1;
+}
+"""
+
+        assertTrue(renderedProto == expected)
+      },
+      test("nestedIn modifier raises an error when target is unreachable at service level") {
+        case class OrphanInner(value: String) derives Schema
+        case class OrphanRequest(inner: OrphanInner) derives Schema
+        case class OrphanResponse(ok: Boolean) derives Schema
+        case class OrphanAncestor(x: Int) derives Schema
+
+        given ProtobufDeriver               = ProtobufDeriver.modifier[OrphanInner](Modifiers.nestedIn[OrphanAncestor])
+        given ProtobufCodec[OrphanRequest]  = Schema[OrphanRequest].derive(summon[ProtobufDeriver])
+        given ProtobufCodec[OrphanResponse] = Schema[OrphanResponse].derive(summon[ProtobufDeriver])
+
+        val rpc     = Rpc.unary[OrphanRequest, OrphanResponse]("Orphan")
+        val service = Service("test.package", "OrphanService").rpc(rpc)
+
+        val error =
+          try {
+            service.render(options)
+            ""
+          } catch {
+            case e: Exception => e.getMessage
+          }
+
+        assertTrue(error.contains("Could not resolve `nestedIn` targets in service OrphanService")) &&
+          assertTrue(error.contains("OrphanInner"))
       }
     ),
     suite("Dependency Rendering")(

@@ -1,6 +1,7 @@
 package proteus
 
 import zio.blocks.schema.Modifier
+import zio.blocks.typeid.TypeId
 
 import proteus.internal.*
 
@@ -28,6 +29,22 @@ object Modifiers {
     * A modifier to force a type to be defined at the root level.
     */
   val unnested: Modifier.Reflect = Modifier.config(nestedModifier, "false")
+
+  /**
+    * A modifier to nest a type inside a specific ancestor message `A`, rather than its direct parent.
+    * The target name is resolved at rendering time against the actual rendered name of `A`, so `rename` on `A` is honored.
+    * If the target is not among the types visible to the service or dependency being rendered, an error is raised at render time.
+    *
+    * ```scala
+    * case class C(i: Int)
+    * case class B(c: C)
+    * case class A(b: B)
+    *
+    * val deriver = ProtobufDeriver.default.modifier[C](Modifiers.nestedIn[A])
+    * ```
+    */
+  inline def nestedIn[A](using typeId: TypeId[A]): Modifier.Reflect =
+    Modifier.config(nestedModifier, s"$nestedInModifierPrefix${typeId.fullName}")
 
   /**
     * A modifier to force a type to be encoded as a oneOf.

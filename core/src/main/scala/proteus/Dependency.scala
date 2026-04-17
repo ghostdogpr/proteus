@@ -58,18 +58,24 @@ final case class Dependency(
     * @param options options to write at the top of the .proto file.
     */
   def render(options: List[ProtoIR.TopLevelOption]): String = {
-    val conflicts = findConflicts
+    val conflicts     = findConflicts
     if (conflicts.nonEmpty) {
       throw new ProteusException(
         s"Conflicts found in dependency $dependencyName:\n ${conflicts.map { case (name, defs) => s"- Type `$name` is defined in different ways: \n${defs.mkString("\n")}" }.mkString("\n")}\n"
       )
     }
+    val resolvedTypes = ProtobufCodec.relocateNestedIn(filteredTypes.toList)
+    val unresolved    = ProtobufCodec.unresolvedNestedIn(resolvedTypes)
+    if (unresolved.nonEmpty)
+      throw new ProteusException(
+        s"Could not resolve `nestedIn` targets in dependency $dependencyName. Ensure the target types are added to the dependency: ${unresolved.mkString(", ")}"
+      )
     Renderer.render(
       ProtoIR.CompilationUnit(
         packageName = packageName,
         options = options,
         statements = filteredDependencies.toList.map(_.toImportStatement) ++
-          filteredTypes.map(ProtoIR.Statement.TopLevelStatement(_)).toList
+          ProtobufCodec.qualifyReferences(resolvedTypes).map(ProtoIR.Statement.TopLevelStatement(_))
       )
     )
   }
