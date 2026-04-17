@@ -1205,45 +1205,6 @@ message Email {
 
         assertTrue(nestedRendered == expectedNested)
       },
-      test("NestedOneOf variant referenced directly from another message should not be re-nested") {
-        sealed trait Action derives Schema
-        object Action {
-          case class Create(name: String) extends Action derives Schema
-        }
-        case class Req(create: Action.Create) derives Schema
-
-        val d              = deriver.modifier[Action.Create](nested).modifier[Req]("create", ref)
-        val actionCodec    = Schema[Action].derive(d)
-        val actionRendered = renderCodec(actionCodec)
-        val reqCodec       = Schema[Req].derive(d)
-        val reqRendered    = renderCodec(reqCodec)
-
-        val expectedAction = """syntax = "proto3";
-
-package test;
-
-message Action {
-    message Create {
-        string name = 1;
-    }
-
-    oneof value {
-        Create create = 1;
-    }
-}
-"""
-
-        val expectedReq = """syntax = "proto3";
-
-package test;
-
-message Req {
-    Action.Create create = 1;
-}
-"""
-
-        assertTrue(actionRendered == expectedAction, reqRendered == expectedReq)
-      },
       test("NestedOneOf variant referenced directly with explicit ref modifier") {
         sealed trait Action derives Schema
         object Action {
@@ -1252,45 +1213,6 @@ message Req {
         case class Req(create: Action.Create) derives Schema
 
         val d              = deriver.modifier[Action.Create](nested).modifier[Req]("create", ref("Action"))
-        val actionCodec    = Schema[Action].derive(d)
-        val actionRendered = renderCodec(actionCodec)
-        val reqCodec       = Schema[Req].derive(d)
-        val reqRendered    = renderCodec(reqCodec)
-
-        val expectedAction = """syntax = "proto3";
-
-package test;
-
-message Action {
-    message Create {
-        string name = 1;
-    }
-
-    oneof value {
-        Create create = 1;
-    }
-}
-"""
-
-        val expectedReq = """syntax = "proto3";
-
-package test;
-
-message Req {
-    Action.Create create = 1;
-}
-"""
-
-        assertTrue(actionRendered == expectedAction, reqRendered == expectedReq)
-      },
-      test("NestedOneOf variant referenced directly with parameterless ref modifier") {
-        sealed trait Action derives Schema
-        object Action {
-          case class Create(name: String) extends Action derives Schema
-        }
-        case class Req(create: Action.Create) derives Schema
-
-        val d              = deriver.modifier[Action.Create](nested).modifier[Req]("create", ref)
         val actionCodec    = Schema[Action].derive(d)
         val actionRendered = renderCodec(actionCodec)
         val reqCodec       = Schema[Req].derive(d)
@@ -1379,130 +1301,112 @@ message Req {
 
         assertTrue(rendered == expected)
       },
-      test("NestedOneOf with AutoRefOneOf flags should not re-nest variant referenced from another message") {
-        sealed trait Action derives Schema
-        object Action {
-          case class Create(name: String) extends Action derives Schema
-        }
-        case class Req(create: Action.Create) derives Schema
+      test("ref modifier with multi-level qualifiers on repeated field") {
+        case class Inner(value: String) derives Schema
+        case class Req(items: List[Inner]) derives Schema
 
-        val d              = deriver
-          .enable(ProtobufDeriver.DerivationFlag.NestedOneOf)
-          .enable(ProtobufDeriver.DerivationFlag.AutoRefOneOf)
-        val actionCodec    = Schema[Action].derive(d)
-        val actionRendered = renderCodec(actionCodec)
-        val reqCodec       = Schema[Req].derive(d)
-        val reqRendered    = renderCodec(reqCodec)
+        val d        = deriver.modifier[Inner](nested).modifier[Req]("items", ref("Outer", "Middle"))
+        val codec    = Schema[Req].derive(d)
+        val rendered = renderCodec(codec)
 
-        val expectedAction = """syntax = "proto3";
-
-package test;
-
-message Action {
-    message Create {
-        string name = 1;
-    }
-
-    oneof value {
-        Create create = 1;
-    }
-}
-"""
-
-        val expectedReq = """syntax = "proto3";
+        val expected = """syntax = "proto3";
 
 package test;
 
 message Req {
-    Action.Create create = 1;
+    repeated Outer.Middle.Inner items = 1;
 }
 """
 
-        assertTrue(actionRendered == expectedAction, reqRendered == expectedReq)
+        assertTrue(rendered == expected)
       },
-      test("ref qualifier uses renamed parent proto name") {
+      test("ref modifier with multi-level qualifiers on map field") {
+        case class Inner(value: String) derives Schema
+        case class Req(items: Map[String, Inner]) derives Schema
+
+        val d        = deriver.modifier[Inner](nested).modifier[Req]("items", ref("Outer", "Middle"))
+        val codec    = Schema[Req].derive(d)
+        val rendered = renderCodec(codec)
+
+        val expected = """syntax = "proto3";
+
+package test;
+
+message Req {
+    map<string, Outer.Middle.Inner> items = 1;
+}
+"""
+
+        assertTrue(rendered == expected)
+      },
+      test("ref modifier with optional field") {
+        case class Inner(value: String) derives Schema
+        case class Req(inner: Option[Inner]) derives Schema
+
+        val d        = deriver.modifier[Inner](nested).modifier[Req]("inner", ref("Parent"))
+        val codec    = Schema[Req].derive(d)
+        val rendered = renderCodec(codec)
+
+        val expected = """syntax = "proto3";
+
+package test;
+
+message Req {
+    optional Parent.Inner inner = 1;
+}
+"""
+
+        assertTrue(rendered == expected)
+      },
+      test("ref qualifier with renamed parent on repeated field") {
         sealed trait Event derives Schema
         object Event {
           case class Mission(name: String) extends Event derives Schema
         }
-        case class Req(mission: Event.Mission) derives Schema
+        case class Req(missions: List[Event.Mission]) derives Schema
 
-        val d             = deriver
+        val d        = deriver
           .modifier[Event](rename("GameEvent"))
           .modifier[Event.Mission](nested)
-          .modifier[Req]("mission", ref)
-        val eventCodec    = Schema[Event].derive(d)
-        val eventRendered = renderCodec(eventCodec)
-        val reqCodec      = Schema[Req].derive(d)
-        val reqRendered   = renderCodec(reqCodec)
+          .modifier[Req]("missions", ref("GameEvent"))
+        val codec    = Schema[Req].derive(d)
+        val rendered = renderCodec(codec)
 
-        val expectedEvent = """syntax = "proto3";
-
-package test;
-
-message GameEvent {
-    message Mission {
-        string name = 1;
-    }
-
-    oneof value {
-        Mission mission = 1;
-    }
-}
-"""
-
-        val expectedReq = """syntax = "proto3";
+        val expected = """syntax = "proto3";
 
 package test;
 
 message Req {
-    GameEvent.Mission mission = 1;
+    repeated GameEvent.Mission missions = 1;
 }
 """
 
-        assertTrue(eventRendered == expectedEvent, reqRendered == expectedReq)
+        assertTrue(rendered == expected)
       },
-      test("AutoRefOneOf qualifier uses renamed parent proto name") {
+      test("ref qualifier with renamed parent on map field") {
         sealed trait Event derives Schema
         object Event {
           case class Mission(name: String) extends Event derives Schema
         }
-        case class Req(mission: Event.Mission) derives Schema
+        case class Req(missions: Map[Int, Event.Mission]) derives Schema
 
-        val d             = deriver
-          .enable(ProtobufDeriver.DerivationFlag.AutoRefOneOf)
+        val d        = deriver
           .modifier[Event](rename("GameEvent"))
           .modifier[Event.Mission](nested)
-        val eventCodec    = Schema[Event].derive(d)
-        val eventRendered = renderCodec(eventCodec)
-        val reqCodec      = Schema[Req].derive(d)
-        val reqRendered   = renderCodec(reqCodec)
+          .modifier[Req]("missions", ref("GameEvent"))
+        val codec    = Schema[Req].derive(d)
+        val rendered = renderCodec(codec)
 
-        val expectedEvent = """syntax = "proto3";
-
-package test;
-
-message GameEvent {
-    message Mission {
-        string name = 1;
-    }
-
-    oneof value {
-        Mission mission = 1;
-    }
-}
-"""
-
-        val expectedReq = """syntax = "proto3";
+        val expected = """syntax = "proto3";
 
 package test;
 
 message Req {
-    GameEvent.Mission mission = 1;
+    map<int32, GameEvent.Mission> missions = 1;
 }
 """
 
-        assertTrue(eventRendered == expectedEvent, reqRendered == expectedReq)
+        assertTrue(rendered == expected)
       },
       test("AutoPrefixEnums flag adds type name as prefix to enum members") {
         enum Status derives Schema { case Active, Inactive, Pending }

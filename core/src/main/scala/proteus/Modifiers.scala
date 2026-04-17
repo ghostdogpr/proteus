@@ -63,12 +63,6 @@ object Modifiers {
 
   /**
     * A modifier to reference a nested type by its qualified protobuf name without re-nesting it.
-    * The parent prefix is automatically inferred from the type's canonical parent.
-    */
-  def ref: Modifier.config = Modifier.config(refModifier, "")
-
-  /**
-    * A modifier to reference a nested type by its qualified protobuf name without re-nesting it.
     *
     * @param qualifiers the qualifier path segments (e.g. "Outer", "Inner" to produce "Outer.Inner.Create")
     */
