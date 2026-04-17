@@ -157,8 +157,9 @@ case class ProtobufDeriver private (
         visited.put(typeId, ())
         val registers          = Reflect.Record.registers(fields.map(_.value).toArray)
         val offset             = Reflect.Record.usedRegisters(registers)
+        val fieldModifiers     = fields.flatMap(_.modifiers)
         val reservedIndexes    = getReservedIndexes(modifiers).toSet
-        val allReservedIndexes = reservedIndexes ++ getReservedIndexes(fields.flatMap(_.modifiers)).toSet
+        val allReservedIndexes = reservedIndexes ++ getReservedIndexes(fieldModifiers).toSet ++ getReservedFromIndexes(fieldModifiers).toSet
         val nested             = modifiers.collectFirst { case Modifier.config(`nestedModifier`, value) => value.toBooleanOption }.flatten
         val builder            = IArray.newBuilder[ProtobufCodec.MessageField[?]]
         var id                 = 0
@@ -250,9 +251,15 @@ case class ProtobufDeriver private (
               val fieldId = getReservedIndex(field.modifiers) match {
                 case Some(reservedIndex) => reservedIndex
                 case None                =>
-                  id += 1
-                  while (allReservedIndexes.contains(id)) id += 1
-                  id
+                  getReservedFromIndex(field.modifiers) match {
+                    case Some(fromIndex) =>
+                      id = fromIndex
+                      fromIndex
+                    case None            =>
+                      id += 1
+                      while (allReservedIndexes.contains(id)) id += 1
+                      id
+                  }
               }
               builder += SimpleField(
                 name,
@@ -336,18 +343,25 @@ case class ProtobufDeriver private (
           c.value.modifiers.exists { case Modifier.config(`excludedModifier`, _) => true; case _ => false }
       )
       val nested             = modifiers.collectFirst { case Modifier.config(`nestedModifier`, "true") => true }.getOrElse(false)
+      val caseModifiers      = filteredCases.flatMap(_.modifiers)
       val reservedIndexes    = getReservedIndexes(modifiers).toSet
-      val allReservedIndexes = reservedIndexes ++ filteredCases.flatMap(c => getReservedIndexes(c.modifiers).toSet)
+      val allReservedIndexes = reservedIndexes ++ getReservedIndexes(caseModifiers).toSet ++ getReservedFromIndexes(caseModifiers).toSet
       val builder            = List.newBuilder[ProtobufCodec.EnumValue[A]]
       var index              = 0
       filteredCases.foreach { c =>
         val fieldIndex = getReservedIndex(c.modifiers) match {
           case Some(id) => id
           case None     =>
-            while (allReservedIndexes.contains(index)) index += 1
-            val current = index
-            index += 1
-            current
+            getReservedFromIndex(c.modifiers) match {
+              case Some(fromIndex) =>
+                index = fromIndex + 1
+                fromIndex
+              case None            =>
+                while (allReservedIndexes.contains(index)) index += 1
+                val current = index
+                index += 1
+                current
+            }
         }
         val a          = constructEnumCase(c).asInstanceOf[A]
         val prefix     = getEnumPrefix(modifiers, flags, typeId)
@@ -381,8 +395,9 @@ case class ProtobufDeriver private (
             .collectFirst { case Modifier.config(`oneOfModifier`, value) => value.contains("nested") }
             .getOrElse(flags.contains(DerivationFlag.NestedOneOf))
           val discriminator      = binding.discriminator
+          val caseModifiers      = cases.flatMap(_.modifiers)
           val reservedIndexes    = getReservedIndexes(modifiers).toSet
-          val allReservedIndexes = reservedIndexes ++ getReservedIndexes(cases.flatMap(_.modifiers)).toSet
+          val allReservedIndexes = reservedIndexes ++ getReservedIndexes(caseModifiers).toSet ++ getReservedFromIndexes(caseModifiers).toSet
           var id                 = 1
           val register           = Register.Object(0)
           val builder            = IArray.newBuilder[SimpleField[?] | ExcludedField[?]]
@@ -398,10 +413,16 @@ case class ProtobufDeriver private (
                     val fieldId = getReservedIndex(c.modifiers) match {
                       case Some(reservedIndex) => reservedIndex
                       case None                =>
-                        while (allReservedIndexes.contains(id)) id += 1
-                        val current = id
-                        id += 1
-                        current
+                        getReservedFromIndex(c.modifiers) match {
+                          case Some(fromIndex) =>
+                            id = fromIndex + 1
+                            fromIndex
+                          case None            =>
+                            while (allReservedIndexes.contains(id)) id += 1
+                            val current = id
+                            id += 1
+                            current
+                        }
                     }
                     builder += SimpleField(
                       getFieldName(c.name, c.modifiers),
@@ -594,6 +615,12 @@ case class ProtobufDeriver private (
 
   private def getReservedIndex(modifiers: Seq[Modifier]): Option[Int] =
     modifiers.collectFirst { case Modifier.config(`reservedModifier`, value) => value.toIntOption }.flatten
+
+  private def getReservedFromIndex(modifiers: Seq[Modifier]): Option[Int] =
+    modifiers.collectFirst { case Modifier.config(`reservedFromModifier`, value) => value.toIntOption }.flatten
+
+  private def getReservedFromIndexes(modifiers: Seq[Modifier]): List[Int] =
+    modifiers.collect { case Modifier.config(`reservedFromModifier`, value) => value.toIntOption }.flatten.toList
 
   private def getEnumPrefix(modifiers: Seq[Modifier], flags: Set[DerivationFlag], typeId: TypeId[?]): String =
     modifiers
