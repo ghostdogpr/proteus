@@ -189,7 +189,7 @@ case class ProtobufDeriver private (
                       }
                     field.copy(
                       id = caseId,
-                      codec = ProtobufCodec.Transform(from, to, field.codec.asInstanceOf[ProtobufCodec[t.Origin]]),
+                      codec = ProtobufCodec.Transform(from, to, clearCanonicalParent(field.codec).asInstanceOf[ProtobufCodec[t.Origin]]),
                       register = register,
                       defaultValue =
                         try from(field.defaultValue.asInstanceOf[t.Origin])
@@ -218,7 +218,7 @@ case class ProtobufDeriver private (
                         while (allReservedIndexes.contains(id)) id += 1
                         id
                       }
-                    field.copy(id = caseId, register = register)
+                    field.copy(id = caseId, register = register, codec = clearCanonicalParent(field.codec))
                 },
                 register,
                 o.discriminator,
@@ -720,6 +720,13 @@ case class ProtobufDeriver private (
         }
       case ProtobufCodec.Transform(_, _, codec)   => isValidKeyType(codec)
       case _                                      => false
+    }
+
+  private def clearCanonicalParent[A](codec: ProtobufCodec[A]): ProtobufCodec[A] =
+    codec match {
+      case c: ProtobufCodec.Message[_]      => c.copy(canonicalParent = None).asInstanceOf[ProtobufCodec[A]]
+      case c: ProtobufCodec.Transform[_, _] => c.copy(codec = clearCanonicalParent(c.codec)).asInstanceOf[ProtobufCodec[A]]
+      case _                                => codec
     }
 
   private def isValidValueTypeForMap[A](codec: ProtobufCodec[A]): Boolean =
