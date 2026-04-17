@@ -1320,6 +1320,30 @@ message Req {
 
         assertTrue(rendered == expected)
       },
+      test("ref modifier on optional field rendered as oneOf qualifies value case") {
+        case class Inner(value: String) derives Schema
+        case class Req(inner: Option[Inner]) derives Schema
+
+        val d        = deriver.modifier[Inner](nested).modifier[Req]("inner", oneOf).modifier[Req]("inner", ref("Parent"))
+        val codec    = Schema[Req].derive(d)
+        val rendered = renderCodec(codec)
+
+        val expected = """syntax = "proto3";
+
+package test;
+
+message Req {
+    oneof inner {
+        Empty no_inner = 1;
+        Parent.Inner inner_value = 2;
+    }
+}
+
+message Empty {}
+"""
+
+        assertTrue(rendered == expected)
+      },
       test("AutoPrefixEnums flag adds type name as prefix to enum members") {
         enum Status derives Schema { case Active, Inactive, Pending }
         case class StatusMessage(status: Status) derives Schema

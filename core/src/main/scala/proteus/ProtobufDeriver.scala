@@ -234,7 +234,15 @@ case class ProtobufDeriver private (
                 name,
                 IArray(
                   SimpleField(s"no_$name", emptyId, Empty.emptyCodec.transform(_ => None, _ => empty), register, None, None),
-                  SimpleField(s"${name}_value", valueId, codec.transform(Some(_), _.get), register, null, None)
+                  SimpleField(
+                    s"${name}_value",
+                    valueId,
+                    codec.transform(Some(_), _.get),
+                    register,
+                    null,
+                    None,
+                    refQualifiers = getRefQualifiers(field.modifiers)
+                  )
                 ),
                 register,
                 new Discriminator[A] {
