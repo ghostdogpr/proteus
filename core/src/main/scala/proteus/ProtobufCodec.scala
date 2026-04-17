@@ -1204,10 +1204,15 @@ object ProtobufCodec {
   }
 
   private[proteus] def relocateNestedIn(defs: List[ProtoIR.TopLevelDef]): List[ProtoIR.TopLevelDef] = {
-    val allNames = defs.iterator.map(_.name).toSet
-
+    val allNames         = defs.iterator.map(_.name).toSet
     val childrenByTarget = mutable.Map.empty[String, mutable.ListBuffer[ProtoIR.TopLevelDef]]
-    defs.foreach(d => resolvableNestedIn(d, allNames).foreach((_, t) => childrenByTarget.getOrElseUpdate(t, mutable.ListBuffer.empty) += d))
+    val childRefs        = mutable.Set.empty[ProtoIR.TopLevelDef]
+    defs.foreach(d =>
+      resolvableNestedIn(d, allNames).foreach { case (_, target) =>
+        childrenByTarget.getOrElseUpdate(target, mutable.ListBuffer.empty) += d
+        childRefs += d
+      }
+    )
 
     def finalize(d: ProtoIR.TopLevelDef): ProtoIR.TopLevelDef = {
       val added = childrenByTarget.get(d.name).toList.flatten.distinctBy(_.name).map(finalize).map {
@@ -1225,7 +1230,7 @@ object ProtobufCodec {
       }
     }
 
-    defs.flatMap(d => if (resolvableNestedIn(d, allNames).isDefined) None else Some(finalize(d)))
+    defs.flatMap(d => if (childRefs.contains(d)) None else Some(finalize(d)))
   }
 
   private[proteus] def unresolvedNestedIn(defs: List[ProtoIR.TopLevelDef]): List[String] =
@@ -1243,12 +1248,12 @@ object ProtobufCodec {
     val allNames      = defs.iterator.map(_.name).toSet
     val childToParent = defs.flatMap(resolvableNestedIn(_, allNames)).toMap
 
-    def resolve(name: String, seen: Set[String] = Set.empty): String =
+    def resolve(name: String, chain: List[String] = Nil): String =
       childToParent.get(name) match {
-        case Some(parent) if seen.contains(parent) =>
-          throw new ProteusException(s"Cyclic `nestedIn` detected: ${(seen + parent).mkString(" -> ")}")
-        case Some(parent)                          => s"${resolve(parent, seen + name)}.$name"
-        case None                                  => name
+        case Some(parent) if chain.contains(parent) =>
+          throw new ProteusException(s"Cyclic `nestedIn` detected: ${(chain :+ name :+ parent).mkString(" -> ")}")
+        case Some(parent)                           => s"${resolve(parent, chain :+ name)}.$name"
+        case None                                   => name
       }
 
     childToParent.map { case (child, _) => child -> resolve(child) }
