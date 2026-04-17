@@ -43,7 +43,7 @@ object ProtoDiff {
       case _: MessageAdded            => (Info, Info)
       case _: MessageRemoved          => (Error, Error)
       case _: MessageRenamed          => (Info, Error)
-      case _: FieldAdded              => (Info, Info)
+      case _: FieldAdded              => (Info, Warning)
       case c: FieldRemoved            => (if (c.numberReserved) Info else Error, Error)
       case _: FieldNumberChanged      => (Error, Info)
       case _: FieldRenamed            => (Info, Error)
