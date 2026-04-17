@@ -595,10 +595,9 @@ case class ProtobufDeriver private (
   private def getNestedPlacement(modifiers: Seq[Modifier]): Option[ProtobufCodec.NestedPlacement] =
     modifiers.collectFirst { case Modifier.config(`nestedModifier`, value) =>
       value match {
-        case "true"                                    => Some(ProtobufCodec.NestedPlacement.Auto)
-        case "false"                                   => Some(ProtobufCodec.NestedPlacement.Unnested)
-        case s if s.startsWith(nestedInModifierPrefix) => Some(ProtobufCodec.NestedPlacement.In(s.drop(nestedInModifierPrefix.length)))
-        case _                                         => None
+        case "true"  => Some(ProtobufCodec.NestedPlacement.Auto)
+        case "false" => Some(ProtobufCodec.NestedPlacement.Unnested)
+        case other   => decodeNestedIn(other).map(ProtobufCodec.NestedPlacement.In(_))
       }
     }.flatten
 

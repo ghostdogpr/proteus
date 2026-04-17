@@ -30,6 +30,9 @@ final case class Dependency(
   private[proteus] lazy val toImportStatement: ProtoIR.Statement.ImportStatement =
     ProtoIR.Statement.ImportStatement(s"${path.fold("")(_ + "/")}$dependencyName.proto")
 
+  private lazy val subDepPaths: Map[String, String] =
+    filteredDependencies.toList.flatMap(dep => ProtobufCodec.nestedInPaths(dep.types.toList)).toMap
+
   private[proteus] def hasAnyOf(typeNames: Set[String]): Boolean =
     types.exists(typeDef => typeNames.contains(typeDef.name))
 
@@ -65,18 +68,16 @@ final case class Dependency(
       )
     }
     val resolvedTypes = ProtobufCodec.relocateNestedIn(filteredTypes.toList)
-    val unresolved    = ProtobufCodec.unresolvedNestedIn(resolvedTypes)
-    if (unresolved.nonEmpty)
-      throw new ProteusException(
-        s"Could not resolve `nestedIn` targets in dependency $dependencyName. Ensure the target types are added to the dependency: ${unresolved.mkString(", ")}"
-      )
-    val depsList      = filteredDependencies.toList
-    val subDepPaths   = depsList.flatMap(dep => ProtobufCodec.nestedInPaths(dep.types.toList)).toMap
+    ProtobufCodec.raiseIfUnresolvedNestedIn(
+      resolvedTypes,
+      s"dependency $dependencyName",
+      "Ensure the target types are added to the dependency"
+    )
     Renderer.render(
       ProtoIR.CompilationUnit(
         packageName = packageName,
         options = options,
-        statements = depsList.map(_.toImportStatement) ++
+        statements = filteredDependencies.toList.map(_.toImportStatement) ++
           ProtobufCodec.qualifyReferences(resolvedTypes, subDepPaths).map(ProtoIR.Statement.TopLevelStatement(_))
       )
     )

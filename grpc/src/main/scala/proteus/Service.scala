@@ -46,11 +46,11 @@ case class Service[Rpcs] private (
     val deduped         = raw.distinct
     val nestedPaths     = ProtobufCodec.nestedInPaths(deduped)
     val resolved        = ProtobufCodec.relocateNestedIn(deduped)
-    val unresolved      = ProtobufCodec.unresolvedNestedIn(resolved)
-    if (unresolved.nonEmpty)
-      throw new ProteusException(
-        s"Could not resolve `nestedIn` targets in service $name. Ensure the target types are reachable from the service's RPCs or dependencies: ${unresolved.mkString(", ")}"
-      )
+    ProtobufCodec.raiseIfUnresolvedNestedIn(
+      resolved,
+      s"service $name",
+      "Ensure the target types are reachable from the service's RPCs or dependencies"
+    )
     ProtoIRResult(resolved, nestedPaths)
   }
 

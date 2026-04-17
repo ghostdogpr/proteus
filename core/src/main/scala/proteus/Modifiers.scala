@@ -44,7 +44,7 @@ object Modifiers {
     * ```
     */
   inline def nestedIn[A](using typeId: TypeId[A]): Modifier.Reflect =
-    Modifier.config(nestedModifier, s"$nestedInModifierPrefix${typeId.fullName}")
+    Modifier.config(nestedModifier, encodeNestedIn(typeId.fullName))
 
   /**
     * A modifier to force a type to be encoded as a oneOf.

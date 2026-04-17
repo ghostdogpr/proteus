@@ -56,15 +56,18 @@ object ProtoIR {
   sealed trait TopLevelDef {
     def name: String
     def collectTypeReferences: Set[String]
+    def nestedIn: Option[String] = None
   }
   object TopLevelDef       {
     final case class MessageDef(message: Message) extends TopLevelDef {
       def name: String                       = message.name
       def collectTypeReferences: Set[String] = message.collectTypeReferences + name
+      override def nestedIn: Option[String]  = message.nestedIn
     }
     final case class EnumDef(enumValue: Enum)     extends TopLevelDef {
       def name: String                       = enumValue.name
       def collectTypeReferences: Set[String] = Set(name)
+      override def nestedIn: Option[String]  = enumValue.nestedIn
     }
     final case class ServiceDef(service: Service) extends TopLevelDef {
       def name: String                       = service.name

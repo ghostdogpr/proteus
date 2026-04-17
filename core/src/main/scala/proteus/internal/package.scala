@@ -53,6 +53,11 @@ private[proteus] def toUpperCamelCase(s: String): String =
 private[proteus] def typeNameToUpperSnakeCase(s: String): String =
   s.replaceAll("([a-z0-9])([A-Z])", "$1_$2").replaceAll("([A-Z])([A-Z][a-z])", "$1_$2").toUpperCase
 
+private[proteus] def encodeNestedIn(fullName: String): String      =
+  s"$nestedInModifierPrefix$fullName"
+private[proteus] def decodeNestedIn(value: String): Option[String] =
+  if (value.startsWith(nestedInModifierPrefix)) Some(value.drop(nestedInModifierPrefix.length)) else None
+
 private[proteus] val oneOfModifier          = "proteus.oneof"
 private[proteus] val nestedModifier         = "proteus.nested"
 private[proteus] val nestedInModifierPrefix = "in:"

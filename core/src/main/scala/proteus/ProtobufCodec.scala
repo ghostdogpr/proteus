@@ -1197,11 +1197,8 @@ object ProtobufCodec {
     builder.result()
   }
 
-  private def resolvableNestedIn(d: ProtoIR.TopLevelDef, allNames: Set[String]): Option[(String, String)] = d match {
-    case ProtoIR.TopLevelDef.MessageDef(m) => m.nestedIn.filter(allNames.contains).map(t => m.name -> t)
-    case ProtoIR.TopLevelDef.EnumDef(e)    => e.nestedIn.filter(allNames.contains).map(t => e.name -> t)
-    case _                                 => None
-  }
+  private def resolvableNestedIn(d: ProtoIR.TopLevelDef, allNames: Set[String]): Option[(String, String)] =
+    d.nestedIn.filter(allNames.contains).map(d.name -> _)
 
   private[proteus] def relocateNestedIn(defs: List[ProtoIR.TopLevelDef]): List[ProtoIR.TopLevelDef] = {
     val allNames         = defs.iterator.map(_.name).toSet
@@ -1234,16 +1231,15 @@ object ProtobufCodec {
   }
 
   private[proteus] def unresolvedNestedIn(defs: List[ProtoIR.TopLevelDef]): List[String] =
-    defs.flatMap {
-      case ProtoIR.TopLevelDef.MessageDef(m) => m.nestedIn.map(t => s"${m.name} -> $t")
-      case ProtoIR.TopLevelDef.EnumDef(e)    => e.nestedIn.map(t => s"${e.name} -> $t")
-      case _                                 => None
-    }
+    defs.flatMap(d => d.nestedIn.map(t => s"${d.name} -> $t"))
 
-  /**
-    * Computes qualified paths for types that have resolvable `nestedIn` targets.
-    * Must be called on defs BEFORE `relocateNestedIn` clears the metadata.
-    */
+  private[proteus] def raiseIfUnresolvedNestedIn(defs: List[ProtoIR.TopLevelDef], scope: String, hint: String): Unit = {
+    val unresolved = unresolvedNestedIn(defs)
+    if (unresolved.nonEmpty)
+      throw new ProteusException(s"Could not resolve `nestedIn` targets in $scope. $hint: ${unresolved.mkString(", ")}")
+  }
+
+  // Must be called BEFORE `relocateNestedIn`: once children are spliced, their `nestedIn` metadata is cleared.
   private[proteus] def nestedInPaths(defs: List[ProtoIR.TopLevelDef]): Map[String, String] = {
     val allNames      = defs.iterator.map(_.name).toSet
     val childToParent = defs.flatMap(resolvableNestedIn(_, allNames)).toMap
