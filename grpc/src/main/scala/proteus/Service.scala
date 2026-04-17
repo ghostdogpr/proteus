@@ -35,7 +35,7 @@ case class Service[Rpcs] private (
   /**
     * Converts the service to a ProtoIR representation.
     */
-  lazy val toProtoIR: List[ProtoIR.TopLevelDef] = {
+  private lazy val protoIRResult: (List[ProtoIR.TopLevelDef], Map[String, String]) = {
     val resolverBuilder = Map.newBuilder[String, String]
     rpcs.foreach { rpc =>
       resolverBuilder ++= ProtobufCodec.collectNames(rpc.requestCodec)
@@ -44,14 +44,23 @@ case class Service[Rpcs] private (
     val resolver        = resolverBuilder.result()
     val raw             = ProtoIR.TopLevelDef.ServiceDef(ProtoIR.Service(name, rpcs.map(_.toProtoIR), comment)) ::
       rpcs.flatMap(_.messagesToProtoIR(resolver))
-    val resolved        = ProtobufCodec.relocateNestedIn(raw.distinct)
+    val deduped         = raw.distinct
+    val nestedPaths     = ProtobufCodec.nestedInPaths(deduped)
+    val resolved        = ProtobufCodec.relocateNestedIn(deduped)
     val unresolved      = ProtobufCodec.unresolvedNestedIn(resolved)
     if (unresolved.nonEmpty)
       throw new ProteusException(
         s"Could not resolve `nestedIn` targets in service $name. Ensure the target types are reachable from the service's RPCs or dependencies: ${unresolved.mkString(", ")}"
       )
-    resolved
+    (resolved, nestedPaths)
   }
+
+  /**
+    * Converts the service to a ProtoIR representation.
+    */
+  lazy val toProtoIR: List[ProtoIR.TopLevelDef] = protoIRResult._1
+
+  private lazy val nestedInPaths: Map[String, String] = protoIRResult._2
 
   /**
     * All the dependencies of the service (including transitive dependencies).
@@ -118,7 +127,7 @@ case class Service[Rpcs] private (
         packageName = packageName,
         options = options,
         statements = usedDependencies.toList.map(_.toImportStatement) ++
-          ProtobufCodec.qualifyReferences(filteredTypes).map(ProtoIR.Statement.TopLevelStatement(_))
+          ProtobufCodec.qualifyReferences(filteredTypes, nestedInPaths).map(ProtoIR.Statement.TopLevelStatement(_))
       )
     )
   }

@@ -525,6 +525,47 @@ message CrossResponse {
 
         assertTrue(renderedProto == expected)
       },
+      test("nestedIn modifier resolves when parent type appears in multiple RPCs") {
+        case class PerkDiff(perkId: Int) derives Schema
+        case class Session(stageId: Int) derives Schema
+        case class StartRequest(session: Session) derives Schema
+        case class StartResponse(ok: Boolean) derives Schema
+        case class EndRequest(session: Session, diff: PerkDiff) derives Schema
+        case class EndResponse(ok: Boolean) derives Schema
+
+        given ProtobufDeriver              = ProtobufDeriver.modifier[PerkDiff](Modifiers.nestedIn[Session])
+        given ProtobufCodec[StartRequest]  = Schema[StartRequest].derive(summon[ProtobufDeriver])
+        given ProtobufCodec[StartResponse] = Schema[StartResponse].derive(summon[ProtobufDeriver])
+        given ProtobufCodec[EndRequest]    = Schema[EndRequest].derive(summon[ProtobufDeriver])
+        given ProtobufCodec[EndResponse]   = Schema[EndResponse].derive(summon[ProtobufDeriver])
+
+        val rpc1          = Rpc.unary[StartRequest, StartResponse]("Start")
+        val rpc2          = Rpc.unary[EndRequest, EndResponse]("End")
+        val service       = Service("test.package", "GameService").rpc(rpc1).rpc(rpc2)
+        val renderedProto = service.render(options)
+
+        assertTrue(renderedProto.contains("Session.PerkDiff diff = 2;")) &&
+          assertTrue(renderedProto.contains("message Session {\n    message PerkDiff {"))
+      },
+      test("nestedIn qualifier works when parent type is in a dependency") {
+        case class DepPerkDiff(perkId: Int) derives Schema
+        case class DepSession(stageId: Int) derives Schema
+        case class DepEndRequest(session: DepSession, diff: DepPerkDiff) derives Schema
+        case class DepEndResponse(ok: Boolean) derives Schema
+
+        given ProtobufDeriver               = ProtobufDeriver.modifier[DepPerkDiff](Modifiers.nestedIn[DepSession])
+        given ProtobufCodec[DepSession]     = Schema[DepSession].derive(summon[ProtobufDeriver])
+        given ProtobufCodec[DepPerkDiff]    = Schema[DepPerkDiff].derive(summon[ProtobufDeriver])
+        given ProtobufCodec[DepEndRequest]  = Schema[DepEndRequest].derive(summon[ProtobufDeriver])
+        given ProtobufCodec[DepEndResponse] = Schema[DepEndResponse].derive(summon[ProtobufDeriver])
+
+        val dep           = Dependency("shared_types", "test.package").add[DepSession].add[DepPerkDiff]
+        val rpc           = Rpc.unary[DepEndRequest, DepEndResponse]("End")
+        val service       = Service("test.package", "GameService").rpc(rpc).dependsOn(dep)
+        val renderedProto = service.render(options)
+
+        assertTrue(renderedProto.contains("DepSession.DepPerkDiff diff = 2;"))
+      },
       test("nestedIn modifier raises an error when target is unreachable at service level") {
         case class OrphanInner(value: String) derives Schema
         case class OrphanRequest(inner: OrphanInner) derives Schema

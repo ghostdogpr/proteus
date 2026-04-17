@@ -1137,7 +1137,7 @@ object ProtobufCodec {
   private[proteus] def toProtoIR(codec: ProtobufCodec[?], resolver: Map[String, String]): List[ProtoIR.TopLevelDef] =
     relocateNestedIn(findTopLevelDefs(codec, resolver))
 
-  private def findTopLevelDefs[A](codec: ProtobufCodec[A], resolver: Map[String, String]): List[ProtoIR.TopLevelDef] = {
+  private[proteus] def findTopLevelDefs[A](codec: ProtobufCodec[A], resolver: Map[String, String]): List[ProtoIR.TopLevelDef] = {
     val visited = new mutable.HashSet[ProtobufCodec[?]]()
 
     def loop[A](codec: ProtobufCodec[A]): List[ProtoIR.TopLevelDef] =
@@ -1197,17 +1197,17 @@ object ProtobufCodec {
     builder.result()
   }
 
+  private def resolvableNestedIn(d: ProtoIR.TopLevelDef, allNames: Set[String]): Option[(String, String)] = d match {
+    case ProtoIR.TopLevelDef.MessageDef(m) => m.nestedIn.filter(allNames.contains).map(t => m.name -> t)
+    case ProtoIR.TopLevelDef.EnumDef(e)    => e.nestedIn.filter(allNames.contains).map(t => e.name -> t)
+    case _                                 => None
+  }
+
   private[proteus] def relocateNestedIn(defs: List[ProtoIR.TopLevelDef]): List[ProtoIR.TopLevelDef] = {
     val allNames = defs.iterator.map(_.name).toSet
 
-    def resolvableTarget(d: ProtoIR.TopLevelDef): Option[String] = d match {
-      case ProtoIR.TopLevelDef.MessageDef(m) => m.nestedIn.filter(allNames.contains)
-      case ProtoIR.TopLevelDef.EnumDef(e)    => e.nestedIn.filter(allNames.contains)
-      case _                                 => None
-    }
-
     val childrenByTarget = mutable.Map.empty[String, mutable.ListBuffer[ProtoIR.TopLevelDef]]
-    defs.foreach(d => resolvableTarget(d).foreach(t => childrenByTarget.getOrElseUpdate(t, mutable.ListBuffer.empty) += d))
+    defs.foreach(d => resolvableNestedIn(d, allNames).foreach((_, t) => childrenByTarget.getOrElseUpdate(t, mutable.ListBuffer.empty) += d))
 
     def finalize(d: ProtoIR.TopLevelDef): ProtoIR.TopLevelDef = {
       val added = childrenByTarget.get(d.name).toList.flatten.distinctBy(_.name).map(finalize).map {
@@ -1225,7 +1225,7 @@ object ProtobufCodec {
       }
     }
 
-    defs.flatMap(d => if (resolvableTarget(d).isDefined) None else Some(finalize(d)))
+    defs.flatMap(d => if (resolvableNestedIn(d, allNames).isDefined) None else Some(finalize(d)))
   }
 
   private[proteus] def unresolvedNestedIn(defs: List[ProtoIR.TopLevelDef]): List[String] =
@@ -1235,8 +1235,30 @@ object ProtobufCodec {
       case _                                 => None
     }
 
-  private[proteus] def qualifyReferences(defs: List[ProtoIR.TopLevelDef]): List[ProtoIR.TopLevelDef] = {
-    val paths = mutable.Map.empty[String, String]
+  /**
+    * Computes qualified paths for types that have resolvable `nestedIn` targets.
+    * Must be called on defs BEFORE `relocateNestedIn` clears the metadata.
+    */
+  private[proteus] def nestedInPaths(defs: List[ProtoIR.TopLevelDef]): Map[String, String] = {
+    val allNames      = defs.iterator.map(_.name).toSet
+    val childToParent = defs.flatMap(resolvableNestedIn(_, allNames)).toMap
+
+    def resolve(name: String, seen: Set[String] = Set.empty): String =
+      childToParent.get(name) match {
+        case Some(parent) if seen.contains(parent) =>
+          throw new ProteusException(s"Cyclic `nestedIn` detected: ${(seen + parent).mkString(" -> ")}")
+        case Some(parent)                          => s"${resolve(parent, seen + name)}.$name"
+        case None                                  => name
+      }
+
+    childToParent.map { case (child, _) => child -> resolve(child) }
+  }
+
+  private[proteus] def qualifyReferences(
+    defs: List[ProtoIR.TopLevelDef],
+    additionalPaths: Map[String, String] = Map.empty
+  ): List[ProtoIR.TopLevelDef] = {
+    val paths = mutable.Map.from(additionalPaths)
 
     def collectMessage(m: ProtoIR.Message, prefix: String): Unit = {
       val path = if (prefix.isEmpty) m.name else s"$prefix.${m.name}"

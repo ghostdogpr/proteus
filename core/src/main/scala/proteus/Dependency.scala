@@ -70,12 +70,14 @@ final case class Dependency(
       throw new ProteusException(
         s"Could not resolve `nestedIn` targets in dependency $dependencyName. Ensure the target types are added to the dependency: ${unresolved.mkString(", ")}"
       )
+    val depsList      = filteredDependencies.toList
+    val subDepPaths   = depsList.flatMap(dep => ProtobufCodec.nestedInPaths(dep.types.toList)).toMap
     Renderer.render(
       ProtoIR.CompilationUnit(
         packageName = packageName,
         options = options,
-        statements = filteredDependencies.toList.map(_.toImportStatement) ++
-          ProtobufCodec.qualifyReferences(resolvedTypes).map(ProtoIR.Statement.TopLevelStatement(_))
+        statements = depsList.map(_.toImportStatement) ++
+          ProtobufCodec.qualifyReferences(resolvedTypes, subDepPaths).map(ProtoIR.Statement.TopLevelStatement(_))
       )
     )
   }
