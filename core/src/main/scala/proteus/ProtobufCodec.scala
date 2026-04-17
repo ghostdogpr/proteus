@@ -655,7 +655,7 @@ object ProtobufCodec {
       * Converts the message to its protobuf IR representation.
       */
     def toProtoIR: ProtoIR.Message = {
-      val elements: IArray[ProtoIR.MessageElement.FieldElement | ProtoIR.MessageElement.OneOfElement] = fields.map(_.toProtoIR)
+      val elements = fields.map(_.toProtoIR)
 
       def findNested[A](codec: ProtobufCodec[A], goDeep: Boolean = false): List[ProtoIR.MessageElement] =
         codec match {
