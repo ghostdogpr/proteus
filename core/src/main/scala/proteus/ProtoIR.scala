@@ -75,16 +75,30 @@ object ProtoIR {
     }
   }
 
+  sealed trait Placement {
+    def nested: Boolean          = this != Placement.TopLevel
+    def nestedIn: Option[String] = this match {
+      case Placement.NestedIn(t) => Some(t)
+      case _                     => None
+    }
+  }
+  object Placement       {
+    case object TopLevel                      extends Placement
+    case object Nested                        extends Placement
+    final case class NestedIn(target: String) extends Placement
+  }
+
   final case class Message(
     name: String,
     elements: List[MessageElement],
     reserved: List[Reserved],
     comment: Option[String] = None,
     options: List[OptionValue] = List.empty,
-    nested: Boolean = false,
-    nestedIn: Option[String] = None
+    placement: Placement = Placement.TopLevel
   ) {
     lazy val collectTypeReferences: Set[String] = elements.toSet.flatMap(_.collectTypeReferences)
+    def nested: Boolean                         = placement.nested
+    def nestedIn: Option[String]                = placement.nestedIn
   }
 
   sealed trait MessageElement {
@@ -133,9 +147,11 @@ object ProtoIR {
     reserved: List[Reserved],
     comment: Option[String] = None,
     options: List[OptionValue] = List.empty,
-    nested: Boolean = false,
-    nestedIn: Option[String] = None
-  )
+    placement: Placement = Placement.TopLevel
+  ) {
+    def nested: Boolean          = placement.nested
+    def nestedIn: Option[String] = placement.nestedIn
+  }
 
   final case class Service(name: String, rpcs: List[Rpc], comment: Option[String] = None)
 

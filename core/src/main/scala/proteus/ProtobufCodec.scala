@@ -157,11 +157,12 @@ object ProtobufCodec {
       */
     final case class In(targetFullName: String) extends NestedPlacement
 
-    private[proteus] def shouldEmitAsNested(opt: Option[NestedPlacement]): Boolean =
-      opt.exists(_ != Unnested)
-
-    private[proteus] def resolveTarget(opt: Option[NestedPlacement], resolver: Map[String, String]): Option[String] =
-      opt.collect { case In(fullName) => resolver.getOrElse(fullName, fullName) }
+    private[proteus] def toPlacement(opt: Option[NestedPlacement], resolver: Map[String, String]): ProtoIR.Placement =
+      opt match {
+        case Some(Auto)            => ProtoIR.Placement.Nested
+        case Some(In(fullName))    => ProtoIR.Placement.NestedIn(resolver.getOrElse(fullName, fullName))
+        case Some(Unnested) | None => ProtoIR.Placement.TopLevel
+      }
   }
 
   private class RegistersHolder(val registers: Registers, val cache: WriterCache, var inUse: Boolean)
@@ -534,8 +535,7 @@ object ProtobufCodec {
           },
           reserved = reserved.sorted.map(ProtoIR.Reserved.Number(_)),
           comment = comment,
-          nested = NestedPlacement.shouldEmitAsNested(nested),
-          nestedIn = NestedPlacement.resolveTarget(nested, resolver)
+          placement = NestedPlacement.toPlacement(nested, resolver)
         )
       )
   }
@@ -719,8 +719,7 @@ object ProtobufCodec {
           nestedMessageElements ++ sortedAllElements,
           reserved = reserved.toList.sorted.map(ProtoIR.Reserved.Number(_)),
           comment = comment,
-          nested = NestedPlacement.shouldEmitAsNested(nested),
-          nestedIn = NestedPlacement.resolveTarget(nested, resolver)
+          placement = NestedPlacement.toPlacement(nested, resolver)
         )
       )
     }
@@ -1214,9 +1213,9 @@ object ProtobufCodec {
     def finalize(d: ProtoIR.TopLevelDef): ProtoIR.TopLevelDef = {
       val added = childrenByTarget.get(d.name).toList.flatten.distinctBy(_.name).map(finalize).map {
         case ProtoIR.TopLevelDef.MessageDef(cm) =>
-          ProtoIR.MessageElement.NestedMessageElement(cm.copy(nestedIn = None, nested = true))
+          ProtoIR.MessageElement.NestedMessageElement(cm.copy(placement = ProtoIR.Placement.Nested))
         case ProtoIR.TopLevelDef.EnumDef(ce)    =>
-          ProtoIR.MessageElement.NestedEnumElement(ce.copy(nestedIn = None, nested = true))
+          ProtoIR.MessageElement.NestedEnumElement(ce.copy(placement = ProtoIR.Placement.Nested))
         case other                              =>
           throw new ProteusException(s"Cannot nest top-level def of kind $other")
       }
