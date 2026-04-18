@@ -604,6 +604,39 @@ object ProtoParserSpec extends ZIOSpecDefault {
           )
         )
       },
+      test("extend block is parsed and ignored") {
+        val input  = """syntax = "proto3";
+                      |package ext;
+                      |import "google/protobuf/descriptor.proto";
+                      |
+                      |extend google.protobuf.FieldOptions {
+                      |  Opts opts = 2001;
+                      |}
+                      |
+                      |message Opts {
+                      |  bool not_null = 1;
+                      |}
+                      |""".stripMargin
+        val result = ProtoParser.parse(input)
+        assertTrue(
+          result.isRight,
+          result.toOption.exists(_.statements.collect { case Statement.TopLevelStatement(TopLevelDef.MessageDef(m)) => m.name } == List("Opts"))
+        )
+      },
+      test("reserved preceded by a comment") {
+        val input  = """syntax = "proto3";
+                      |message Foo {
+                      |    // a comment
+                      |    reserved 5, 6;
+                      |    int32 id = 1;
+                      |}
+                      |""".stripMargin
+        val result = ProtoParser.parse(input)
+        assertTrue(
+          result.map(_.statements.collect { case Statement.TopLevelStatement(TopLevelDef.MessageDef(m)) => m.reserved }) ==
+            Right(List(List(Reserved.Number(5), Reserved.Number(6))))
+        )
+      },
       test("reserved range with max") {
         val input = """syntax = "proto3";
                       |message Foo {

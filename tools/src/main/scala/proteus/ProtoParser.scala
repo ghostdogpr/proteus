@@ -297,8 +297,8 @@ object ProtoParser {
   ).map(_.toList)
 
   private def reserved[$: P]: P[List[Reserved]] = P(
-    "reserved" ~ ws ~ (reservedNames | reservedNumbers) ~ semi
-  )
+    commentBlock ~ ws ~ "reserved" ~ ws ~ (reservedNames | reservedNumbers) ~ semi
+  ).map { case (_, res) => res }
 
   private def enumField[$: P]: P[EnumValue] = P(
     commentBlock ~ ws ~ ident ~ ws ~ "=" ~ ws ~ int32Lit ~ ws ~ inlineOptions ~ semi ~ inlineComment.?
@@ -437,8 +437,15 @@ object ProtoParser {
       serviceDef.map(TopLevelDef.ServiceDef(_))
   )
 
+  // `extend <type> { ... }` blocks are parsed but not tracked: they define custom proto options
+  // (e.g. extending google.protobuf.FieldOptions) rather than schema-level types users would diff.
+  private def extendDef[$: P]: P[Unit] = P(
+    commentBlock ~ ws ~ "extend" ~ ws ~ (".".? ~ fullIdent).! ~ ws ~ "{" ~ messageBody ~ ws ~ "}"
+  ).map(_ => ())
+
   private def topLevelElement[$: P]: P[Option[Either[Either[Statement.ImportStatement, TopLevelOption], TopLevelDef]]] = P(
     emptyStatement.map(_ => None) |
+      extendDef.map(_ => None) |
       importStatement.map(i => Some(Left(Left(i)))) |
       topLevelOption.map(o => Some(Left(Right(o)))) |
       topLevelDef.map(d => Some(Right(d)))

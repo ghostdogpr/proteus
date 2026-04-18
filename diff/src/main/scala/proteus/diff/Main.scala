@@ -1,10 +1,10 @@
 package proteus.diff
 
-import java.nio.file.{Files, Paths}
-
 import mainargs.{arg, main, ParserForMethods, TokensReader}
 
 import proteus.{CompatMode, ProtoDiff, Severity, SeverityOverrides}
+
+enum OutputFormat { case Text, Json }
 
 object Main {
 
@@ -19,7 +19,7 @@ object Main {
     @arg(short = 'o', doc = "severity override: mode.ChangeType=severity (e.g. wire.FieldRemoved=info)")
     `override`: List[String] = Nil,
     @arg(short = 'f', doc = "output format: text | json (default: text)")
-    format: String = "text",
+    format: OutputFormat = OutputFormat.Text,
     @arg(doc = "exit 1 if any change at this severity or above: error | warning | info (default: error)")
     failOn: Severity = Severity.Error,
     @arg(doc = "color output: auto | always | never (default: auto)")
@@ -31,33 +31,19 @@ object Main {
       case _        => System.console() != null
     }
 
-    val outputFormat = format.toLowerCase match {
-      case "json" => "json"
-      case "text" => "text"
-      case other  => fail(s"unknown format '$other' (expected: text | json)")
-    }
-
-    val oldPath               = Paths.get(old)
-    val newPath               = Paths.get(`new`)
-    val isDirectoryComparison = Files.isDirectory(oldPath) || Files.isDirectory(newPath)
-
     val overrides = SeverityOverrides.parse(`override`).fold(err => fail(err), identity)
 
-    val changes  =
-      if (isDirectoryComparison) {
-        val oldFiles = ProtoFiles.load(oldPath).fold(err => fail(err), identity)
-        val newFiles = ProtoFiles.load(newPath).fold(err => fail(err), identity)
-        ProtoDiff.diffFiles(oldFiles, newFiles)
-      } else {
-        val oldUnit = ProtoFiles.loadFile(oldPath).fold(err => fail(err), identity)
-        val newUnit = ProtoFiles.loadFile(newPath).fold(err => fail(err), identity)
-        ProtoDiff.diff(oldUnit, newUnit)
-      }
-    val filtered = changes.filter(c => ProtoDiff.severity(c, mode, overrides).level >= severity.level)
+    val oldSrc       = ProtoFiles.resolve(old).fold(err => fail(err), identity)
+    val newSrc       = ProtoFiles.resolve(`new`).fold(err => fail(err), identity)
+    val isSingleFile = oldSrc.singleFile && newSrc.singleFile
+    val changes      =
+      if (isSingleFile) ProtoDiff.diff(oldSrc.files.values.head, newSrc.files.values.head)
+      else ProtoDiff.diffFiles(oldSrc.files, newSrc.files)
+    val filtered     = changes.filter(c => ProtoDiff.severity(c, mode, overrides).level >= severity.level)
 
-    val output     = outputFormat match {
-      case "json" => Report.formatJson(filtered, mode, overrides)
-      case _      => Report.format(filtered, mode, isDirectoryComparison, overrides, useColor)
+    val output     = format match {
+      case OutputFormat.Json => Report.formatJson(filtered, mode, overrides)
+      case OutputFormat.Text => Report.format(filtered, mode, !isSingleFile, overrides, useColor)
     }
     print(output)
     val shouldFail = filtered.exists(c => ProtoDiff.severity(c, mode, overrides).level >= failOn.level)
@@ -112,6 +98,16 @@ object Main {
         case "warning" => Right(Severity.Warning)
         case "info"    => Right(Severity.Info)
         case other     => Left(s"unknown severity '$other' (expected: error | warning | info)")
+      }
+  }
+
+  given TokensReader.Simple[OutputFormat] = new TokensReader.Simple[OutputFormat] {
+    def shortName: String                                     = "format"
+    def read(strs: Seq[String]): Either[String, OutputFormat] =
+      strs.last.toLowerCase match {
+        case "text" => Right(OutputFormat.Text)
+        case "json" => Right(OutputFormat.Json)
+        case other  => Left(s"unknown format '$other' (expected: text | json)")
       }
   }
 

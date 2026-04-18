@@ -45,6 +45,38 @@ proteus-diff old/ new/
 
 The tool prints a grouped report and exits with code `1` if any breaking change is found, `0` otherwise — so it plugs directly into CI.
 
+## Comparing git refs
+
+You can pass git refs directly — branches, tags, or commits — instead of filesystem paths:
+
+```bash
+proteus-diff main HEAD              # compare PR against main
+proteus-diff HEAD~1 HEAD            # what changed in the last commit
+proteus-diff v0.1.0 v0.2.0          # compare two releases
+proteus-diff main ./proto           # ref vs current working tree
+```
+
+Resolution rule: if the argument exists as a file or directory, it's treated as a filesystem path. Otherwise, proteus-diff tries to resolve it as a git ref with `git rev-parse`. If neither works, you get an error.
+
+::: tip
+If a file or directory happens to share a name with a ref (e.g. a folder named `main`), the filesystem wins by default. Use the `git:` prefix to force git mode:
+
+```bash
+proteus-diff git:main ./proto     # force git ref
+```
+:::
+
+### Git submodules
+
+If your protos live in a git submodule, `cd` into the submodule and run proteus-diff with the submodule's own refs:
+
+```bash
+cd path/to/submodule
+proteus-diff main HEAD
+```
+
+Git commands resolve correctly against the submodule's repository.
+
 ## Compatibility modes
 
 proteus-diff evaluates each change against one of three compatibility axes. Pick the one that matches what your consumers rely on:

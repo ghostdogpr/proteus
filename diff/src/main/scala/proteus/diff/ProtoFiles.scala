@@ -1,25 +1,17 @@
 package proteus.diff
 
 import java.nio.charset.StandardCharsets
-import java.nio.file.{Files, Path}
+import java.nio.file.{Files, Path, Paths}
 
 import scala.jdk.CollectionConverters.*
 
 import proteus.ProtoIR.CompilationUnit
 import proteus.ProtoParser
 
-/**
-  * File loading helpers for the proto diff CLI.
-  *
-  * `loadFile` parses a single `.proto` file. `loadDirectory` recursively finds and parses all
-  * `.proto` files under a directory, keying them by their path relative to the root. `load`
-  * auto-detects file vs directory.
-  */
+case class Resolved(files: Map[String, CompilationUnit], singleFile: Boolean)
+
 object ProtoFiles {
 
-  /**
-    * Reads and parses a single `.proto` file.
-    */
   def loadFile(path: Path): Either[String, CompilationUnit] =
     if (!Files.exists(path)) Left(s"File not found: $path")
     else if (Files.isDirectory(path)) Left(s"Expected a file, got a directory: $path")
@@ -28,10 +20,6 @@ object ProtoFiles {
       ProtoParser.parse(content).left.map(err => s"$path: $err")
     }
 
-  /**
-    * Recursively finds all `*.proto` files under `root`, parses each, and returns them keyed by
-    * path relative to `root`. Aggregates parse errors per file.
-    */
   def loadDirectory(root: Path): Either[String, Map[String, CompilationUnit]] =
     if (!Files.exists(root)) Left(s"Directory not found: $root")
     else if (!Files.isDirectory(root)) Left(s"Expected a directory, got a file: $root")
@@ -56,13 +44,31 @@ object ProtoFiles {
       else Right(parsed)
     }
 
-  /**
-    * Loads either a single proto file or all proto files in a directory.
-    *
-    * For a single file, returns a one-entry map keyed by the file name.
-    */
   def load(path: Path): Either[String, Map[String, CompilationUnit]] =
     if (!Files.exists(path)) Left(s"Path not found: $path")
     else if (Files.isDirectory(path)) loadDirectory(path)
     else loadFile(path).map(unit => Map(path.getFileName.toString -> unit))
+
+  /**
+    * Resolves an argument as either a filesystem path or a git ref.
+    *
+    * `git:<ref>` forces git mode. Otherwise, a valid filesystem path wins; else git ref is tried.
+    */
+  def resolve(arg: String): Either[String, Resolved] =
+    if (arg.startsWith("git:")) resolveRef(arg.stripPrefix("git:"), explicit = true)
+    else {
+      val path = Paths.get(arg)
+      if (Files.isDirectory(path)) loadDirectory(path).map(files => Resolved(files, singleFile = false))
+      else if (Files.isRegularFile(path))
+        loadFile(path).map(unit => Resolved(Map(path.getFileName.toString -> unit), singleFile = true))
+      else resolveRef(arg, explicit = false)
+    }
+
+  private def resolveRef(ref: String, explicit: Boolean): Either[String, Resolved] =
+    Git.extractProtos(ref) match {
+      case Right(dir)            => loadDirectory(dir).map(files => Resolved(files, singleFile = false))
+      case Left(err) if explicit => Left(err)
+      case Left(_)               =>
+        Left(s"'$ref' is not a file/directory, and not a valid git ref.\nHint: check that the path or ref exists.")
+    }
 }
