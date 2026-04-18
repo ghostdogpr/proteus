@@ -33,9 +33,9 @@ jobs:
       - name: Cache scala dependencies
         uses: coursier/cache-action@v8
       - name: Build native image
-        run: sbt 'cli/nativeImage'
+        run: sbt 'diff/nativeImage'
       - name: Rename binary
-        run: mv cli/target/native-image/proteus-diff "${{ matrix.artifact }}"
+        run: mv diff/target/native-image/proteus-diff "${{ matrix.artifact }}"
       - name: Upload release asset
         uses: softprops/action-gh-release@v2
         with:

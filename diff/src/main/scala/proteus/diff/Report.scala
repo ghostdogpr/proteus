@@ -1,4 +1,4 @@
-package proteus.cli
+package proteus.diff
 
 import proteus.{Change, CompatMode, ProtoDiff, Severity, SeverityOverrides}
 

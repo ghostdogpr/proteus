@@ -1,4 +1,4 @@
-package proteus.cli
+package proteus.diff
 
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path, Paths}

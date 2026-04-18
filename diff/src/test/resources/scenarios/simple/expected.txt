@@ -1,5 +1,5 @@
 Changes (2)
   FieldAdded (1)
-    info: User: field 'email' added
+    warning: User: field 'email' added
   FieldTypeChanged (1)
     error: User: field 'id' type changed from int32 to int64

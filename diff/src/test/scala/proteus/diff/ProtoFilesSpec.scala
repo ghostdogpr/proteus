@@ -1,4 +1,4 @@
-package proteus.cli
+package proteus.diff
 
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path}
@@ -8,7 +8,7 @@ import zio.test.*
 object ProtoFilesSpec extends ZIOSpecDefault {
 
   private def withTempDir[A](f: Path => A): A = {
-    val dir = Files.createTempDirectory("proteus-cli-test")
+    val dir = Files.createTempDirectory("proteus-diff-test")
     try f(dir)
     finally deleteRecursively(dir)
   }

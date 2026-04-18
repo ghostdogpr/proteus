@@ -35,7 +35,7 @@ addCommandAlias("check", "all scalafmtSbtCheck scalafmtCheck test:scalafmtCheck"
 lazy val root = project
   .in(file("."))
   .settings(publish / skip := true)
-  .aggregate(core.jvm, core.js, tools.jvm, tools.js, cli, grpc, zioGrpc, fs2Grpc, oxGrpc, json.jvm, json.js, benchmarks, examples)
+  .aggregate(core.jvm, core.js, tools.jvm, tools.js, diff, grpc, zioGrpc, fs2Grpc, oxGrpc, json.jvm, json.js, benchmarks, examples)
 
 lazy val core = crossProject(JSPlatform, JVMPlatform)
   .crossType(CrossType.Pure)
@@ -75,8 +75,8 @@ lazy val tools = crossProject(JSPlatform, JVMPlatform)
   .dependsOn(core % "compile->compile;test->test")
   .jsSettings(Test / fork := false)
 
-lazy val cli = project
-  .in(file("cli"))
+lazy val diff = project
+  .in(file("diff"))
   .settings(name := "proteus-diff")
   .settings(commonSettings)
   .settings(publish / skip := true)
@@ -89,7 +89,7 @@ lazy val cli = project
   )
   .enablePlugins(JavaAppPackaging, NativeImagePlugin)
   .settings(
-    Compile / mainClass  := Some("proteus.cli.Main"),
+    Compile / mainClass  := Some("proteus.diff.Main"),
     executableScriptName := "proteus-diff",
     nativeImageVersion   := "25.0.1",
     nativeImageJvm       := "graalvm-community",

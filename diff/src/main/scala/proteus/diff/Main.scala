@@ -1,4 +1,4 @@
-package proteus.cli
+package proteus.diff
 
 import java.nio.file.{Files, Paths}
 
