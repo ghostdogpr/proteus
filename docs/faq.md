@@ -16,7 +16,7 @@ That led to a few issues as the project grew:
 
 It is true that changes in Scala code will change the resulting Protobuf schema, potentially breaking backward compatibility.
 
-To deal with this, make sure to always [generate `.proto` files](/proto-file-generation) and commit them to your repository, enforcing that they are always up to date thanks to a CI check. That way, you can detect when your changes break compatibility. When they do, you can then use the [customization features](/customization) to ensure that the parts of the schema that need to stay the same are not affected by the changes.
+To deal with this, make sure to always [generate `.proto` files](/proto-file-generation) and commit them to your repository, enforcing that they are always up to date thanks to a CI check. Then use [proteus-diff](/proteus-diff) in CI to flag breaking changes automatically. When a change does break compatibility, you can use the [customization features](/customization) to ensure that the parts of the schema that need to stay the same are not affected by the changes.
 
 ## How about performance?
 
