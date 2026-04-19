@@ -338,8 +338,8 @@ object ProtoParser {
   private def messageElement[$: P]: P[Either[List[Reserved], MessageElement]] = P(
     reserved.map(Left(_)) |
       oneOf.map(o => Right(MessageElement.OneOfElement(o))) |
-      messageDef.map(m => Right(MessageElement.NestedMessageElement(m.copy(nested = true)))) |
-      enumDef.map(e => Right(MessageElement.NestedEnumElement(e.copy(nested = true)))) |
+      messageDef.map(m => Right(MessageElement.NestedMessageElement(m.copy(placement = Placement.Nested)))) |
+      enumDef.map(e => Right(MessageElement.NestedEnumElement(e.copy(placement = Placement.Nested)))) |
       field.map(f => Right(MessageElement.FieldElement(f)))
   )
 

@@ -744,7 +744,7 @@ object ProtoParserSpec extends ZIOSpecDefault {
                             "Inner",
                             List(MessageElement.FieldElement(Field(Type.String, "value", 1, optional = false, comment = None))),
                             reserved = List.empty,
-                            nested = true
+                            placement = Placement.Nested
                           )
                         ),
                         MessageElement.NestedEnumElement(
@@ -752,7 +752,7 @@ object ProtoParserSpec extends ZIOSpecDefault {
                             "Color",
                             List(EnumValue("RED", 0), EnumValue("GREEN", 1)),
                             reserved = List.empty,
-                            nested = true
+                            placement = Placement.Nested
                           )
                         ),
                         MessageElement.FieldElement(Field(Type.RefType("Inner"), "inner", 1, optional = false, comment = None)),

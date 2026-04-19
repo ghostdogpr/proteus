@@ -277,10 +277,15 @@ object ProtoDiff {
   }
 
   private def stripMessageCosmetics(m: Message): Message =
-    m.copy(comment = None, options = Nil, nested = false, elements = m.elements.map(stripElementCosmetics))
+    m.copy(comment = None, options = Nil, placement = Placement.TopLevel, elements = m.elements.map(stripElementCosmetics))
 
   private def stripEnumCosmetics(e: Enum): Enum =
-    e.copy(comment = None, options = Nil, nested = false, values = e.values.map(v => v.copy(comment = None, options = Nil)))
+    e.copy(
+      comment = None,
+      options = Nil,
+      placement = Placement.TopLevel,
+      values = e.values.map(v => v.copy(comment = None, options = Nil))
+    )
 
   private def diffPackage(oldPkg: Option[String], newPkg: Option[String], path: List[String]): List[Change] =
     if (oldPkg == newPkg) Nil else List(PackageChanged(path, oldPkg, newPkg))
