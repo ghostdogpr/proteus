@@ -96,7 +96,7 @@ lazy val diff = project
     nativeImageJvmIndex  := "cs",
     // In CI, GRAALVM_HOME is set by graalvm/setup-graalvm and points to an arch-correct install.
     // Prefer it to avoid Coursier cross-arch cache issues (notably on macos-15-intel).
-    nativeImageGraalHome := sys.env.get("GRAALVM_HOME").map(file(_)).getOrElse(nativeImageGraalHome.value),
+    nativeImageGraalHome := sys.env.get("GRAALVM_HOME").map(java.nio.file.Paths.get(_)).getOrElse(nativeImageGraalHome.value),
     Global / excludeLintKeys ++= Set(nativeImageVersion, nativeImageJvm, nativeImageJvmIndex),
     nativeImageOptions ++= Seq(
       "--no-fallback",
