@@ -3,6 +3,7 @@ name: Release Native Binaries
 on:
   release:
     types: [published]
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -37,6 +38,13 @@ jobs:
       - name: Rename binary
         run: mv diff/target/native-image/proteus-diff "${{ matrix.artifact }}"
       - name: Upload release asset
+        if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:
           files: ${{ matrix.artifact }}
+      - name: Upload workflow artifact
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}
