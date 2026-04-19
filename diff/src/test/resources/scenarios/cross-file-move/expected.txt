@@ -1,4 +1,4 @@
-Changes (3)
+Proto changes (3)
   common.proto
     FileRemoved (1)
       error: file removed

@@ -98,7 +98,7 @@ proteus-diff old.proto new.proto -m wire
 Changes are grouped by file, then by change type. Each entry is prefixed with its severity:
 
 ```
-Changes (3)
+Proto changes (3)
   user.proto
     FieldRemoved (1)
       error: User: field 'email' removed
@@ -127,13 +127,35 @@ proteus-diff old.proto new.proto -f json
 
 Pipe this into `jq` or any JSON-aware tool to build custom reporters or CI checks.
 
+### Markdown format
+
+Use `-f markdown` to produce GitHub/GitLab-friendly output, ideal for PR comments:
+
+```bash
+proteus-diff main HEAD -f markdown
+```
+
+```markdown
+## Proto changes (3)
+
+- 🔴 1 error
+- 🟡 1 warning
+- 🔵 1 info
+
+### `user.proto`
+
+- 🔴 **FieldRemoved** — User: field 'email' removed
+- 🟡 **FieldAdded** — User: field 'phone' added
+- 🔵 **CommentChanged** — comment changed on 'User'
+```
+
 ## Options
 
 | Flag                        | Description                                                     | Default     |
 | --------------------------- | --------------------------------------------------------------- | ----------- |
 | `-m, --mode <mode>`         | Compatibility axis: `wire`, `source`, or `strictest`            | `strictest` |
 | `-s, --severity <severity>` | Minimum severity to display: `error`, `warning`, or `info`      | `warning`   |
-| `-f, --format <format>`     | Output format: `text` or `json`                                 | `text`      |
+| `-f, --format <format>`     | Output format: `text`, `json`, or `markdown`                    | `text`      |
 | `--fail-on <severity>`      | Exit code 1 if any change at this severity or above is reported | `error`     |
 | `-o, --override <entry>`    | Severity override (repeatable) — see below                      | —           |
 | `--color <mode>`            | Color output: `auto`, `always`, or `never`                      | `auto`      |

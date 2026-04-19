@@ -4,7 +4,7 @@ import mainargs.{arg, main, ParserForMethods, TokensReader}
 
 import proteus.{CompatMode, ProtoDiff, Severity, SeverityOverrides}
 
-enum OutputFormat { case Text, Json }
+enum OutputFormat { case Text, Json, Markdown }
 
 object Main {
 
@@ -18,7 +18,7 @@ object Main {
     severity: Severity = Severity.Warning,
     @arg(short = 'o', doc = "severity override: mode.ChangeType=severity (e.g. wire.FieldRemoved=info)")
     `override`: List[String] = Nil,
-    @arg(short = 'f', doc = "output format: text | json (default: text)")
+    @arg(short = 'f', doc = "output format: text | json | markdown (default: text)")
     format: OutputFormat = OutputFormat.Text,
     @arg(doc = "exit 1 if any change at this severity or above: error | warning | info (default: error)")
     failOn: Severity = Severity.Error,
@@ -42,8 +42,9 @@ object Main {
     val filtered     = changes.filter(c => ProtoDiff.severity(c, mode, overrides).level >= severity.level)
 
     val output     = format match {
-      case OutputFormat.Json => Report.formatJson(filtered, mode, overrides)
-      case OutputFormat.Text => Report.format(filtered, mode, !isSingleFile, overrides, useColor)
+      case OutputFormat.Json     => Report.formatJson(filtered, mode, overrides)
+      case OutputFormat.Markdown => Report.formatMarkdown(filtered, mode, !isSingleFile, overrides)
+      case OutputFormat.Text     => Report.format(filtered, mode, !isSingleFile, overrides, useColor)
     }
     print(output)
     val shouldFail = filtered.exists(c => ProtoDiff.severity(c, mode, overrides).level >= failOn.level)
@@ -65,7 +66,7 @@ object Main {
       |Options:
       |  -m, --mode <mode>          compat mode: wire | source | strictest (default: strictest)
       |  -s, --severity <severity>  minimum severity to display: error | warning | info (default: warning)
-      |  -f, --format <format>      output format: text | json (default: text)
+      |  -f, --format <format>      output format: text | json | markdown (default: text)
       |  --fail-on <severity>       exit 1 at this severity or above: error | warning | info (default: error)
       |  -o, --override <override>  severity override: mode.ChangeType=severity (repeatable)
       |  --color <mode>             color output: auto | always | never (default: auto)
@@ -105,9 +106,10 @@ object Main {
     def shortName: String                                     = "format"
     def read(strs: Seq[String]): Either[String, OutputFormat] =
       strs.last.toLowerCase match {
-        case "text" => Right(OutputFormat.Text)
-        case "json" => Right(OutputFormat.Json)
-        case other  => Left(s"unknown format '$other' (expected: text | json)")
+        case "text"     => Right(OutputFormat.Text)
+        case "json"     => Right(OutputFormat.Json)
+        case "markdown" => Right(OutputFormat.Markdown)
+        case other      => Left(s"unknown format '$other' (expected: text | json | markdown)")
       }
   }
 
