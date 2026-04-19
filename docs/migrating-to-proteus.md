@@ -175,7 +175,7 @@ message Unreleased {
 Now there are no more errors, but the schema does not exactly match the original. We need some extra steps to ensure backward compatibility.
 
 ::: tip
-Finding differences between two protobuf schemas can be tricky. There's a tool called [buf](https://github.com/bufbuild/buf) that can help with this (see `buf breaking`).
+Finding differences between two protobuf schemas can be tricky. Proteus ships a dedicated CLI for this — see [proteus-diff](/proteus-diff).
 
 AI agents like Claude Code are also quite good at this, and can organize the differences in a human-friendly way.
 :::

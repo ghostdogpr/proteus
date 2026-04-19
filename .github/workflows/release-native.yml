@@ -1,0 +1,50 @@
+name: Release Native Binaries
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  native-image:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            artifact: proteus-diff-linux-x86_64
+          - os: macos-13
+            artifact: proteus-diff-macos-x86_64
+          - os: macos-14
+            artifact: proteus-diff-macos-aarch64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Setup GraalVM
+        uses: coursier/setup-action@v3
+        with:
+          jvm: graalvm-community:25
+          apps: sbt
+      - name: Cache scala dependencies
+        uses: coursier/cache-action@v8
+      - name: Build native image
+        run: sbt 'diff/nativeImage'
+      - name: Rename binary
+        run: mv diff/target/native-image/proteus-diff "${{ matrix.artifact }}"
+      - name: Upload release asset
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ matrix.artifact }}
+      - name: Upload workflow artifact
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}

@@ -4,7 +4,7 @@ Proteus is able to generate [Circe](https://github.com/circe/circe) JSON `Encode
 
 For that, you need to add the following dependency to your `build.sbt` file:
 ```scala
-"com.github.ghostdogpr" %% "proteus-json" % "0.2.0"
+"com.github.ghostdogpr" %% "proteus-json" % "@VERSION@"
 ```
 
 Then, importing `proteus.json.*` will automatically provide an implicit `Encoder` for all the types that have a `ProtobufCodec` instance, as long as you also have implicit `Registry` and `Options` in scope.

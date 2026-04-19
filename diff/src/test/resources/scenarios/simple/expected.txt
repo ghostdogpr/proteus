@@ -1,0 +1,5 @@
+Proto changes (2)
+  FieldAdded (1)
+    warning: User: field 'email' added
+  FieldTypeChanged (1)
+    error: User: field 'id' type changed from int32 to int64

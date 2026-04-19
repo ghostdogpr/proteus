@@ -5,7 +5,14 @@ object ProtoIR {
 
   final case class CompilationUnit(packageName: Option[String], statements: List[Statement], options: List[TopLevelOption])
 
-  final case class TopLevelOption(key: String, value: String)
+  final case class TopLevelOption(name: OptionName, value: OptionVal)
+  object TopLevelOption {
+    def apply(key: String, value: String): TopLevelOption =
+      TopLevelOption(OptionName.BuiltIn(key), OptionVal.StringLit(value))
+
+    def identifier(key: String, value: String): TopLevelOption =
+      TopLevelOption(OptionName.BuiltIn(key), OptionVal.Identifier(value))
+  }
 
   sealed trait OptionVal
   object OptionVal {
@@ -49,8 +56,8 @@ object ProtoIR {
 
   sealed trait Statement
   object Statement {
-    final case class ImportStatement(path: String)     extends Statement
-    final case class TopLevelStatement(s: TopLevelDef) extends Statement
+    final case class ImportStatement(path: String, modifier: Option[String] = None) extends Statement
+    final case class TopLevelStatement(s: TopLevelDef)                              extends Statement
   }
 
   sealed trait TopLevelDef {
@@ -132,7 +139,7 @@ object ProtoIR {
     nested: Boolean = false
   )
 
-  final case class Service(name: String, rpcs: List[Rpc], comment: Option[String] = None)
+  final case class Service(name: String, rpcs: List[Rpc], comment: Option[String] = None, options: List[OptionValue] = List.empty)
 
   final case class RpcMessage(fqn: Fqn)
 
@@ -142,7 +149,8 @@ object ProtoIR {
     response: RpcMessage,
     streamingRequest: Boolean,
     streamingResponse: Boolean,
-    comment: Option[String]
+    comment: Option[String],
+    options: List[OptionValue] = List.empty
   )
 
   sealed trait Type { self =>

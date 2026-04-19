@@ -47,7 +47,7 @@ private[proteus] object Renderer {
     statement(s"package $packageName")
 
   private def renderOption(opt: TopLevelOption): Text =
-    statement(s"""option ${opt.key} = "${opt.value}"""")
+    renderOptionStatement(opt.name, opt.value)
 
   private def renderOptionValCompact(v: OptionVal): String = v match {
     case OptionVal.Identifier(value)                      => value
@@ -96,23 +96,26 @@ private[proteus] object Renderer {
     if (options.isEmpty) "" else options.map(o => s"${o.name.render} = ${renderOptionValCompact(o.value)}").mkString(" [", ", ", "]")
 
   private def renderStatementOptions(options: List[OptionValue]): List[Text] =
-    options.map { o =>
-      o.value match {
-        case OptionVal.MessageValue(fields) if fields.isEmpty => line(s"option ${o.name.render} = {};")
-        case OptionVal.MessageValue(fields)                   =>
-          many(
-            line(s"option ${o.name.render} = {"),
-            indent(fields.map { case (k, v) => renderMessageField(k, v) }),
-            line("};")
-          )
-        case other                                            => line(s"option ${o.name.render} = ${renderOptionValCompact(other)};")
-      }
+    options.map(o => renderOptionStatement(o.name, o.value))
+
+  private def renderOptionStatement(name: OptionName, value: OptionVal): Text =
+    value match {
+      case OptionVal.MessageValue(fields) if fields.isEmpty => line(s"option ${name.render} = {};")
+      case OptionVal.MessageValue(fields)                   =>
+        many(
+          line(s"option ${name.render} = {"),
+          indent(fields.map { case (k, v) => renderMessageField(k, v) }),
+          line("};")
+        )
+      case other                                            => line(s"option ${name.render} = ${renderOptionValCompact(other)};")
     }
 
   private def renderStatement(st: Statement): Text =
     st match {
-      case Statement.ImportStatement(path)  => statement(s"""import "$path"""")
-      case Statement.TopLevelStatement(tld) => renderTopLevelDef(tld)
+      case Statement.ImportStatement(path, modifier) =>
+        val prefix = modifier.fold("")(_ + " ")
+        statement(s"""import $prefix"$path"""")
+      case Statement.TopLevelStatement(tld)          => renderTopLevelDef(tld)
     }
 
   private def renderEnumElement(enumValue: EnumValue): Text = {
@@ -183,7 +186,15 @@ private[proteus] object Renderer {
       many(
         commentLine,
         line(s"oneof ${oneOf.name} {"),
+        indent(renderStatementOptions(oneOf.options)),
         indent(oneOf.fields.map(renderField(_, isOneOf = true))),
+        line("}")
+      )
+    } else if (oneOf.options.nonEmpty) {
+      many(
+        commentLine,
+        line(s"oneof ${oneOf.name} {"),
+        indent(renderStatementOptions(oneOf.options)),
         line("}")
       )
     } else
@@ -202,13 +213,8 @@ private[proteus] object Renderer {
     }
 
   private def renderReserved(reserved: List[Reserved]): Text = {
-    val numeric = reserved.collect {
-      case Reserved.Number(number)    => s"$number"
-      case Reserved.Range(start, end) => s"$start to $end"
-    }
-    val names   = reserved.collect { case Reserved.Name(name) =>
-      s""""$name""""
-    }
+    val numeric = reserved.collect { case r @ (_: Reserved.Number | _: Reserved.Range) => renderReservedValue(r) }
+    val names   = reserved.collect { case r: Reserved.Name => renderReservedValue(r) }
 
     many(
       maybe(
@@ -253,11 +259,15 @@ private[proteus] object Renderer {
 
   private def renderService(service: Service): Text = {
     val commentLine = service.comment.map(renderComment).getOrElse(many())
-    val hasContent  = service.rpcs.nonEmpty
+    val hasRpcs     = service.rpcs.nonEmpty
+    val hasContent  = service.options.nonEmpty || hasRpcs
+    val optionsSep  = if (service.options.nonEmpty && hasRpcs) emptyLine else many()
     if (hasContent) {
       many(
         commentLine,
         line(s"service ${service.name} {"),
+        indent(renderStatementOptions(service.options)),
+        optionsSep,
         indent(service.rpcs.map(renderRpc)),
         line("}")
       )
@@ -273,13 +283,27 @@ private[proteus] object Renderer {
     val commentLine  = rpc.comment.map(renderComment).getOrElse(many())
     val requestType  = if (rpc.streamingRequest) s"stream ${rpc.request.fqn.render}" else rpc.request.fqn.render
     val responseType = if (rpc.streamingResponse) s"stream ${rpc.response.fqn.render}" else rpc.response.fqn.render
-    many(
-      commentLine,
-      line(s"rpc ${rpc.name} ($requestType) returns ($responseType) {}")
-    )
+    if (rpc.options.nonEmpty)
+      many(
+        commentLine,
+        line(s"rpc ${rpc.name} ($requestType) returns ($responseType) {"),
+        indent(renderStatementOptions(rpc.options)),
+        line("}")
+      )
+    else
+      many(
+        commentLine,
+        line(s"rpc ${rpc.name} ($requestType) returns ($responseType) {}")
+      )
   }
 
-  private def renderType(ty: Type): String = {
+  private[proteus] def renderReservedValue(r: Reserved): String = r match {
+    case Reserved.Number(n)   => n.toString
+    case Reserved.Name(name)  => s""""$name""""
+    case Reserved.Range(s, e) => s"$s to $e"
+  }
+
+  private[proteus] def renderType(ty: Type): String = {
     import Type._
     ty match {
       case Double                      => "double"
