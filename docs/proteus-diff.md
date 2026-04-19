@@ -61,11 +61,16 @@ The tool prints a grouped report and exits with code `1` if any breaking change 
 You can pass git refs directly — branches, tags, or commits — instead of filesystem paths:
 
 ```bash
+proteus-diff main .                 # main vs current working tree (including uncommitted changes)
+proteus-diff HEAD ./proto           # last commit vs current state of proto/ (uncommitted-only diff)
 proteus-diff main HEAD              # compare PR against main
 proteus-diff HEAD~1 HEAD            # what changed in the last commit
 proteus-diff v0.1.0 v0.2.0          # compare two releases
-proteus-diff main ./proto           # ref vs current working tree
 ```
+
+::: tip
+Mix git refs and filesystem paths freely. Passing `.` or any directory path for the "new" side compares against your current working tree, so you can preview uncommitted changes before committing.
+:::
 
 Resolution rule: if the argument exists as a file or directory, it's treated as a filesystem path. Otherwise, proteus-diff tries to resolve it as a git ref with `git rev-parse`. If neither works, you get an error.
 

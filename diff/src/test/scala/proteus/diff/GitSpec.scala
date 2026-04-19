@@ -51,21 +51,19 @@ object GitSpec extends ZIOSpecDefault {
     if (!gitAvailable) suite("GitSpec")(test("skipped — git not on PATH")(assertCompletes))
     else
       suite("GitSpec")(
-        test("extractProtos extracts proto files from a ref") {
-          val (hasA, hasB, hasMd, isRight) = withRepo { dir =>
+        test("extractProtos extracts the tree at a ref") {
+          val (hasA, hasB, isRight) = withRepo { dir =>
             writeFile(dir.resolve("a.proto"), """syntax = "proto3"; message Foo {}""")
             writeFile(dir.resolve("sub/b.proto"), """syntax = "proto3"; message Bar {}""")
-            writeFile(dir.resolve("README.md"), "hi")
             commit(dir, "initial")
             val result = Git.extractProtos("HEAD", Some(dir))
             (
               result.toOption.exists(p => Files.exists(p.resolve("a.proto"))),
               result.toOption.exists(p => Files.exists(p.resolve("sub/b.proto"))),
-              result.toOption.exists(p => Files.exists(p.resolve("README.md"))),
               result.isRight
             )
           }
-          assertTrue(isRight, hasA, hasB, !hasMd)
+          assertTrue(isRight, hasA, hasB)
         },
         test("extractProtos returns error for missing ref") {
           val isLeft = withRepo { dir =>
