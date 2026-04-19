@@ -31,20 +31,20 @@ object Main {
       case _        => System.console() != null
     }
 
-    val overrides = SeverityOverrides.parse(`override`).fold(err => fail(err), identity)
+    val overrides = SeverityOverrides.parse(`override`).fold(fail, identity)
 
-    val oldSrc       = ProtoFiles.resolve(old).fold(err => fail(err), identity)
-    val newSrc       = ProtoFiles.resolve(`new`).fold(err => fail(err), identity)
-    val isSingleFile = oldSrc.singleFile && newSrc.singleFile
-    val changes      =
-      if (isSingleFile) ProtoDiff.diff(oldSrc.files.values.head, newSrc.files.values.head)
-      else ProtoDiff.diffFiles(oldSrc.files, newSrc.files)
-    val filtered     = changes.filter(c => ProtoDiff.severity(c, mode, overrides).level >= severity.level)
+    val oldSrc            = ProtoFiles.resolve(old).fold(fail, identity)
+    val newSrc            = ProtoFiles.resolve(`new`).fold(fail, identity)
+    val (changes, byFile) = (oldSrc, newSrc) match {
+      case (Resolved.Single(_, o), Resolved.Single(_, n)) => (ProtoDiff.diff(o, n), false)
+      case _                                              => (ProtoDiff.diffFiles(oldSrc.asFiles, newSrc.asFiles), true)
+    }
+    val filtered          = changes.filter(c => ProtoDiff.severity(c, mode, overrides).level >= severity.level)
 
     val output     = format match {
       case OutputFormat.Json     => Report.formatJson(filtered, mode, overrides)
-      case OutputFormat.Markdown => Report.formatMarkdown(filtered, mode, !isSingleFile, overrides)
-      case OutputFormat.Text     => Report.format(filtered, mode, !isSingleFile, overrides, useColor)
+      case OutputFormat.Markdown => Report.formatMarkdown(filtered, mode, byFile, overrides)
+      case OutputFormat.Text     => Report.format(filtered, mode, byFile, overrides, useColor)
     }
     print(output)
     val shouldFail = filtered.exists(c => ProtoDiff.severity(c, mode, overrides).level >= failOn.level)

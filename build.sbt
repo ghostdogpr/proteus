@@ -1,6 +1,5 @@
 val scala3Version = "3.3.7"
 
-val fastparseVersion            = "3.1.1"
 val grpcVersion                 = "1.80.0"
 val scalaProtobufRuntimeVersion = "0.8.16"
 val zioBlocksSchemaVersion      = "0.0.33"
@@ -13,6 +12,7 @@ val circeVersion                = "0.14.15"
 val zioSchemaVersion            = "1.8.3"
 val upickleVersion              = "4.4.3"
 val borerVersion                = "1.16.2"
+val fastparseVersion            = "3.1.1"
 val mainargsVersion             = "0.7.8"
 
 inThisBuild(

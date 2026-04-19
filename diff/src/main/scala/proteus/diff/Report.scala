@@ -17,14 +17,12 @@ object Report {
       val sb = new StringBuilder
       sb.append(s"Proto changes (${changes.size})\n")
       if (byFile) {
-        val byFileGroup = changes.groupBy(ch => ch.path.headOption.getOrElse("<root>"))
+        val byFileGroup = changes.groupBy(_.path.headOption.getOrElse("<root>"))
         byFileGroup.toList.sortBy(_._1).foreach { case (file, fileChanges) =>
           sb.append(s"  $file\n")
           appendByType(sb, fileChanges, mode, overrides, indent = "    ", stripFile = true, c)
         }
-      } else {
-        appendByType(sb, changes, mode, overrides, indent = "  ", stripFile = false, c)
-      }
+      } else appendByType(sb, changes, mode, overrides, indent = "  ", stripFile = false, c)
       sb.toString
     }
 
@@ -52,19 +50,11 @@ object Report {
           fileChanges.foreach(ch => appendMarkdownLine(sb, ch, mode, overrides, stripFile = true))
           sb.append('\n')
         }
-      } else {
-        changes.foreach(ch => appendMarkdownLine(sb, ch, mode, overrides, stripFile = false))
-      }
+      } else changes.foreach(ch => appendMarkdownLine(sb, ch, mode, overrides, stripFile = false))
       sb.toString
     }
 
-  private def appendMarkdownLine(
-    sb: StringBuilder,
-    ch: Change,
-    mode: CompatMode,
-    overrides: SeverityOverrides,
-    stripFile: Boolean
-  ): Unit = {
+  private def appendMarkdownLine(sb: StringBuilder, ch: Change, mode: CompatMode, overrides: SeverityOverrides, stripFile: Boolean): Unit = {
     val sev      = ProtoDiff.severity(ch, mode, overrides)
     val rendered = if (stripFile) renderWithoutFile(ch) else ch.toString
     sb.append(s"- ${sevEmoji(sev)} **${ch.productPrefix}** — $rendered\n")

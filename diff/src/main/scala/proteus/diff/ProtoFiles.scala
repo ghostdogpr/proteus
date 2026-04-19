@@ -8,7 +8,15 @@ import scala.jdk.CollectionConverters.*
 import proteus.ProtoIR.CompilationUnit
 import proteus.ProtoParser
 
-case class Resolved(files: Map[String, CompilationUnit], singleFile: Boolean)
+enum Resolved {
+  case Single(name: String, unit: CompilationUnit)
+  case Multi(files: Map[String, CompilationUnit])
+
+  def asFiles: Map[String, CompilationUnit] = this match {
+    case Single(name, unit) => Map(name -> unit)
+    case Multi(files)       => files
+  }
+}
 
 object ProtoFiles {
 
@@ -49,24 +57,19 @@ object ProtoFiles {
     else if (Files.isDirectory(path)) loadDirectory(path)
     else loadFile(path).map(unit => Map(path.getFileName.toString -> unit))
 
-  /**
-    * Resolves an argument as either a filesystem path or a git ref.
-    *
-    * `git:<ref>` forces git mode. Otherwise, a valid filesystem path wins; else git ref is tried.
-    */
   def resolve(arg: String): Either[String, Resolved] =
     if (arg.startsWith("git:")) resolveRef(arg.stripPrefix("git:"), explicit = true)
     else {
       val path = Paths.get(arg)
-      if (Files.isDirectory(path)) loadDirectory(path).map(files => Resolved(files, singleFile = false))
+      if (Files.isDirectory(path)) loadDirectory(path).map(Resolved.Multi(_))
       else if (Files.isRegularFile(path))
-        loadFile(path).map(unit => Resolved(Map(path.getFileName.toString -> unit), singleFile = true))
+        loadFile(path).map(Resolved.Single(path.getFileName.toString, _))
       else resolveRef(arg, explicit = false)
     }
 
   private def resolveRef(ref: String, explicit: Boolean): Either[String, Resolved] =
     Git.extractProtos(ref) match {
-      case Right(dir)            => loadDirectory(dir).map(files => Resolved(files, singleFile = false))
+      case Right(dir)            => loadDirectory(dir).map(Resolved.Multi(_))
       case Left(err) if explicit => Left(err)
       case Left(_)               =>
         Left(s"'$ref' is not a file/directory, and not a valid git ref.\nHint: check that the path or ref exists.")
