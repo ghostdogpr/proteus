@@ -117,6 +117,7 @@ Here are the different types of modifiers you can apply:
 - `comment(comment: String)`: Adds a comment to a type, field, or enum member.
 - `rename(name: String)`: Renames a type, field, or enum member.
 - `reserved(indexes: Int*)`: Adds some reserved indexes to a type. Those reserved indexes will be skipped when deriving the protobuf type. If this modifier is applied to a field, the field will use the given index(es).
+- `reservedFrom(index: Int)`: Forces a field (or enum/oneof case) to use the given index, and has all subsequent fields continue numbering from that index. For example, given `case class M(a: Int, b: Int, c: Int)` with `reservedFrom(5)` on `b`, the resulting indexes are `a = 1`, `b = 5`, `c = 6`.
 - `deprecated`: Marks a field or an enum member as deprecated. It will be rendered with the `[deprecated = true]` option in the protobuf definition.
 
 There are two possible `OneOfFlag` values:

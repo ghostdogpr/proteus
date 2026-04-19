@@ -86,6 +86,15 @@ object Modifiers {
   def reserved(indexes: Int*): Modifier.config = Modifier.config(reservedModifier, indexes.mkString(","))
 
   /**
+    * A modifier to force a field (or enum/oneof case) to have the given index, and have all subsequent fields
+    * continue numbering from that index.
+    *
+    * For example, given `case class M(a: Int, b: Int, c: Int)` with `reservedFrom(5)` applied to `b`, the resulting
+    * indexes will be `a = 1`, `b = 5`, `c = 6` (versus `reserved(5)` which would produce `a = 1`, `c = 2`, `b = 5`).
+    */
+  def reservedFrom(index: Int): Modifier.config = Modifier.config(reservedFromModifier, index.toString)
+
+  /**
     * Flags for the oneOf modifier.
     */
   enum OneOfFlag {

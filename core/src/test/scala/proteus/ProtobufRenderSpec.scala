@@ -652,6 +652,80 @@ message ReservedMessage {
 
         assertTrue(rendered == expected)
       },
+      test("proteus reservedFrom modifier forces a field number and advances subsequent fields") {
+        case class ReservedFromMessage(id: Int, name: String, value: String, active: Boolean) derives Schema
+
+        val codec    = Schema[ReservedFromMessage].derive(deriver.modifier[ReservedFromMessage]("name", reservedFrom(6)))
+        val rendered = renderCodec(codec)
+        val expected = """syntax = "proto3";
+
+package test;
+
+message ReservedFromMessage {
+    int32 id = 1;
+    string name = 6;
+    string value = 7;
+    bool active = 8;
+}
+"""
+
+        assertTrue(rendered == expected)
+      },
+      test("proteus reservedFrom modifier forces an enum case number and advances subsequent cases") {
+        enum ReservedFromEnum derives Schema { case Name, Value, Active }
+
+        val codec    = Schema[ReservedFromEnum].derive(deriver.modifier[ReservedFromEnum]("Value", reservedFrom(6)))
+        val rendered = renderCodec(codec)
+        val expected = """syntax = "proto3";
+
+package test;
+
+enum ReservedFromEnum {
+    NAME = 0;
+    VALUE = 6;
+    ACTIVE = 7;
+}
+"""
+
+        assertTrue(rendered == expected)
+      },
+      test("proteus reservedFrom modifier forces a oneof case number and advances subsequent cases") {
+        enum ReservedFromOneOf derives Schema {
+          case Name(name: String)
+          case Value(value: String)
+          case Active(value: String)
+        }
+
+        val codec    =
+          Schema[ReservedFromOneOf].derive(deriver.modifier[ReservedFromOneOf]("Value", reservedFrom(6)))
+        val rendered = renderCodec(codec)
+        val expected = """syntax = "proto3";
+
+package test;
+
+message ReservedFromOneOf {
+    oneof value {
+        Name name = 1;
+        Value value = 6;
+        Active active = 7;
+    }
+}
+
+message Name {
+    string name = 1;
+}
+
+message Value {
+    string value = 1;
+}
+
+message Active {
+    string value = 1;
+}
+"""
+
+        assertTrue(rendered == expected)
+      },
       test("proteus reserved modifier forces a enum case number") {
         enum ReservedEnum derives Schema { case Name, Value, Active }
 
