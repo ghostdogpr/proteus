@@ -130,3 +130,11 @@ Then, you can run the task to generate the `.proto` files:
 sbt generateProtos
 ```
 You can even run this in CI, either to generate the `.proto` files and push them, or just to check that the `.proto` files are up to date.
+
+## Detecting breaking changes
+
+Once your `.proto` files are committed, use [proteus-diff](/proteus-diff) to compare versions and catch breaking changes before they ship:
+
+```bash
+proteus-diff proto/main proto/pr
+```

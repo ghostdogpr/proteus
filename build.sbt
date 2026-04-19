@@ -12,6 +12,8 @@ val circeVersion                = "0.14.15"
 val zioSchemaVersion            = "1.8.3"
 val upickleVersion              = "4.4.3"
 val borerVersion                = "1.16.2"
+val fastparseVersion            = "3.1.1"
+val mainargsVersion             = "0.7.8"
 
 inThisBuild(
   List(
@@ -33,7 +35,7 @@ addCommandAlias("check", "all scalafmtSbtCheck scalafmtCheck test:scalafmtCheck"
 lazy val root = project
   .in(file("."))
   .settings(publish / skip := true)
-  .aggregate(core.jvm, core.js, grpc, zioGrpc, fs2Grpc, oxGrpc, json.jvm, json.js, benchmarks, examples)
+  .aggregate(core.jvm, core.js, tools.jvm, tools.js, diff, grpc, zioGrpc, fs2Grpc, oxGrpc, json.jvm, json.js, benchmarks, examples)
 
 lazy val core = crossProject(JSPlatform, JVMPlatform)
   .crossType(CrossType.Pure)
@@ -56,6 +58,56 @@ lazy val core = crossProject(JSPlatform, JVMPlatform)
     libraryDependencies ++= Seq("com.thesamet.scalapb" %%% "protobuf-runtime-scala" % scalaProtobufRuntimeVersion),
     Test / fork                              := false
   )
+
+lazy val tools = crossProject(JSPlatform, JVMPlatform)
+  .crossType(CrossType.Pure)
+  .in(file("tools"))
+  .settings(name := "proteus-tools")
+  .settings(commonSettings)
+  .settings(
+    libraryDependencies ++=
+      Seq(
+        "com.lihaoyi" %%% "fastparse"    % fastparseVersion,
+        "dev.zio"     %%% "zio-test"     % zioTestVersion % Test,
+        "dev.zio"     %%% "zio-test-sbt" % zioTestVersion % Test
+      )
+  )
+  .dependsOn(core % "compile->compile;test->test")
+  .jsSettings(Test / fork := false)
+
+lazy val diff = project
+  .in(file("diff"))
+  .settings(name := "proteus-diff")
+  .settings(commonSettings)
+  .settings(publish / skip := true)
+  .settings(
+    libraryDependencies ++= Seq(
+      "com.lihaoyi" %% "mainargs"     % mainargsVersion,
+      "dev.zio"     %% "zio-test"     % zioTestVersion % Test,
+      "dev.zio"     %% "zio-test-sbt" % zioTestVersion % Test
+    )
+  )
+  .enablePlugins(JavaAppPackaging, NativeImagePlugin)
+  .settings(
+    Compile / mainClass  := Some("proteus.diff.Main"),
+    executableScriptName := "proteus-diff",
+    nativeImageVersion   := "25.0.1",
+    nativeImageJvm       := "graalvm-community",
+    nativeImageJvmIndex  := "cs",
+    Global / excludeLintKeys ++= Set(nativeImageVersion, nativeImageJvm, nativeImageJvmIndex),
+    nativeImageOptions ++= Seq(
+      "--no-fallback",
+      "--initialize-at-build-time",
+      "--gc=epsilon",
+      "-O2"
+    ),
+    Compile / resourceGenerators += Def.task {
+      val file = (Compile / resourceManaged).value / "proteus-version.txt"
+      IO.write(file, version.value)
+      Seq(file)
+    }
+  )
+  .dependsOn(tools.jvm)
 
 lazy val grpc = project
   .in(file("grpc"))
