@@ -21,6 +21,21 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+      - name: Resolve version
+        id: version
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "release" ]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION=$(gh release view --json tagName -q .tagName | sed 's/^v//')
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Substitute version placeholder
+        run: find docs -name '*.md' -exec sed -i "s/@VERSION@/$VERSION/g" {} +
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
       - name: Setup Node
         uses: actions/setup-node@v6
         with:
