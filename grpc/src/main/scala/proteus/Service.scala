@@ -111,12 +111,13 @@ case class Service[Rpcs] private (
         s"Conflicts found in service $name:\n ${conflicts.map { case (name, defs) => s"- Type `$name` is defined in different ways: \n${defs.mkString("\n")}" }.mkString("\n")}\n"
       )
     }
+    val depPaths  = usedDependencies.toList.flatMap(d => ProtobufCodec.nestedInPaths(d.types.toList)).toMap
     Renderer.render(
       ProtoIR.CompilationUnit(
         packageName = packageName,
         options = options,
         statements = usedDependencies.toList.map(_.toImportStatement) ++
-          ProtobufCodec.qualifyReferences(filteredTypes, nestedInPaths).map(ProtoIR.Statement.TopLevelStatement(_))
+          ProtobufCodec.qualifyReferences(filteredTypes, depPaths ++ nestedInPaths).map(ProtoIR.Statement.TopLevelStatement(_))
       )
     )
   }
