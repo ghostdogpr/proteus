@@ -34,17 +34,20 @@ case class Service[Rpcs] private (
 
   private case class ProtoIRResult(defs: List[ProtoIR.TopLevelDef], nestedInPaths: Map[String, String])
 
+  // Raw (un-relocated) defs. Relocation is deferred to render/fileDescriptor (or to the dependency
+  // when these defs are aggregated via `fromServices`) — that way same-named types contributed by
+  // multiple services merge cleanly before relocation, instead of producing per-service variants
+  // that conflict in the dependency.
   private lazy val protoIRResult: ProtoIRResult = {
     val raw         = ProtoIR.TopLevelDef.ServiceDef(ProtoIR.Service(name, rpcs.map(_.toProtoIR), comment)) ::
       rpcs.flatMap(_.messagesToProtoIR)
     val deduped     = raw.distinctBy(ProtobufCodec.dedupKey)
     val nestedPaths = ProtobufCodec.nestedInPaths(deduped)
-    val resolved    = ProtobufCodec.relocateNestedIn(deduped)
-    ProtoIRResult(resolved, nestedPaths)
+    ProtoIRResult(deduped, nestedPaths)
   }
 
   /**
-    * Converts the service to a ProtoIR representation.
+    * Converts the service to a ProtoIR representation (un-relocated; nestedIn relocation happens at render time).
     */
   lazy val toProtoIR: List[ProtoIR.TopLevelDef] = protoIRResult.defs
 
@@ -59,7 +62,7 @@ case class Service[Rpcs] private (
 
   private lazy val filteredTypes          = {
     val dependencyTypes = allDependencies.filter(_.hasAnyOf(typeReferences)).flatMap(_.types).map(_.name)
-    toProtoIR.filterNot(d => dependencyTypes.contains(d.name))
+    ProtobufCodec.relocateNestedIn(toProtoIR.filterNot(d => dependencyTypes.contains(d.name)))
   }
   private lazy val filteredTypeReferences = filteredTypes.flatMap(_.collectTypeReferences).toSet
   private lazy val usedDependencies       = allDependencies.filter(_.hasAnyOf(filteredTypeReferences))
@@ -149,7 +152,8 @@ case class Service[Rpcs] private (
     * A conflict is a situation where the same type name is defined in different ways.
     */
   def findConflicts: Map[String, List[String]] =
-    toProtoIR
+    ProtobufCodec
+      .relocateNestedIn(toProtoIR)
       .groupBy(_.name)
       .view
       .mapValues(_.map(Renderer.renderTopLevelDef).map(Text.renderText).distinct)
