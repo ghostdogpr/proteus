@@ -68,11 +68,6 @@ final case class Dependency(
       )
     }
     val resolvedTypes = ProtobufCodec.relocateNestedIn(filteredTypes.toList)
-    ProtobufCodec.raiseIfUnresolvedNestedIn(
-      resolvedTypes,
-      s"dependency $dependencyName",
-      "Ensure the target types are added to the dependency"
-    )
     Renderer.render(
       ProtoIR.CompilationUnit(
         packageName = packageName,

@@ -1233,15 +1233,6 @@ object ProtobufCodec {
     defs.flatMap(d => if (childRefs.contains(d)) None else Some(finalize(d)))
   }
 
-  private[proteus] def unresolvedNestedIn(defs: List[ProtoIR.TopLevelDef]): List[String] =
-    defs.flatMap(d => d.nestedIn.map(t => s"${d.name} -> $t"))
-
-  private[proteus] def raiseIfUnresolvedNestedIn(defs: List[ProtoIR.TopLevelDef], scope: String, hint: String): Unit = {
-    val unresolved = unresolvedNestedIn(defs)
-    if (unresolved.nonEmpty)
-      throw new ProteusException(s"Could not resolve `nestedIn` targets in $scope. $hint: ${unresolved.mkString(", ")}")
-  }
-
   // Must be called BEFORE `relocateNestedIn`: once children are spliced, their `nestedIn` metadata is cleared.
   private[proteus] def nestedInPaths(defs: List[ProtoIR.TopLevelDef]): Map[String, String] = {
     val allNames      = defs.iterator.map(_.name).toSet

@@ -566,7 +566,7 @@ message CrossResponse {
 
         assertTrue(renderedProto.contains("DepSession.DepPerkDiff diff = 2;"))
       },
-      test("nestedIn modifier raises an error when target is unreachable at service level") {
+      test("nestedIn modifier leaves type at top level when target is unreachable at service level") {
         case class OrphanInner(value: String) derives Schema
         case class OrphanRequest(inner: OrphanInner) derives Schema
         case class OrphanResponse(ok: Boolean) derives Schema
@@ -576,19 +576,12 @@ message CrossResponse {
         given ProtobufCodec[OrphanRequest]  = Schema[OrphanRequest].derive(summon[ProtobufDeriver])
         given ProtobufCodec[OrphanResponse] = Schema[OrphanResponse].derive(summon[ProtobufDeriver])
 
-        val rpc     = Rpc.unary[OrphanRequest, OrphanResponse]("Orphan")
-        val service = Service("test.package", "OrphanService").rpc(rpc)
+        val rpc           = Rpc.unary[OrphanRequest, OrphanResponse]("Orphan")
+        val service       = Service("test.package", "OrphanService").rpc(rpc)
+        val renderedProto = service.render(options)
 
-        val error =
-          try {
-            service.render(options)
-            ""
-          } catch {
-            case e: Exception => e.getMessage
-          }
-
-        assertTrue(error.contains("Could not resolve `nestedIn` targets in service OrphanService")) &&
-          assertTrue(error.contains("OrphanInner"))
+        assertTrue(renderedProto.contains("message OrphanInner {")) &&
+          assertTrue(renderedProto.contains("OrphanInner inner = 1;"))
       }
     ),
     suite("Dependency Rendering")(
