@@ -226,10 +226,23 @@ extension (dep: Dependency.type) {
     val requestResponseTypeNames =
       services.flatMap(_.rpcs.flatMap(rpc => List(rpc.toProtoIR.request.fqn.name, rpc.toProtoIR.response.fqn.name))).toSet
 
+    // A type whose `nestedIn` chain roots at a request/response must travel with that parent (which
+    // stays in the service file), so it doesn't belong in the shared dependency.
+    val byTypeId                                                                               = filteredTypes.iterator.flatMap(d => d.typeId.map(_ -> d)).toMap
+    def rootsAtRequestResponse(d: ProtoIR.TopLevelDef, seen: Set[String] = Set.empty): Boolean =
+      d.nestedIn match {
+        case Some(parentTid) if !seen.contains(parentTid) =>
+          byTypeId.get(parentTid) match {
+            case Some(parent) =>
+              requestResponseTypeNames.contains(parent.name) || rootsAtRequestResponse(parent, seen + parentTid)
+            case None         => false
+          }
+        case _                                            => false
+      }
+
     val commonTypes = filteredTypes.filterNot {
-      case ProtoIR.TopLevelDef.MessageDef(msg)  => requestResponseTypeNames.contains(msg.name)
-      case ProtoIR.TopLevelDef.EnumDef(enumDef) => requestResponseTypeNames.contains(enumDef.name)
-      case ProtoIR.TopLevelDef.ServiceDef(_)    => true
+      case _: ProtoIR.TopLevelDef.ServiceDef => true
+      case d                                 => requestResponseTypeNames.contains(d.name) || rootsAtRequestResponse(d)
     }
 
     Dependency(dependencyName, packageName, path, commonTypes, dependencies)
