@@ -242,6 +242,32 @@ object ProtoDiffSpec extends ZIOSpecDefault {
           changes.contains(FieldOneOfChanged(List("Foo"), "email", 2, Some("alpha"), Some("beta"))),
           changes.contains(FieldOneOfChanged(List("Foo"), "phone", 3, Some("beta"), Some("alpha")))
         )
+      },
+      test("oneof renamed: collapses per-field moves into a single OneOfRenamed") {
+        val old     = parse(
+          """syntax = "proto3";
+            |message Foo {
+            |  oneof value {
+            |    string a = 1;
+            |    int32 b = 2;
+            |  }
+            |}
+            |""".stripMargin
+        )
+        val nw      = parse(
+          """syntax = "proto3";
+            |message Foo {
+            |  oneof reward {
+            |    string a = 1;
+            |    int32 b = 2;
+            |  }
+            |}
+            |""".stripMargin
+        )
+        val changes = ProtoDiff.diff(old, nw)
+        assertTrue(
+          changes == List(OneOfRenamed(List("Foo"), "value", "reward"))
+        )
       }
     ),
     suite("Enum changes")(

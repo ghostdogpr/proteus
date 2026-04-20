@@ -187,16 +187,16 @@ The flag is repeatable. Unspecified change types keep their defaults.
 
 ### Change types
 
-| Category           | Types                                                                                                                                                                              |
-| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| File / package     | `FileAdded`, `FileRemoved`, `PackageChanged`                                                                                                                                       |
-| Import             | `ImportAdded`, `ImportRemoved`, `ImportModifierChanged`                                                                                                                            |
-| Message            | `MessageAdded`, `MessageRemoved`, `MessageRenamed`, `MessageMoved`                                                                                                                 |
-| Field              | `FieldAdded`, `FieldRemoved`, `FieldNumberChanged`, `FieldRenamed`, `FieldTypeChanged`, `FieldTypeRefRenamed`, `FieldOptionalityChanged`, `FieldOrderChanged`, `FieldOneOfChanged` |
-| Enum               | `EnumAdded`, `EnumRemoved`, `EnumRenamed`, `EnumMoved`, `EnumValueAdded`, `EnumValueRemoved`, `EnumValueNumberChanged`, `EnumValueRenamed`                                         |
-| Reserved / options | `ReservedAdded`, `ReservedRemoved`, `OptionAdded`, `OptionRemoved`, `OptionChanged`                                                                                                |
-| Service / RPC      | `ServiceAdded`, `ServiceRemoved`, `RpcAdded`, `RpcRemoved`, `RpcRequestTypeChanged`, `RpcResponseTypeChanged`, `RpcStreamingChanged`                                               |
-| Comments           | `CommentAdded`, `CommentRemoved`, `CommentChanged`                                                                                                                                 |
+| Category           | Types                                                                                                                                                                                             |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| File / package     | `FileAdded`, `FileRemoved`, `PackageChanged`                                                                                                                                                      |
+| Import             | `ImportAdded`, `ImportRemoved`, `ImportModifierChanged`                                                                                                                                           |
+| Message            | `MessageAdded`, `MessageRemoved`, `MessageRenamed`, `MessageMoved`                                                                                                                                |
+| Field              | `FieldAdded`, `FieldRemoved`, `FieldNumberChanged`, `FieldRenamed`, `FieldTypeChanged`, `FieldTypeRefRenamed`, `FieldOptionalityChanged`, `FieldOrderChanged`, `FieldOneOfChanged`, `OneOfRenamed` |
+| Enum               | `EnumAdded`, `EnumRemoved`, `EnumRenamed`, `EnumMoved`, `EnumValueAdded`, `EnumValueRemoved`, `EnumValueNumberChanged`, `EnumValueRenamed`                                                        |
+| Reserved / options | `ReservedAdded`, `ReservedRemoved`, `OptionAdded`, `OptionRemoved`, `OptionChanged`                                                                                                               |
+| Service / RPC      | `ServiceAdded`, `ServiceRemoved`, `RpcAdded`, `RpcRemoved`, `RpcRequestTypeChanged`, `RpcResponseTypeChanged`, `RpcStreamingChanged`                                                              |
+| Comments           | `CommentAdded`, `CommentRemoved`, `CommentChanged`                                                                                                                                                |
 
 ## Examples
 
