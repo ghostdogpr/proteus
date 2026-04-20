@@ -64,7 +64,7 @@ final case class Dependency(
     val rawTypes      = filteredTypes.toList
     val ownPaths      = ProtobufCodec.nestedInPaths(rawTypes)
     val resolvedTypes = ProtobufCodec.relocateNestedIn(rawTypes)
-    val conflicts     = conflictsOf(resolvedTypes)
+    val conflicts     = ProtobufCodec.conflictsOf(resolvedTypes)
     if (conflicts.nonEmpty) {
       throw new ProteusException(
         s"Conflicts found in dependency $dependencyName:\n ${conflicts.map { case (name, defs) => s"- Type `$name` is defined in different ways: \n${defs.mkString("\n")}" }.mkString("\n")}\n"
@@ -99,15 +99,7 @@ final case class Dependency(
     * The key is the type name, and the value is a list of definitions that conflict.
     */
   def findConflicts: Map[String, List[String]] =
-    conflictsOf(ProtobufCodec.relocateNestedIn(types.toList))
-
-  private def conflictsOf(defs: Iterable[ProtoIR.TopLevelDef]): Map[String, List[String]] =
-    defs
-      .groupBy(_.name)
-      .view
-      .mapValues(_.map(Renderer.renderTopLevelDef).map(Text.renderText).toList.distinct)
-      .toMap
-      .filter((_, values) => values.length > 1)
+    ProtobufCodec.conflictsOf(ProtobufCodec.relocateNestedIn(types.toList))
 }
 
 object Dependency {

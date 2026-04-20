@@ -34,10 +34,8 @@ case class Service[Rpcs] private (
 
   private case class ProtoIRResult(defs: List[ProtoIR.TopLevelDef], nestedInPaths: Map[String, String])
 
-  // Raw (un-relocated) defs. Relocation is deferred to render/fileDescriptor (or to the dependency
-  // when these defs are aggregated via `fromServices`) — that way same-named types contributed by
-  // multiple services merge cleanly before relocation, instead of producing per-service variants
-  // that conflict in the dependency.
+  // Defs are kept un-relocated so that, when aggregated across services via `fromServices`, contributions
+  // for the same Scala type merge cleanly before relocation runs once at the dependency level.
   private lazy val protoIRResult: ProtoIRResult = {
     val raw         = ProtoIR.TopLevelDef.ServiceDef(ProtoIR.Service(name, rpcs.map(_.toProtoIR), comment)) ::
       rpcs.flatMap(_.messagesToProtoIR)
@@ -47,7 +45,7 @@ case class Service[Rpcs] private (
   }
 
   /**
-    * Converts the service to a ProtoIR representation (un-relocated; nestedIn relocation happens at render time).
+    * Converts the service to a ProtoIR representation.
     */
   lazy val toProtoIR: List[ProtoIR.TopLevelDef] = protoIRResult.defs
 
@@ -61,7 +59,7 @@ case class Service[Rpcs] private (
   private lazy val typeReferences = toProtoIR.flatMap(_.collectTypeReferences).toSet
 
   private lazy val filteredTypes          = {
-    val dependencyTypes = allDependencies.filter(_.hasAnyOf(typeReferences)).flatMap(_.types).map(_.name)
+    val dependencyTypes = allDependencies.filter(_.hasAnyOf(typeReferences)).flatMap(_.types).map(_.name).toSet
     ProtobufCodec.relocateNestedIn(toProtoIR.filterNot(d => dependencyTypes.contains(d.name)))
   }
   private lazy val filteredTypeReferences = filteredTypes.flatMap(_.collectTypeReferences).toSet
@@ -152,13 +150,7 @@ case class Service[Rpcs] private (
     * A conflict is a situation where the same type name is defined in different ways.
     */
   def findConflicts: Map[String, List[String]] =
-    ProtobufCodec
-      .relocateNestedIn(toProtoIR)
-      .groupBy(_.name)
-      .view
-      .mapValues(_.map(Renderer.renderTopLevelDef).map(Text.renderText).distinct)
-      .toMap
-      .filter((_, values) => values.length > 1)
+    ProtobufCodec.conflictsOf(filteredTypes)
 }
 
 object Service {

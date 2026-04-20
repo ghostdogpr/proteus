@@ -1167,6 +1167,17 @@ object ProtobufCodec {
     loop(codec)
   }
 
+  // Groups defs by name and returns those whose definitions render to more than one distinct shape.
+  // Should be called on relocated defs so types nested in different parents (and only same by simple name)
+  // aren't reported as conflicts.
+  private[proteus] def conflictsOf(defs: Iterable[ProtoIR.TopLevelDef]): Map[String, List[String]] =
+    defs
+      .groupBy(_.name)
+      .view
+      .mapValues(_.map(Renderer.renderTopLevelDef).map(Text.renderText).toList.distinct)
+      .toMap
+      .filter((_, values) => values.length > 1)
+
   // Strips the message-level typeId so two structurally-identical defs that differ only by the
   // owning Scala type's TypeId (e.g. two case classes renamed to the same proto name) dedupe to one.
   private[proteus] def dedupKey(d: ProtoIR.TopLevelDef): ProtoIR.TopLevelDef =
@@ -1176,20 +1187,18 @@ object ProtobufCodec {
       case other                             => other
     }
 
-  // Returns (childTypeId, parentTypeId) for defs whose `nestedIn` target resolves to another def's typeId.
-  private def resolvableNestedIn(d: ProtoIR.TopLevelDef, allTypeIds: Set[String]): Option[(String, String)] =
+  private def resolvableNestedIn(d: ProtoIR.TopLevelDef, knownTypeIds: collection.Set[String]): Option[(String, String)] =
     for {
       childTid  <- d.typeId
-      parentTid <- d.nestedIn if allTypeIds.contains(parentTid)
+      parentTid <- d.nestedIn if knownTypeIds.contains(parentTid)
     } yield childTid -> parentTid
 
   private[proteus] def relocateNestedIn(defs: List[ProtoIR.TopLevelDef]): List[ProtoIR.TopLevelDef] = {
-    val allTypeIds       = defs.iterator.flatMap(_.typeId).toSet
-    val byTypeId         = defs.iterator.flatMap(d => d.typeId.map(tid => tid -> d)).toMap
+    val typeIds          = defs.iterator.flatMap(_.typeId).toSet
     val childrenByTarget = mutable.Map.empty[String, mutable.ListBuffer[ProtoIR.TopLevelDef]]
     val childRefs        = mutable.Set.empty[ProtoIR.TopLevelDef]
     defs.foreach(d =>
-      resolvableNestedIn(d, allTypeIds).foreach { case (_, parentTid) =>
+      resolvableNestedIn(d, typeIds).foreach { case (_, parentTid) =>
         childrenByTarget.getOrElseUpdate(parentTid, mutable.ListBuffer.empty) += d
         childRefs += d
       }
@@ -1215,11 +1224,9 @@ object ProtobufCodec {
   }
 
   // Must be called BEFORE `relocateNestedIn`: once children are spliced, their `nestedIn` metadata is cleared.
-  // Returns a map from child typeId fullName to its dotted simple-name path (e.g. "Parent.Child").
   private[proteus] def nestedInPaths(defs: List[ProtoIR.TopLevelDef]): Map[String, String] = {
-    val allTypeIds       = defs.iterator.flatMap(_.typeId).toSet
     val nameByTypeId     = defs.iterator.flatMap(d => d.typeId.map(_ -> d.name)).toMap
-    val childToParentTid = defs.flatMap(resolvableNestedIn(_, allTypeIds)).toMap
+    val childToParentTid = defs.flatMap(resolvableNestedIn(_, nameByTypeId.keySet)).toMap
 
     def resolve(tid: String, chain: List[String] = Nil): String = {
       val name = nameByTypeId.getOrElse(tid, tid)
@@ -1236,9 +1243,8 @@ object ProtobufCodec {
 
   private[proteus] def qualifyReferences(
     defs: List[ProtoIR.TopLevelDef],
-    additionalPaths: Map[String, String] = Map.empty
+    paths: Map[String, String]
   ): List[ProtoIR.TopLevelDef] = {
-    val paths = additionalPaths
 
     def qualify(name: String, refTypeId: Option[String], scope: String): String =
       refTypeId.flatMap(paths.get) match {
