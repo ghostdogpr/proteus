@@ -78,8 +78,12 @@ sealed trait ProtobufCodec[A] {
   /**
     * Renders the codec to a .proto file as a string.
     */
-  final def render(packageName: Option[String] = None, options: List[TopLevelOption] = List.empty): String =
-    Renderer.render(CompilationUnit(packageName, qualifyReferences(toProtoIR(this)).map(TopLevelStatement(_)), options))
+  final def render(packageName: Option[String] = None, options: List[TopLevelOption] = List.empty): String = {
+    val rawDefs   = findTopLevelDefs(this, collectNames(this))
+    val paths     = nestedInPaths(rawDefs)
+    val relocated = relocateNestedIn(rawDefs)
+    Renderer.render(CompilationUnit(packageName, qualifyReferences(relocated, paths).map(TopLevelStatement(_)), options))
+  }
 
   private def decode(input: CodedInputStream): A =
     wrapDecode(getName, prependOnExisting = false) {
@@ -1258,23 +1262,7 @@ object ProtobufCodec {
     defs: List[ProtoIR.TopLevelDef],
     additionalPaths: Map[String, String] = Map.empty
   ): List[ProtoIR.TopLevelDef] = {
-    val paths = mutable.Map.from(additionalPaths)
-
-    def collectMessage(m: ProtoIR.Message, prefix: String): Unit = {
-      val path = if (prefix.isEmpty) m.name else s"$prefix.${m.name}"
-      paths.getOrElseUpdate(m.name, path): Unit
-      m.elements.foreach {
-        case ProtoIR.MessageElement.NestedMessageElement(nm) => collectMessage(nm, path)
-        case ProtoIR.MessageElement.NestedEnumElement(ne)    => paths.getOrElseUpdate(ne.name, s"$path.${ne.name}"): Unit
-        case _                                               => ()
-      }
-    }
-
-    defs.foreach {
-      case ProtoIR.TopLevelDef.MessageDef(m) => collectMessage(m, "")
-      case ProtoIR.TopLevelDef.EnumDef(e)    => paths.getOrElseUpdate(e.name, e.name): Unit
-      case _                                 => ()
-    }
+    val paths = additionalPaths
 
     def qualify(name: String, scope: String): String =
       paths.get(name) match {

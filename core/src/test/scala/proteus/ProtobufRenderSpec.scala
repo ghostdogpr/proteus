@@ -16,7 +16,8 @@ object ProtobufRenderSpec extends ZIOSpecDefault {
   val deriverWithNestedOneOf     = deriver.enable(ProtobufDeriver.DerivationFlag.NestedOneOf)
 
   def renderCodec[A](codec: ProtobufCodec[A], packageName: String = "test"): String = {
-    val topLevelDefs    = ProtobufCodec.qualifyReferences(ProtobufCodec.toProtoIR(codec))
+    val rawDefs         = ProtobufCodec.findTopLevelDefs(codec, ProtobufCodec.collectNames(codec))
+    val topLevelDefs    = ProtobufCodec.qualifyReferences(ProtobufCodec.relocateNestedIn(rawDefs), ProtobufCodec.nestedInPaths(rawDefs))
     val statements      = topLevelDefs.map(Statement.TopLevelStatement(_)).distinct
     val compilationUnit = CompilationUnit(Some(packageName), statements, List.empty)
     Renderer.render(compilationUnit)
