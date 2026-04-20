@@ -41,7 +41,7 @@ jobs:
         run: cp diff/target/native-image/proteus-diff ${{ matrix.artifact }}
       - name: Upload release asset
         if: github.event_name == 'release'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: ${{ matrix.artifact }}
       - name: Upload workflow artifact
