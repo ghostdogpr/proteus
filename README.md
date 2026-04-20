@@ -11,6 +11,6 @@ It also provides a **declarative way to define gRPC services** in Scala, a bit l
 
 It is available for Scala 3.3.x LTS and later versions. The core module is available for both Scala JVM and Scala.js.
 
-Proteus also ships **[proteus-diff](https://ghostdogpr.github.io/proteus/proteus-diff)**, a standalone native CLI for detecting breaking changes between `.proto` schemas — usable with any Protobuf project, no JVM required.
+Proteus also ships **[proteus-diff](https://ghostdogpr.github.io/proteus/proteus-diff)**, a standalone native CLI for detecting breaking changes between `.proto` schemas, usable with any Protobuf project, no JVM required.
 
 ### Consult the [Documentation](https://ghostdogpr.github.io/proteus/) to learn how to use Proteus.
