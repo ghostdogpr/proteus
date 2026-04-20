@@ -27,6 +27,7 @@ object SeverityOverrides {
     "FieldOptionalityChanged",
     "FieldOrderChanged",
     "FieldOneOfChanged",
+    "OneOfRenamed",
     "EnumAdded",
     "EnumRemoved",
     "EnumRenamed",

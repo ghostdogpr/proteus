@@ -242,6 +242,32 @@ object ProtoDiffSpec extends ZIOSpecDefault {
           changes.contains(FieldOneOfChanged(List("Foo"), "email", 2, Some("alpha"), Some("beta"))),
           changes.contains(FieldOneOfChanged(List("Foo"), "phone", 3, Some("beta"), Some("alpha")))
         )
+      },
+      test("oneof renamed: collapses per-field moves into a single OneOfRenamed") {
+        val old     = parse(
+          """syntax = "proto3";
+            |message Foo {
+            |  oneof value {
+            |    string a = 1;
+            |    int32 b = 2;
+            |  }
+            |}
+            |""".stripMargin
+        )
+        val nw      = parse(
+          """syntax = "proto3";
+            |message Foo {
+            |  oneof reward {
+            |    string a = 1;
+            |    int32 b = 2;
+            |  }
+            |}
+            |""".stripMargin
+        )
+        val changes = ProtoDiff.diff(old, nw)
+        assertTrue(
+          changes == List(OneOfRenamed(List("Foo"), "value", "reward"))
+        )
       }
     ),
     suite("Enum changes")(
@@ -591,7 +617,7 @@ object ProtoDiffSpec extends ZIOSpecDefault {
         val changes = ProtoDiff.diffFiles(old, nw)
         assertTrue(changes == List(EnumMoved(List("b.proto"), "Status", "a.proto", "b.proto")))
       },
-      test("cross-file move not detected when structure differs: falls back to remove + add") {
+      test("cross-file move with modifications: emits MessageMoved plus internal diffs") {
         val old     = Map(
           "a.proto" -> parse("""syntax = "proto3"; message Common { string name = 1; }"""),
           "b.proto" -> parse("""syntax = "proto3";""")
@@ -602,9 +628,10 @@ object ProtoDiffSpec extends ZIOSpecDefault {
         )
         val changes = ProtoDiff.diffFiles(old, nw)
         assertTrue(
-          changes.contains(MessageRemoved(List("a.proto"), "Common")),
-          changes.contains(MessageAdded(List("b.proto"), "Common")),
-          changes.collect { case _: MessageMoved => true }.isEmpty
+          changes.contains(MessageMoved(List("b.proto"), "Common", "a.proto", "b.proto")),
+          changes.contains(FieldAdded(List("b.proto", "Common"), "id", 2)),
+          !changes.exists(_.isInstanceOf[MessageRemoved]),
+          !changes.exists(_.isInstanceOf[MessageAdded])
         )
       },
       test("cross-file move not detected when name moves to same file (just rename detection within file)") {

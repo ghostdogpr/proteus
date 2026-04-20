@@ -8,34 +8,26 @@ import scala.jdk.CollectionConverters.*
 
 object Git {
 
-  def extractProtos(ref: String, cwd: Option[Path] = None): Either[String, Path] =
-    runGit(cwd, "ls-tree", "-r", "--name-only", ref).flatMap { stdout =>
-      val protos   = stdout.linesIterator.filter(_.endsWith(".proto")).toList
-      val tmp      = Files.createTempDirectory("proteus-diff-git-")
-      sys.addShutdownHook(deleteRecursively(tmp))
-      val attempts = protos.map { path =>
-        val target = tmp.resolve(path)
-        Option(target.getParent).foreach(p => Files.createDirectories(p): Unit)
-        runGit(cwd, "show", s"$ref:$path").map { content =>
-          Files.writeString(target, content, StandardCharsets.UTF_8): Unit
-        }
-      }
-      attempts.find(_.isLeft) match {
-        case Some(Left(err)) => Left(s"failed to extract $ref: $err")
-        case _               => Right(tmp)
-      }
-    }
+  /**
+    * Extracts all files at the given ref into a temp dir via a `git archive | tar -x` pipeline.
+    * Much faster than invoking `git show` per file (one subprocess pair vs N+1).
+    */
+  def extractProtos(ref: String, cwd: Option[Path] = None): Either[String, Path] = {
+    val tmp = Files.createTempDirectory("proteus-diff-git-")
+    sys.addShutdownHook(deleteRecursively(tmp))
 
-  private def runGit(cwd: Option[Path], args: String*): Either[String, String] = {
-    val pb = new ProcessBuilder(("git" +: args)*)
-    cwd.foreach(p => pb.directory(p.toFile): Unit)
+    val gitPb = new ProcessBuilder("git", "archive", "--format=tar", ref, "--", ":(glob)**/*.proto").redirectErrorStream(false)
+    cwd.foreach(p => gitPb.directory(p.toFile): Unit)
+    val tarPb = new ProcessBuilder("tar", "-x", "-C", tmp.toString)
+
     try {
-      val p      = pb.start()
-      val stdout = readStream(p.getInputStream)
-      val stderr = readStream(p.getErrorStream)
-      val code   = p.waitFor()
-      if (code == 0) Right(stdout)
-      else Left(if (stderr.nonEmpty) stderr.trim else s"git exited with code $code")
+      val pipeline  = ProcessBuilder.startPipeline(java.util.List.of(gitPb, tarPb)).asScala.toList
+      val exitCodes = pipeline.map(_.waitFor())
+      if (exitCodes.forall(_ == 0)) Right(tmp)
+      else {
+        val gitErr = readStream(pipeline.head.getErrorStream).trim
+        Left(if (gitErr.nonEmpty) gitErr else s"git/tar pipeline failed with exit codes ${exitCodes.mkString(",")}")
+      }
     } catch {
       case _: IOException => Left("git not found on PATH")
     }

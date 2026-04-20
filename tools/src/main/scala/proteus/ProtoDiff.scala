@@ -52,6 +52,7 @@ object ProtoDiff {
       case _: FieldOptionalityChanged => (Warning, Warning)
       case _: FieldOrderChanged       => (Info, Warning)
       case _: FieldOneOfChanged       => (Error, Error)
+      case _: OneOfRenamed            => (Info, Error)
       case _: EnumAdded               => (Info, Info)
       case _: EnumRemoved             => (Error, Error)
       case _: EnumRenamed             => (Info, Error)
@@ -164,30 +165,28 @@ object ProtoDiff {
     val enumRemovedRaw = enumRemovedDirect ++ enumRemovedFromFile
     val enumAddedRaw   = enumAddedDirect ++ enumAddedFromFile
 
-    val msgMoves: List[(String, String, String)] = msgRemovedRaw.flatMap { case (oldFile, name) =>
+    val msgMoves: List[(String, String, String, Message, Message)] = msgRemovedRaw.flatMap { case (oldFile, name) =>
       msgAddedRaw.find { case (newFile, n) => n == name && newFile != oldFile }.flatMap { case (newFile, _) =>
         for {
           oldMsg <- topMessages(oldFiles(oldFile)).get(name)
           newMsg <- topMessages(newFiles(newFile)).get(name)
-          if messageFingerprint(oldMsg) == messageFingerprint(newMsg)
-        } yield (oldFile, newFile, name)
+        } yield (oldFile, newFile, name, oldMsg, newMsg)
       }
     }
 
-    val enumMoves: List[(String, String, String)] = enumRemovedRaw.flatMap { case (oldFile, name) =>
+    val enumMoves: List[(String, String, String, Enum, Enum)] = enumRemovedRaw.flatMap { case (oldFile, name) =>
       enumAddedRaw.find { case (newFile, n) => n == name && newFile != oldFile }.flatMap { case (newFile, _) =>
         for {
           oldEnum <- topEnums(oldFiles(oldFile)).get(name)
           newEnum <- topEnums(newFiles(newFile)).get(name)
-          if enumFingerprint(oldEnum) == enumFingerprint(newEnum)
-        } yield (oldFile, newFile, name)
+        } yield (oldFile, newFile, name, oldEnum, newEnum)
       }
     }
 
-    val removedMovedMsg  = msgMoves.map { case (of, _, n) => (of, n) }.toSet
-    val addedMovedMsg    = msgMoves.map { case (_, nf, n) => (nf, n) }.toSet
-    val removedMovedEnum = enumMoves.map { case (of, _, n) => (of, n) }.toSet
-    val addedMovedEnum   = enumMoves.map { case (_, nf, n) => (nf, n) }.toSet
+    val removedMovedMsg  = msgMoves.map { case (of, _, n, _, _) => (of, n) }.toSet
+    val addedMovedMsg    = msgMoves.map { case (_, nf, n, _, _) => (nf, n) }.toSet
+    val removedMovedEnum = enumMoves.map { case (of, _, n, _, _) => (of, n) }.toSet
+    val addedMovedEnum   = enumMoves.map { case (_, nf, n, _, _) => (nf, n) }.toSet
 
     val filtered = changes.filterNot {
       case MessageRemoved(file :: Nil, name) => removedMovedMsg.contains((file, name))
@@ -198,9 +197,16 @@ object ProtoDiff {
     }
 
     // Group the move under the destination file so it appears alongside changes in that file.
+    // When the moved type was also modified, surface the internal changes under the destination file.
     val moves: List[Change] =
-      msgMoves.map { case (of, nf, n) => MessageMoved(List(nf), n, of, nf) } ++
-        enumMoves.map { case (of, nf, n) => EnumMoved(List(nf), n, of, nf) }
+      msgMoves.flatMap { case (of, nf, n, oldMsg, newMsg) =>
+        val innerDiffs = if (messageFingerprint(oldMsg) == messageFingerprint(newMsg)) Nil else diffMessage(oldMsg, newMsg, List(nf))
+        MessageMoved(List(nf), n, of, nf) :: innerDiffs
+      } ++
+        enumMoves.flatMap { case (of, nf, n, oldEnum, newEnum) =>
+          val innerDiffs = if (enumFingerprint(oldEnum) == enumFingerprint(newEnum)) Nil else diffEnum(oldEnum, newEnum, List(nf))
+          EnumMoved(List(nf), n, of, nf) :: innerDiffs
+        }
 
     filtered ++ moves
   }
@@ -361,8 +367,10 @@ object ProtoDiff {
     val msgPath         = path :+ oldMsg.name
     val oldFlat         = flattenFields(oldMsg)
     val newFlat         = flattenFields(newMsg)
-    val fieldChanges    = diffFields(oldFlat, newFlat, msgPath, newMsg.reserved)
-    val oneOfChanges    = diffOneOfs(oldMsg, newMsg, msgPath)
+    val oneOfRenames    = detectOneOfRenames(oldMsg, newMsg)
+    val renameChanges   = oneOfRenames.toList.map { case (o, n) => OneOfRenamed(msgPath, o, n) }
+    val fieldChanges    = diffFields(oldFlat, newFlat, msgPath, newMsg.reserved, oneOfRenames)
+    val oneOfChanges    = diffOneOfs(oldMsg, newMsg, msgPath, oneOfRenames)
     val oldNested       = oldMsg.elements.collect { case MessageElement.NestedMessageElement(m) => m }
     val newNested       = newMsg.elements.collect { case MessageElement.NestedMessageElement(m) => m }
     val nestedMsgDiffs  = diffMessages(oldNested, newNested, msgPath)
@@ -372,7 +380,30 @@ object ProtoDiff {
     val reservedDiffs   = diffReserved(oldMsg.reserved, newMsg.reserved, msgPath)
     val optionDiffs     = diffOptions(oldMsg.options, newMsg.options, msgPath)
     val commentDiffs    = diffComment(oldMsg.comment, newMsg.comment, path, oldMsg.name)
-    fieldChanges ++ oneOfChanges ++ nestedMsgDiffs ++ nestedEnumDiffs ++ reservedDiffs ++ optionDiffs ++ commentDiffs
+    renameChanges ++ fieldChanges ++ oneOfChanges ++ nestedMsgDiffs ++ nestedEnumDiffs ++ reservedDiffs ++ optionDiffs ++ commentDiffs
+  }
+
+  /**
+    * Detect oneofs that were renamed: paired by identical field-set fingerprint
+    * (same numbers and types). Returns map from old oneof name to new oneof name.
+    */
+  private def detectOneOfRenames(oldMsg: Message, newMsg: Message): Map[String, String] = {
+    val oldOneOfs                      = oldMsg.elements.collect { case MessageElement.OneOfElement(o) => o }
+    val newOneOfs                      = newMsg.elements.collect { case MessageElement.OneOfElement(o) => o }
+    val oldNames                       = oldOneOfs.map(_.name).toSet
+    val newNames                       = newOneOfs.map(_.name).toSet
+    val unmOld                         = oldOneOfs.filterNot(o => newNames.contains(o.name))
+    val unmNew                         = newOneOfs.filterNot(o => oldNames.contains(o.name))
+    def fp(o: OneOf): Set[(Int, Type)] =
+      o.fields.map(f => (f.number, normalizeType(f.ty))).toSet
+    val oldByFp                        = unmOld.groupBy(fp)
+    val newByFp                        = unmNew.groupBy(fp)
+    oldByFp.flatMap { case (k, olds) =>
+      newByFp.get(k) match {
+        case Some(news) if olds.length == 1 && news.length == 1 => List(olds.head.name -> news.head.name)
+        case _                                                  => Nil
+      }
+    }
   }
 
   private case class ContainedField(field: Field, container: Option[String], index: Int)
@@ -429,9 +460,12 @@ object ProtoDiff {
     oldFields: List[ContainedField],
     newFields: List[ContainedField],
     path: List[String],
-    newReserved: List[Reserved]
+    newReserved: List[Reserved],
+    oneOfRenames: Map[String, String]
   ): List[Change] = {
     val (matched, unmatchedOld, unmatchedNew) = matchFields(oldFields, newFields)
+
+    def remappedContainer(c: Option[String]): Option[String] = c.map(n => oneOfRenames.getOrElse(n, n))
 
     val matchChanges = matched.flatMap { case (oldCf, newCf) =>
       val changes  = List.newBuilder[Change]
@@ -444,7 +478,7 @@ object ProtoDiff {
         changes += FieldTypeChanged(path, oF.name, oF.number, oF.ty, nF.ty)
       if (oF.optional != nF.optional)
         changes += FieldOptionalityChanged(path, oF.name, oF.number, oF.optional)
-      if (oldCf.container != newCf.container)
+      if (remappedContainer(oldCf.container) != newCf.container)
         changes += FieldOneOfChanged(path, oF.name, oF.number, oldCf.container, newCf.container)
       changes ++= diffOptions(oF.options, nF.options, path :+ oF.name)
       changes ++= diffComment(oF.comment, nF.comment, path, oF.name)
@@ -473,15 +507,20 @@ object ProtoDiff {
       case _: Reserved.Name     => false
     }
 
-  private def diffOneOfs(oldMsg: Message, newMsg: Message, path: List[String]): List[Change] = {
+  private def diffOneOfs(oldMsg: Message, newMsg: Message, path: List[String], oneOfRenames: Map[String, String]): List[Change] = {
     val oldOneOfs = oldMsg.elements.collect { case MessageElement.OneOfElement(o) => o }
     val newOneOfs = newMsg.elements.collect { case MessageElement.OneOfElement(o) => o }
     val oldByName = oldOneOfs.map(o => o.name -> o).toMap
     val newByName = newOneOfs.map(o => o.name -> o).toMap
-    (oldByName.keySet & newByName.keySet).toList.flatMap { n =>
+    val sameName  = (oldByName.keySet & newByName.keySet).toList.flatMap { n =>
       diffOptions(oldByName(n).options, newByName(n).options, path :+ n) ++
         diffComment(oldByName(n).comment, newByName(n).comment, path, n)
     }
+    val renamed   = oneOfRenames.toList.flatMap { case (oldN, newN) =>
+      diffOptions(oldByName(oldN).options, newByName(newN).options, path :+ newN) ++
+        diffComment(oldByName(oldN).comment, newByName(newN).comment, path, newN)
+    }
+    sameName ++ renamed
   }
 
   private def diffEnums(oldEnums: List[Enum], newEnums: List[Enum], path: List[String]): List[Change] = {

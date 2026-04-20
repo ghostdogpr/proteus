@@ -10,24 +10,19 @@ proteus-diff focuses exclusively on proto3 syntax. proto2 files are rejected.
 
 ## Installation
 
-Download the binary for your platform from the [GitHub Releases](https://github.com/ghostdogpr/proteus/releases) page:
-
-- `proteus-diff-linux-x86_64`
-- `proteus-diff-macos-x86_64`
-- `proteus-diff-macos-aarch64`
-
-Make it executable and move it to a directory on your `PATH`:
+**Linux (x86_64):**
 
 ```bash
-chmod +x proteus-diff-macos-aarch64
-mv proteus-diff-macos-aarch64 /usr/local/bin/proteus-diff
+curl -sL https://github.com/ghostdogpr/proteus/releases/latest/download/proteus-diff-linux-x86_64 > proteus-diff && chmod +x proteus-diff && ./proteus-diff --help
 ```
 
-Verify the installation:
+**macOS (Apple Silicon / Intel):**
 
 ```bash
-proteus-diff --version
+ARCH=$(uname -m | sed 's/arm64/aarch64/') && curl -sL https://github.com/ghostdogpr/proteus/releases/latest/download/proteus-diff-macos-${ARCH} > proteus-diff && chmod +x proteus-diff && ./proteus-diff --help
 ```
+
+This downloads the binary to the current directory. Move it somewhere on your `PATH` (e.g. `sudo mv proteus-diff /usr/local/bin/`) to use it from anywhere.
 
 ## Quick start
 
@@ -50,11 +45,16 @@ The tool prints a grouped report and exits with code `1` if any breaking change 
 You can pass git refs directly — branches, tags, or commits — instead of filesystem paths:
 
 ```bash
+proteus-diff main .                 # main vs current working tree (including uncommitted changes)
+proteus-diff HEAD ./proto           # last commit vs current state of proto/ (uncommitted-only diff)
 proteus-diff main HEAD              # compare PR against main
 proteus-diff HEAD~1 HEAD            # what changed in the last commit
 proteus-diff v0.1.0 v0.2.0          # compare two releases
-proteus-diff main ./proto           # ref vs current working tree
 ```
+
+::: tip
+Mix git refs and filesystem paths freely. Passing `.` or any directory path for the "new" side compares against your current working tree, so you can preview uncommitted changes before committing.
+:::
 
 Resolution rule: if the argument exists as a file or directory, it's treated as a filesystem path. Otherwise, proteus-diff tries to resolve it as a git ref with `git rev-parse`. If neither works, you get an error.
 
@@ -187,16 +187,16 @@ The flag is repeatable. Unspecified change types keep their defaults.
 
 ### Change types
 
-| Category           | Types                                                                                                                                                                              |
-| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| File / package     | `FileAdded`, `FileRemoved`, `PackageChanged`                                                                                                                                       |
-| Import             | `ImportAdded`, `ImportRemoved`, `ImportModifierChanged`                                                                                                                            |
-| Message            | `MessageAdded`, `MessageRemoved`, `MessageRenamed`, `MessageMoved`                                                                                                                 |
-| Field              | `FieldAdded`, `FieldRemoved`, `FieldNumberChanged`, `FieldRenamed`, `FieldTypeChanged`, `FieldTypeRefRenamed`, `FieldOptionalityChanged`, `FieldOrderChanged`, `FieldOneOfChanged` |
-| Enum               | `EnumAdded`, `EnumRemoved`, `EnumRenamed`, `EnumMoved`, `EnumValueAdded`, `EnumValueRemoved`, `EnumValueNumberChanged`, `EnumValueRenamed`                                         |
-| Reserved / options | `ReservedAdded`, `ReservedRemoved`, `OptionAdded`, `OptionRemoved`, `OptionChanged`                                                                                                |
-| Service / RPC      | `ServiceAdded`, `ServiceRemoved`, `RpcAdded`, `RpcRemoved`, `RpcRequestTypeChanged`, `RpcResponseTypeChanged`, `RpcStreamingChanged`                                               |
-| Comments           | `CommentAdded`, `CommentRemoved`, `CommentChanged`                                                                                                                                 |
+| Category           | Types                                                                                                                                                                                             |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| File / package     | `FileAdded`, `FileRemoved`, `PackageChanged`                                                                                                                                                      |
+| Import             | `ImportAdded`, `ImportRemoved`, `ImportModifierChanged`                                                                                                                                           |
+| Message            | `MessageAdded`, `MessageRemoved`, `MessageRenamed`, `MessageMoved`                                                                                                                                |
+| Field              | `FieldAdded`, `FieldRemoved`, `FieldNumberChanged`, `FieldRenamed`, `FieldTypeChanged`, `FieldTypeRefRenamed`, `FieldOptionalityChanged`, `FieldOrderChanged`, `FieldOneOfChanged`, `OneOfRenamed` |
+| Enum               | `EnumAdded`, `EnumRemoved`, `EnumRenamed`, `EnumMoved`, `EnumValueAdded`, `EnumValueRemoved`, `EnumValueNumberChanged`, `EnumValueRenamed`                                                        |
+| Reserved / options | `ReservedAdded`, `ReservedRemoved`, `OptionAdded`, `OptionRemoved`, `OptionChanged`                                                                                                               |
+| Service / RPC      | `ServiceAdded`, `ServiceRemoved`, `RpcAdded`, `RpcRemoved`, `RpcRequestTypeChanged`, `RpcResponseTypeChanged`, `RpcStreamingChanged`                                                              |
+| Comments           | `CommentAdded`, `CommentRemoved`, `CommentChanged`                                                                                                                                                |
 
 ## Examples
 

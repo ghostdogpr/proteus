@@ -16,9 +16,9 @@ jobs:
         include:
           - os: ubuntu-24.04
             artifact: proteus-diff-linux-x86_64
-          - os: macos-13
+          - os: macos-15-intel
             artifact: proteus-diff-macos-x86_64
-          - os: macos-14
+          - os: macos-15
             artifact: proteus-diff-macos-aarch64
     runs-on: ${{ matrix.os }}
     steps:
@@ -27,16 +27,18 @@ jobs:
         with:
           fetch-depth: 0
       - name: Setup GraalVM
-        uses: coursier/setup-action@v3
+        uses: graalvm/setup-graalvm@v1
         with:
-          jvm: graalvm-community:25
-          apps: sbt
+          java-version: '25'
+          distribution: 'graalvm-community'
+      - name: Setup sbt
+        uses: sbt/setup-sbt@v1
       - name: Cache scala dependencies
         uses: coursier/cache-action@v8
       - name: Build native image
         run: sbt 'diff/nativeImage'
       - name: Rename binary
-        run: mv diff/target/native-image/proteus-diff "${{ matrix.artifact }}"
+        run: cp diff/target/native-image/proteus-diff ${{ matrix.artifact }}
       - name: Upload release asset
         if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
