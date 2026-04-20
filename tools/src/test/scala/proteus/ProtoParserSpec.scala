@@ -462,7 +462,7 @@ object ProtoParserSpec extends ZIOSpecDefault {
                   _,
                   List(
                     Statement.TopLevelStatement(
-                      TopLevelDef.MessageDef(Message(_, List(MessageElement.FieldElement(Field(_, _, _, _, _, options))), _, _, _, _))
+                      TopLevelDef.MessageDef(Message(_, List(MessageElement.FieldElement(Field(_, _, _, _, _, options))), _, _, _, _, _))
                     )
                   ),
                   _

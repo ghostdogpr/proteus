@@ -79,7 +79,7 @@ sealed trait ProtobufCodec[A] {
     * Renders the codec to a .proto file as a string.
     */
   final def render(packageName: Option[String] = None, options: List[TopLevelOption] = List.empty): String = {
-    val rawDefs   = findTopLevelDefs(this, collectNames(this))
+    val rawDefs   = findTopLevelDefs(this)
     val paths     = nestedInPaths(rawDefs)
     val relocated = relocateNestedIn(rawDefs)
     Renderer.render(CompilationUnit(packageName, qualifyReferences(relocated, paths).map(TopLevelStatement(_)), options))
@@ -161,10 +161,10 @@ object ProtobufCodec {
       */
     final case class In(targetFullName: String) extends NestedPlacement
 
-    private[proteus] def toPlacement(opt: Option[NestedPlacement], resolver: Map[String, String]): ProtoIR.Placement =
+    private[proteus] def toPlacement(opt: Option[NestedPlacement]): ProtoIR.Placement =
       opt match {
         case Some(Auto)            => ProtoIR.Placement.Nested
-        case Some(In(fullName))    => ProtoIR.Placement.NestedIn(resolver.getOrElse(fullName, fullName))
+        case Some(In(fullName))    => ProtoIR.Placement.NestedIn(fullName)
         case Some(Unnested) | None => ProtoIR.Placement.TopLevel
       }
   }
@@ -527,9 +527,7 @@ object ProtobufCodec {
     /**
       * Converts the enum to its protobuf IR representation.
       */
-    def toProtoIR: ProtoIR.Enum = toProtoIR(Map.empty)
-
-    private[proteus] def toProtoIR(resolver: Map[String, String]): ProtoIR.Enum =
+    def toProtoIR: ProtoIR.Enum =
       customizeIR(
         ProtoIR.Enum(
           name,
@@ -539,7 +537,8 @@ object ProtobufCodec {
           },
           reserved = reserved.sorted.map(ProtoIR.Reserved.Number(_)),
           comment = comment,
-          placement = NestedPlacement.toPlacement(nested, resolver)
+          placement = NestedPlacement.toPlacement(nested),
+          typeId = typeId.map(_.fullName)
         )
       )
   }
@@ -690,19 +689,17 @@ object ProtobufCodec {
     /**
       * Converts the message to its protobuf IR representation.
       */
-    def toProtoIR: ProtoIR.Message = toProtoIR(Map.empty)
-
-    private[proteus] def toProtoIR(resolver: Map[String, String]): ProtoIR.Message = {
+    def toProtoIR: ProtoIR.Message = {
       val elements = fields.map(_.toProtoIR)
 
       def findNested[A](codec: ProtobufCodec[A], goDeep: Boolean = false): List[ProtoIR.MessageElement] =
         codec match {
           case c: Message[_]           =>
-            if (c.nested.contains(NestedPlacement.Auto)) List(ProtoIR.MessageElement.NestedMessageElement(c.toProtoIR(resolver)))
+            if (c.nested.contains(NestedPlacement.Auto)) List(ProtoIR.MessageElement.NestedMessageElement(c.toProtoIR))
             else if (goDeep) c.simpleFields.collect(field => findNested(field.codec)).flatten.distinct
             else Nil
           case c: Enum[_]              =>
-            if (c.nested.contains(NestedPlacement.Auto)) List(ProtoIR.MessageElement.NestedEnumElement(c.toProtoIR(resolver))) else Nil
+            if (c.nested.contains(NestedPlacement.Auto)) List(ProtoIR.MessageElement.NestedEnumElement(c.toProtoIR)) else Nil
           case c: Transform[_, _]      => findNested(c.codec, goDeep)
           case c: Optional[_]          => findNested(c.codec, goDeep)
           case c: Repeated[_, _]       => findNested(c.element, goDeep)
@@ -723,7 +720,8 @@ object ProtobufCodec {
           nestedMessageElements ++ sortedAllElements,
           reserved = reserved.toList.sorted.map(ProtoIR.Reserved.Number(_)),
           comment = comment,
-          placement = NestedPlacement.toPlacement(nested, resolver)
+          placement = NestedPlacement.toPlacement(nested),
+          typeId = typeId.map(_.fullName)
         )
       )
     }
@@ -1135,12 +1133,10 @@ object ProtobufCodec {
   /**
     * Converts the given codec to its protobuf IR representation.
     */
-  final def toProtoIR(codec: ProtobufCodec[?]): List[ProtoIR.TopLevelDef] = toProtoIR(codec, collectNames(codec))
+  final def toProtoIR(codec: ProtobufCodec[?]): List[ProtoIR.TopLevelDef] =
+    relocateNestedIn(findTopLevelDefs(codec))
 
-  private[proteus] def toProtoIR(codec: ProtobufCodec[?], resolver: Map[String, String]): List[ProtoIR.TopLevelDef] =
-    relocateNestedIn(findTopLevelDefs(codec, resolver))
-
-  private[proteus] def findTopLevelDefs[A](codec: ProtobufCodec[A], resolver: Map[String, String]): List[ProtoIR.TopLevelDef] = {
+  private[proteus] def findTopLevelDefs[A](codec: ProtobufCodec[A]): List[ProtoIR.TopLevelDef] = {
     val visited = new mutable.HashSet[ProtobufCodec[?]]()
 
     def loop[A](codec: ProtobufCodec[A]): List[ProtoIR.TopLevelDef] =
@@ -1151,7 +1147,7 @@ object ProtobufCodec {
             if (!c.name.isEmpty) {
               visited.add(c): Unit
               if (c.nested.contains(NestedPlacement.Auto)) c.simpleFields.map(_.codec).flatMap(loop)
-              else ProtoIR.TopLevelDef.MessageDef(c.toProtoIR(resolver)) :: c.simpleFields.map(_.codec).flatMap(loop)
+              else ProtoIR.TopLevelDef.MessageDef(c.toProtoIR) :: c.simpleFields.map(_.codec).flatMap(loop)
             } else c.simpleFields.map(_.codec).flatMap(loop)
           }
         case c: Transform[_, _]      => loop(c.codec)
@@ -1163,7 +1159,7 @@ object ProtobufCodec {
           if (visited.contains(c)) Nil
           else {
             visited.add(c)
-            if (c.nested.contains(NestedPlacement.Auto)) Nil else List(ProtoIR.TopLevelDef.EnumDef(c.toProtoIR(resolver)))
+            if (c.nested.contains(NestedPlacement.Auto)) Nil else List(ProtoIR.TopLevelDef.EnumDef(c.toProtoIR))
           }
         case _                       => Nil
       }
@@ -1171,51 +1167,36 @@ object ProtobufCodec {
     loop(codec)
   }
 
-  private[proteus] def collectNames(codec: ProtobufCodec[?]): Map[String, String] = {
-    val visited = new mutable.HashSet[ProtobufCodec[?]]()
-    val builder = Map.newBuilder[String, String]
+  // Strips the message-level typeId so two structurally-identical defs that differ only by the
+  // owning Scala type's TypeId (e.g. two case classes renamed to the same proto name) dedupe to one.
+  private[proteus] def dedupKey(d: ProtoIR.TopLevelDef): ProtoIR.TopLevelDef =
+    d match {
+      case ProtoIR.TopLevelDef.MessageDef(m) => ProtoIR.TopLevelDef.MessageDef(m.copy(typeId = None))
+      case ProtoIR.TopLevelDef.EnumDef(e)    => ProtoIR.TopLevelDef.EnumDef(e.copy(typeId = None))
+      case other                             => other
+    }
 
-    def loop(codec: ProtobufCodec[?]): Unit =
-      codec match {
-        case c: Message[_]           =>
-          if (!visited.contains(c)) {
-            visited.add(c): Unit
-            c.typeId.foreach(tid => builder += (tid.fullName -> c.name))
-            c.simpleFields.foreach(f => loop(f.codec))
-          }
-        case c: Enum[_]              =>
-          if (!visited.contains(c)) {
-            visited.add(c): Unit
-            c.typeId.foreach(tid => builder += (tid.fullName -> c.name))
-          }
-        case c: Transform[_, _]      => loop(c.codec)
-        case c: Optional[_]          => loop(c.codec)
-        case c: Repeated[_, _]       => loop(c.element)
-        case c: RepeatedMap[_, _, _] => loop(c.element)
-        case c: RecursiveMessage[_]  => loop(c.codec)
-        case _                       => ()
-      }
-
-    loop(codec)
-    builder.result()
-  }
-
-  private def resolvableNestedIn(d: ProtoIR.TopLevelDef, allNames: Set[String]): Option[(String, String)] =
-    d.nestedIn.filter(allNames.contains).map(d.name -> _)
+  // Returns (childTypeId, parentTypeId) for defs whose `nestedIn` target resolves to another def's typeId.
+  private def resolvableNestedIn(d: ProtoIR.TopLevelDef, allTypeIds: Set[String]): Option[(String, String)] =
+    for {
+      childTid  <- d.typeId
+      parentTid <- d.nestedIn if allTypeIds.contains(parentTid)
+    } yield childTid -> parentTid
 
   private[proteus] def relocateNestedIn(defs: List[ProtoIR.TopLevelDef]): List[ProtoIR.TopLevelDef] = {
-    val allNames         = defs.iterator.map(_.name).toSet
+    val allTypeIds       = defs.iterator.flatMap(_.typeId).toSet
+    val byTypeId         = defs.iterator.flatMap(d => d.typeId.map(tid => tid -> d)).toMap
     val childrenByTarget = mutable.Map.empty[String, mutable.ListBuffer[ProtoIR.TopLevelDef]]
     val childRefs        = mutable.Set.empty[ProtoIR.TopLevelDef]
     defs.foreach(d =>
-      resolvableNestedIn(d, allNames).foreach { case (_, target) =>
-        childrenByTarget.getOrElseUpdate(target, mutable.ListBuffer.empty) += d
+      resolvableNestedIn(d, allTypeIds).foreach { case (_, parentTid) =>
+        childrenByTarget.getOrElseUpdate(parentTid, mutable.ListBuffer.empty) += d
         childRefs += d
       }
     )
 
     def finalize(d: ProtoIR.TopLevelDef): ProtoIR.TopLevelDef = {
-      val added = childrenByTarget.get(d.name).toList.flatten.distinctBy(_.name).map(finalize).map {
+      val added = d.typeId.flatMap(childrenByTarget.get).toList.flatten.distinctBy(_.typeId).map(finalize).map {
         case ProtoIR.TopLevelDef.MessageDef(cm) =>
           ProtoIR.MessageElement.NestedMessageElement(cm.copy(placement = ProtoIR.Placement.Nested))
         case ProtoIR.TopLevelDef.EnumDef(ce)    =>
@@ -1234,19 +1215,23 @@ object ProtobufCodec {
   }
 
   // Must be called BEFORE `relocateNestedIn`: once children are spliced, their `nestedIn` metadata is cleared.
+  // Returns a map from child typeId fullName to its dotted simple-name path (e.g. "Parent.Child").
   private[proteus] def nestedInPaths(defs: List[ProtoIR.TopLevelDef]): Map[String, String] = {
-    val allNames      = defs.iterator.map(_.name).toSet
-    val childToParent = defs.flatMap(resolvableNestedIn(_, allNames)).toMap
+    val allTypeIds       = defs.iterator.flatMap(_.typeId).toSet
+    val nameByTypeId     = defs.iterator.flatMap(d => d.typeId.map(_ -> d.name)).toMap
+    val childToParentTid = defs.flatMap(resolvableNestedIn(_, allTypeIds)).toMap
 
-    def resolve(name: String, chain: List[String] = Nil): String =
-      childToParent.get(name) match {
-        case Some(parent) if chain.contains(parent) =>
-          throw new ProteusException(s"Cyclic `nestedIn` detected: ${(chain :+ name :+ parent).mkString(" -> ")}")
-        case Some(parent)                           => s"${resolve(parent, chain :+ name)}.$name"
-        case None                                   => name
+    def resolve(tid: String, chain: List[String] = Nil): String = {
+      val name = nameByTypeId.getOrElse(tid, tid)
+      childToParentTid.get(tid) match {
+        case Some(parentTid) if chain.contains(parentTid) =>
+          throw new ProteusException(s"Cyclic `nestedIn` detected: ${(chain :+ tid :+ parentTid).mkString(" -> ")}")
+        case Some(parentTid)                              => s"${resolve(parentTid, chain :+ tid)}.$name"
+        case None                                         => name
       }
+    }
 
-    childToParent.map { case (child, _) => child -> resolve(child) }
+    childToParentTid.map { case (childTid, _) => childTid -> resolve(childTid) }
   }
 
   private[proteus] def qualifyReferences(
@@ -1255,8 +1240,8 @@ object ProtobufCodec {
   ): List[ProtoIR.TopLevelDef] = {
     val paths = additionalPaths
 
-    def qualify(name: String, scope: String): String =
-      paths.get(name) match {
+    def qualify(name: String, refTypeId: Option[String], scope: String): String =
+      refTypeId.flatMap(paths.get) match {
         case Some(path) =>
           val lastDot = path.lastIndexOf('.')
           if (lastDot < 0) name
@@ -1272,12 +1257,12 @@ object ProtobufCodec {
 
     def rewriteType(t: ProtoIR.Type, scope: String): ProtoIR.Type =
       t match {
-        case ProtoIR.Type.RefType(n)     =>
-          val q = qualify(n, scope)
-          if (q eq n) t else ProtoIR.Type.RefType(q)
-        case ProtoIR.Type.EnumRefType(n) =>
-          val q = qualify(n, scope)
-          if (q eq n) t else ProtoIR.Type.EnumRefType(q)
+        case r: ProtoIR.Type.RefType     =>
+          val q = qualify(r.name, r.typeId, scope)
+          if (q eq r.name) t else r.copy(name = q)
+        case r: ProtoIR.Type.EnumRefType =>
+          val q = qualify(r.name, r.typeId, scope)
+          if (q eq r.name) t else r.copy(name = q)
         case ProtoIR.Type.ListType(v)    =>
           val nv = rewriteType(v, scope)
           if (nv eq v) t else ProtoIR.Type.ListType(nv)
@@ -1328,8 +1313,8 @@ object ProtobufCodec {
           case _: PrimitiveType.Float   => ProtoIR.Type.Float
           case _                        => throw new ProteusException(s"Unsupported primitive type: $c")
         }
-      case c: Message[_]           => ProtoIR.Type.RefType(c.name)
-      case c: Enum[_]              => ProtoIR.Type.EnumRefType(c.name)
+      case c: Message[_]           => ProtoIR.Type.RefType(c.name, c.typeId.map(_.fullName))
+      case c: Enum[_]              => ProtoIR.Type.EnumRefType(c.name, c.typeId.map(_.fullName))
       case c: Repeated[_, _]       => ProtoIR.Type.ListType(toProtoType(c.element))
       case c: RepeatedMap[_, _, _] =>
         if (c.mapInProto) ProtoIR.Type.MapType(toProtoType(c.element.simpleFields.head.codec), toProtoType(c.element.simpleFields(1).codec))

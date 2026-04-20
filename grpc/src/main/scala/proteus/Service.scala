@@ -35,17 +35,11 @@ case class Service[Rpcs] private (
   private case class ProtoIRResult(defs: List[ProtoIR.TopLevelDef], nestedInPaths: Map[String, String])
 
   private lazy val protoIRResult: ProtoIRResult = {
-    val resolverBuilder = Map.newBuilder[String, String]
-    rpcs.foreach { rpc =>
-      resolverBuilder ++= ProtobufCodec.collectNames(rpc.requestCodec)
-      resolverBuilder ++= ProtobufCodec.collectNames(rpc.responseCodec)
-    }
-    val resolver        = resolverBuilder.result()
-    val raw             = ProtoIR.TopLevelDef.ServiceDef(ProtoIR.Service(name, rpcs.map(_.toProtoIR), comment)) ::
-      rpcs.flatMap(_.messagesToProtoIR(resolver))
-    val deduped         = raw.distinct
-    val nestedPaths     = ProtobufCodec.nestedInPaths(deduped)
-    val resolved        = ProtobufCodec.relocateNestedIn(deduped)
+    val raw         = ProtoIR.TopLevelDef.ServiceDef(ProtoIR.Service(name, rpcs.map(_.toProtoIR), comment)) ::
+      rpcs.flatMap(_.messagesToProtoIR)
+    val deduped     = raw.distinctBy(ProtobufCodec.dedupKey)
+    val nestedPaths = ProtobufCodec.nestedInPaths(deduped)
+    val resolved    = ProtobufCodec.relocateNestedIn(deduped)
     ProtoIRResult(resolved, nestedPaths)
   }
 

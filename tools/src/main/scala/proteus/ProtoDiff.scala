@@ -234,16 +234,16 @@ object ProtoDiff {
     if (oldNorm == newNorm) true
     else
       (oldNorm, newNorm) match {
-        case (Type.RefType(oldName), Type.RefType(newName)) =>
-          (oldRegistry.get(oldName), newRegistry.get(newName)) match {
+        case (oldRef: Type.RefType, newRef: Type.RefType) =>
+          (oldRegistry.get(oldRef.name), newRegistry.get(newRef.name)) match {
             case (Some(Left(oldMsg)), Some(Left(newMsg)))     => messageFingerprint(oldMsg) == messageFingerprint(newMsg)
             case (Some(Right(oldEnum)), Some(Right(newEnum))) => enumFingerprint(oldEnum) == enumFingerprint(newEnum)
             case _                                            => false
           }
-        case (Type.ListType(v1), Type.ListType(v2))         => areWireEquivalent(v1, v2, oldRegistry, newRegistry)
-        case (Type.MapType(k1, v1), Type.MapType(k2, v2))   =>
+        case (Type.ListType(v1), Type.ListType(v2))       => areWireEquivalent(v1, v2, oldRegistry, newRegistry)
+        case (Type.MapType(k1, v1), Type.MapType(k2, v2)) =>
           areWireEquivalent(k1, k2, oldRegistry, newRegistry) && areWireEquivalent(v1, v2, oldRegistry, newRegistry)
-        case _                                              => false
+        case _                                            => false
       }
   }
 
@@ -255,11 +255,11 @@ object ProtoDiff {
     }
 
   private def normalizeType(ty: Type): Type = ty match {
-    case Type.RefType(name)     => Type.RefType(name.stripPrefix("."))
-    case Type.EnumRefType(name) => Type.RefType(name.stripPrefix("."))
-    case Type.MapType(k, v)     => Type.MapType(normalizeType(k), normalizeType(v))
-    case Type.ListType(v)       => Type.ListType(normalizeType(v))
-    case other                  => other
+    case r: Type.RefType     => Type.RefType(r.name.stripPrefix("."))
+    case r: Type.EnumRefType => Type.RefType(r.name.stripPrefix("."))
+    case Type.MapType(k, v)  => Type.MapType(normalizeType(k), normalizeType(v))
+    case Type.ListType(v)    => Type.ListType(normalizeType(v))
+    case other               => other
   }
 
   private def stripFieldCosmetics(f: Field): Field =
