@@ -1,9 +1,10 @@
-Proto changes (3)
-  common.proto
-    FileRemoved (1)
-      error: file removed
-  users.proto
-    FieldRenamed (1)
-      error: User: field 'user_id' renamed to 'id'
-    MessageMoved (1)
-      warning: message 'Address' moved from common.proto to users.proto
+Proto changes (3): 2 errors, 1 warning, 0 info
+
+common.proto
+  error [FileRemoved] file removed
+
+users.proto
+  Address (1)
+    warning [MessageMoved] message 'Address' moved from common.proto to users.proto
+  User (1)
+    error [FieldRenamed] field 'user_id' renamed to 'id'

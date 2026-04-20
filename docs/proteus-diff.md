@@ -95,20 +95,19 @@ proteus-diff old.proto new.proto -m wire
 
 ### Text format (default)
 
-Changes are grouped by file, then by change type. Each entry is prefixed with its severity:
+Changes are grouped by file, then by enclosing message/enum/service. Within each group, entries are sorted with errors first. Each entry shows the severity, the change kind in brackets (the same name you'd use with `-o`), and a description:
 
 ```
-Proto changes (3)
-  user.proto
-    FieldRemoved (1)
-      error: User: field 'email' removed
-    FieldAdded (1)
-      warning: User: field 'phone' added
-    CommentChanged (1)
-      info: comment changed on 'User'
+Proto changes (3): 1 error, 1 warning, 1 info
+
+user.proto
+  User (3)
+    error [FieldRemoved] field 'email' removed
+    warning [FieldAdded] field 'phone' added
+    info [CommentChanged] comment changed on 'User'
 ```
 
-Severity prefixes — `error:`, `warning:`, `info:` — are colored red / yellow / blue when connected to a terminal. Colors are auto-disabled when the output is piped, so the prefix remains the primary signal.
+When connected to a terminal, the file header is bold cyan, the type name is bold, and the severity word is colored red / yellow / blue. Colors are auto-disabled when piped, so the change kind in brackets stays the primary lookup key for `-o` overrides.
 
 ### JSON format
 
@@ -144,10 +143,14 @@ proteus-diff main HEAD -f markdown
 
 ### `user.proto`
 
-- 🔴 **FieldRemoved** — User: field 'email' removed
-- 🟡 **FieldAdded** — User: field 'phone' added
+#### `User`
+
+- 🔴 **FieldRemoved** — field 'email' removed
+- 🟡 **FieldAdded** — field 'phone' added
 - 🔵 **CommentChanged** — comment changed on 'User'
 ```
+
+The structure mirrors the text format: H3 per file, H4 per enclosing message/enum/service, errors first within each group. File-level events (`FileAdded`/`FileRemoved`/`PackageChanged`/import changes) appear directly under the file heading, before any type sub-sections.
 
 ## Options
 

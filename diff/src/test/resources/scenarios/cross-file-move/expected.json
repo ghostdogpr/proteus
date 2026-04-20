@@ -1,0 +1,5 @@
+[
+  {"type": "FileRemoved", "severity": "error", "path": ["common.proto"], "message": "common.proto: file removed"},
+  {"type": "FieldRenamed", "severity": "error", "path": ["users.proto", "User"], "message": "users.proto.User: field 'user_id' renamed to 'id'"},
+  {"type": "MessageMoved", "severity": "warning", "path": ["users.proto"], "message": "users.proto: message 'Address' moved from common.proto to users.proto"}
+]

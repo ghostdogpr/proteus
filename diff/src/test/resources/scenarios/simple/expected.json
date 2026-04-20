@@ -1,0 +1,4 @@
+[
+  {"type": "FieldTypeChanged", "severity": "error", "path": ["User"], "message": "User: field 'id' type changed from int32 to int64"},
+  {"type": "FieldAdded", "severity": "warning", "path": ["User"], "message": "User: field 'email' added"}
+]

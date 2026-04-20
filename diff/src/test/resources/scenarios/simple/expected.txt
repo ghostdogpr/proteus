@@ -1,5 +1,5 @@
-Proto changes (2)
-  FieldAdded (1)
-    warning: User: field 'email' added
-  FieldTypeChanged (1)
-    error: User: field 'id' type changed from int32 to int64
+Proto changes (2): 1 error, 1 warning, 0 info
+
+User (2)
+  error [FieldTypeChanged] field 'id' type changed from int32 to int64
+  warning [FieldAdded] field 'email' added
