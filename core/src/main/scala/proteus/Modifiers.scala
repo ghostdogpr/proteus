@@ -100,6 +100,16 @@ object Modifiers {
   def rename(name: String): Modifier.config = Modifier.config(renameModifier, name)
 
   /**
+    * Builds a term-scoped modifier entry for use with [[ProtobufDeriver.modifier]] when applying modifiers
+    * to multiple terms of the same type in a single call.
+    *
+    * The name is captured as a singleton type so it can be validated at compile time against the fields/cases
+    * of the target type.
+    */
+  inline def field[N <: String & Singleton](name: N, modifier: Modifier.Term): FieldMod[N] =
+    new FieldMod(name, modifier)
+
+  /**
     * A modifier to add some reserved indexes to a type.
     * Those reserved indexes will be skipped when deriving the protobuf type.
     * If this modifier is applied to a field, instead the field will use the given index(es).

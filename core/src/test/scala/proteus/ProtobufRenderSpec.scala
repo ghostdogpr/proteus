@@ -653,6 +653,29 @@ message ReservedMessage {
 
         assertTrue(rendered == expected)
       },
+      test("proteus field helper applies modifiers to multiple terms in one call") {
+        case class MultiComment(cards: Int, maxFloorsCompleted: Int, other: String) derives Schema
+
+        val codec    = Schema[MultiComment].derive(
+          deriver.modifier[MultiComment](
+            field("cards", comment("Actual message contents")),
+            field("maxFloorsCompleted", comment("0 means never."))
+          )
+        )
+        val rendered = renderCodec(codec)
+        val expected = """syntax = "proto3";
+
+package test;
+
+message MultiComment {
+    int32 cards = 1; // Actual message contents
+    int32 max_floors_completed = 2; // 0 means never.
+    string other = 3;
+}
+"""
+
+        assertTrue(rendered == expected)
+      },
       test("proteus reservedFrom modifier forces a field number and advances subsequent fields") {
         case class ReservedFromMessage(id: Int, name: String, value: String, active: Boolean) derives Schema
 

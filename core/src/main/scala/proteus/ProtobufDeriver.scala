@@ -64,18 +64,19 @@ case class ProtobufDeriver private (
   }
 
   /**
-    * Adds a custom modifier for the given type.
+    * Adds custom modifiers for the given type.
     */
-  def modifier[A](modifier: Modifier.Reflect)(using typeId: TypeId[A]): ProtobufDeriver =
-    copy(modifiers = modifiers :+ ModifierReflectOverrideByType(typeId, modifier))
+  def modifier[A](modifier: Modifier.Reflect, rest: Modifier.Reflect*)(using typeId: TypeId[A]): ProtobufDeriver =
+    copy(modifiers = modifiers ++ (modifier +: rest).map(ModifierReflectOverrideByType(typeId, _)))
 
   /**
-    * Adds a custom modifier for a term (case class field or enum member) of the given type.
+    * Adds custom modifiers for a term (case class field or enum member) of the given type.
     *
-    * @param termName the name of the term to apply the modifier to (there will be a compile error if the term does not exist)
+    * @param termName the name of the term to apply the modifiers to (there will be a compile error if the term does not exist)
     * @param modifier the modifier to apply.
+    * @param rest additional modifiers to apply to the same term.
     */
-  inline def modifier[A: TypeId](termName: String, modifier: Modifier.Term): ProtobufDeriver = {
+  inline def modifier[A: TypeId](termName: String, modifier: Modifier.Term, rest: Modifier.Term*): ProtobufDeriver = {
     inline summonInline[Mirror.Of[A]] match {
       case m: Mirror.ProductOf[A] =>
         inline if (!constValue[proteus.Tuple.Contains[m.MirroredElemLabels, termName.type]]) {
@@ -86,8 +87,27 @@ case class ProtobufDeriver private (
           error("Case " + constValue[termName.type] + " does not exist in sealed trait or enum " + constValue[m.MirroredLabel] + ".")
         }
     }
-    copy(modifiers = modifiers :+ ModifierTermOverrideByType(summon[TypeId[A]], termName, modifier))
+    val typeId = summon[TypeId[A]]
+    copy(modifiers = modifiers ++ (modifier +: rest).map(ModifierTermOverrideByType(typeId, termName, _)))
   }
+
+  /**
+    * Adds custom modifiers to multiple terms of the given type in a single call.
+    * Use [[Modifiers.field]] to build each entry. Term names must be literal strings and are validated at compile time
+    * against the fields or cases of `A`.
+    *
+    * {{{
+    *   deriver.modifier[Mine](
+    *     field("cards",              comment("Actual message contents")),
+    *     field("maxFloorsCompleted", comment("0 means never."))
+    *   )
+    * }}}
+    */
+  inline def modifier[A](inline entries: FieldMod[?]*)(using typeId: TypeId[A]): ProtobufDeriver =
+    ${ ProtobufDeriverMacros.termModifiersImpl[A]('this, 'entries, 'typeId) }
+
+  private[proteus] def appendModifierOverrides(more: Seq[ModifierOverride]): ProtobufDeriver =
+    copy(modifiers = modifiers ++ more)
 
   /**
     * Enables a derivation flag.

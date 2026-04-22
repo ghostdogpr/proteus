@@ -105,6 +105,24 @@ println(ProtobufCodec.derived[Person](using deriver).render())
 //     int32 age = 2;
 // }
 ```
+
+You can pass multiple modifiers in a single call. For type-level modifiers and for multiple modifiers on the same term, use varargs:
+```scala
+val deriver =
+  ProtobufDeriver
+    .modifier[Person](rename("User"), comment("A user record"))
+    .modifier[Person]("name", rename("full_name"), deprecated)
+```
+
+To apply modifiers to several different terms of the same type at once, use the `field(...)` helper. Term names are literal strings and are validated at compile time against the fields/cases of the target type:
+```scala
+val deriver =
+  ProtobufDeriver.modifier[Person](
+    field("name", rename("full_name")),
+    field("age",  comment("Age in years"))
+  )
+```
+
 Here are the different types of modifiers you can apply:
 - `excluded`: Excludes a field or an enum member from the protobuf type.
 - `nested`: Nests a type inside its direct parent message instead of creating it at the root level.
