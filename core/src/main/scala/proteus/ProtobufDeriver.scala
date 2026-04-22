@@ -226,13 +226,14 @@ case class ProtobufDeriver private (
                   field.modifiers.exists { case Modifier.config(`oneOfModifier`, _) => true; case _ => false } =>
               id += 1
               while (allReservedIndexes.contains(id)) id += 1
-              val emptyId = id
+              val emptyId   = id
               id += 1
               while (allReservedIndexes.contains(id)) id += 1
-              val valueId = id
-              val empty   = Empty()
+              val valueId   = id
+              val empty     = Empty()
+              val oneOfName = getOneOfName(field.modifiers, name)
               builder += OneOfField(
-                name,
+                oneOfName,
                 IArray(
                   SimpleField(s"no_$name", emptyId, Empty.emptyCodec.transform(_ => None, _ => empty), register, None, None),
                   SimpleField(s"${name}_value", valueId, codec.transform(Some(_), _.get), register, null, None)
@@ -440,7 +441,7 @@ case class ProtobufDeriver private (
             }
             .map { _ =>
               val field = OneOfField(
-                "value",
+                getOneOfName(modifiers, "value"),
                 builder.result(),
                 register.asInstanceOf[Register[Any]],
                 discriminator,
@@ -603,6 +604,9 @@ case class ProtobufDeriver private (
     modifiers
       .collectFirst { case Modifier.config(`renameModifier`, newName) => newName }
       .getOrElse(toSnakeCase(fieldName))
+
+  private def getOneOfName(modifiers: Seq[Modifier], default: String): String =
+    modifiers.collectFirst { case Modifier.config(`oneOfNameModifier`, newName) => newName }.getOrElse(default)
 
   private def getEnumMemberName(memberName: String, modifiers: Seq[Modifier], enumPrefix: String, enumSuffix: String): String =
     modifiers

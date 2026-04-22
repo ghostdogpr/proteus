@@ -900,6 +900,70 @@ enum Status {
 
         assertTrue(rendered == expected)
       },
+      test("proteus oneOfName modifier renames the oneof wrapper on a sum type") {
+        sealed trait Commission derives Schema
+        object Commission {
+          case class Sealed(id: Int) extends Commission
+          case class Task(id: Int)   extends Commission
+        }
+        case class CommissionMessage(c: Commission) derives Schema
+
+        val codec    = Schema[CommissionMessage].derive(deriver.modifier[Commission](oneOfName("quest")))
+        val rendered = renderCodec(codec)
+        val expected = """syntax = "proto3";
+
+package test;
+
+message CommissionMessage {
+    Commission c = 1;
+}
+
+message Commission {
+    oneof quest {
+        Sealed sealed = 1;
+        Task task = 2;
+    }
+}
+
+message Sealed {
+    int32 id = 1;
+}
+
+message Task {
+    int32 id = 1;
+}
+"""
+
+        assertTrue(rendered == expected)
+      },
+      test("proteus oneOfName modifier renames the oneof wrapper on an optional field") {
+        case class Parts(n: Int) derives Schema
+        case class PartsOptional(attachedParts: Option[Parts]) derives Schema
+
+        val codec    = Schema[PartsOptional].derive(
+          deriverWithOptionalAsOneOf.modifier[PartsOptional]("attachedParts", oneOfName("value"))
+        )
+        val rendered = renderCodec(codec)
+        val expected = """syntax = "proto3";
+
+package test;
+
+message PartsOptional {
+    oneof value {
+        Empty no_attached_parts = 1;
+        Parts attached_parts_value = 2;
+    }
+}
+
+message Empty {}
+
+message Parts {
+    int32 n = 1;
+}
+"""
+
+        assertTrue(rendered == expected)
+      },
       test("proteus enum prefix modifier adds prefix to enum members") {
         enum Priority derives Schema { case Low, Medium, High }
         case class PriorityMessage(priority: Priority) derives Schema
