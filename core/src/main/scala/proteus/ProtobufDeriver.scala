@@ -104,7 +104,7 @@ case class ProtobufDeriver private (
     * }}}
     */
   inline def modifier[A](inline entries: FieldMod[?]*)(using typeId: TypeId[A]): ProtobufDeriver =
-    ${ ProtobufDeriverMacros.termModifiersImpl[A]('{ this }, '{ entries }, '{ typeId }) }
+    ${ ProtobufDeriverMacros.termModifiersImpl[A]('{ this }, 'entries, 'typeId) }
 
   private[proteus] def appendModifierOverrides(more: Seq[ModifierOverride]): ProtobufDeriver =
     copy(modifiers = modifiers ++ more)
