@@ -59,6 +59,27 @@ object Modifiers {
   def oneOf(flags: OneOfFlag*): Modifier.Reflect = Modifier.config(oneOfModifier, flags.mkString(",").toLowerCase)
 
   /**
+    * A modifier to set the name of the oneof wrapper field.
+    *
+    * When applied to a sum type, it overrides the default `value` name of the generated oneof.
+    * When applied to an `Option` field encoded as a oneof, it overrides the field-derived oneof name
+    * while leaving the case names untouched.
+    */
+  def oneOfName(name: String): Modifier.config = Modifier.config(oneOfNameModifier, name)
+
+  /**
+    * A modifier to set the name of the `None` case of a `Option` field encoded as a oneof.
+    * Defaults to `no_<field>`.
+    */
+  def oneOfNoneName(name: String): Modifier.config = Modifier.config(oneOfNoneNameModifier, name)
+
+  /**
+    * A modifier to set the name of the `Some` case of a `Option` field encoded as a oneof.
+    * Defaults to `<field>_value`.
+    */
+  def oneOfSomeName(name: String): Modifier.config = Modifier.config(oneOfSomeNameModifier, name)
+
+  /**
     * A modifier to prefix members of an enum type with a string.
     */
   def enumPrefix(prefix: String): Modifier.Reflect = Modifier.config(enumPrefixModifier, prefix)

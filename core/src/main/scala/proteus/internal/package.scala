@@ -59,6 +59,9 @@ private[proteus] def decodeNestedIn(value: String): Option[String] =
   if (value.startsWith(nestedInModifierPrefix)) Some(value.drop(nestedInModifierPrefix.length)) else None
 
 private[proteus] val oneOfModifier          = "proteus.oneof"
+private[proteus] val oneOfNameModifier      = "proteus.oneof.name"
+private[proteus] val oneOfNoneNameModifier  = "proteus.oneof.none.name"
+private[proteus] val oneOfSomeNameModifier  = "proteus.oneof.some.name"
 private[proteus] val nestedModifier         = "proteus.nested"
 private[proteus] val nestedInModifierPrefix = "in:"
 private[proteus] val excludedModifier       = "proteus.excluded"
