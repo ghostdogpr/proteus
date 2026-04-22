@@ -113,6 +113,7 @@ Here are the different types of modifiers you can apply:
 - `oneOf`: Forces a type to be encoded as a `oneof` rather than an enum.
 - `oneOf(flags: OneOfFlag*)`: Controls how `oneof` types are encoded—see below for more details.
 - `oneOfName(name: String)`: Overrides the name of the generated `oneof` wrapper. When applied to a sum type it replaces the default `value` name; when applied to an `Option` field encoded as a `oneof`, it renames only the wrapper and leaves the two case names (`no_<field>` / `<field>_value`) untouched.
+- `oneOfNoneName(name: String)` / `oneOfSomeName(name: String)`: Override the synthesized case names (defaults `no_<field>` and `<field>_value`) of an `Option` field encoded as a `oneof`. For sum-type cases, use `rename` on the case instead.
 - `enumPrefix(prefix: String)`: Prefixes enum members with a string.
 - `enumSuffix(suffix: String)`: Suffixes enum members with a string.
 - `comment(comment: String)`: Adds a comment to a type, field, or enum member.

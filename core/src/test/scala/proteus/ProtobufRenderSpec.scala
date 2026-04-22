@@ -964,6 +964,36 @@ message Parts {
 
         assertTrue(rendered == expected)
       },
+      test("proteus oneOfNoneName and oneOfSomeName modifiers rename oneof cases for an optional field") {
+        case class AvatarCookie(flavor: String) derives Schema
+        case class AvatarCookieMessage(avatarCookie: Option[AvatarCookie]) derives Schema
+
+        val codec    = Schema[AvatarCookieMessage].derive(
+          deriverWithOptionalAsOneOf
+            .modifier[AvatarCookieMessage]("avatarCookie", oneOfNoneName("no_cookie"))
+            .modifier[AvatarCookieMessage]("avatarCookie", oneOfSomeName("cookie"))
+        )
+        val rendered = renderCodec(codec)
+        val expected = """syntax = "proto3";
+
+package test;
+
+message AvatarCookieMessage {
+    oneof avatar_cookie {
+        Empty no_cookie = 1;
+        AvatarCookie cookie = 2;
+    }
+}
+
+message Empty {}
+
+message AvatarCookie {
+    string flavor = 1;
+}
+"""
+
+        assertTrue(rendered == expected)
+      },
       test("proteus enum prefix modifier adds prefix to enum members") {
         enum Priority derives Schema { case Low, Medium, High }
         case class PriorityMessage(priority: Priority) derives Schema

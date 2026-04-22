@@ -68,6 +68,18 @@ object Modifiers {
   def oneOfName(name: String): Modifier.config = Modifier.config(oneOfNameModifier, name)
 
   /**
+    * A modifier to set the name of the `None` case of a `Option` field encoded as a oneof.
+    * Defaults to `no_<field>`.
+    */
+  def oneOfNoneName(name: String): Modifier.config = Modifier.config(oneOfNoneNameModifier, name)
+
+  /**
+    * A modifier to set the name of the `Some` case of a `Option` field encoded as a oneof.
+    * Defaults to `<field>_value`.
+    */
+  def oneOfSomeName(name: String): Modifier.config = Modifier.config(oneOfSomeNameModifier, name)
+
+  /**
     * A modifier to prefix members of an enum type with a string.
     */
   def enumPrefix(prefix: String): Modifier.Reflect = Modifier.config(enumPrefixModifier, prefix)
