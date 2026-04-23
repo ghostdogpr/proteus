@@ -5,7 +5,8 @@ import scala.jdk.CollectionConverters.*
 import zio.blocks.schema.Schema
 import zio.test.*
 
-/** Covers runtime `FileDescriptor` generation used by gRPC reflection — paths that bypass the
+/**
+  * Covers runtime `FileDescriptor` generation used by gRPC reflection — paths that bypass the
   * `render` pipeline and need their own handling of nested types, cross-file refs, and dedup.
   */
 object FileDescriptorSpec extends ZIOSpecDefault {
@@ -63,7 +64,7 @@ object FileDescriptorSpec extends ZIOSpecDefault {
       case class Req(o: Outer) derives Schema, ProtobufCodec
       case class Resp(ok: Boolean) derives Schema, ProtobufCodec
 
-      given ProtobufDeriver =
+      given ProtobufDeriver     =
         ProtobufDeriver
           .modifier[TradeA](Modifiers.rename("Trade"))
           .modifier[TradeA](Modifiers.nestedIn[Outer])
@@ -88,7 +89,7 @@ object FileDescriptorSpec extends ZIOSpecDefault {
       case class Req(a: A, b: B, trA: TradeA, trB: TradeB) derives Schema, ProtobufCodec
       case class Resp(ok: Boolean) derives Schema, ProtobufCodec
 
-      given ProtobufDeriver =
+      given ProtobufDeriver     =
         ProtobufDeriver
           .modifier[TradeA](Modifiers.rename("Trade"))
           .modifier[TradeA](Modifiers.nestedIn[A])
@@ -141,13 +142,13 @@ object FileDescriptorSpec extends ZIOSpecDefault {
     test("sealed trait variants nested under the parent") {
       sealed trait Payment derives Schema
       object Payment {
-        case class Coin(amount: Int)      extends Payment derives Schema
-        case class Cash(bills: Int)       extends Payment derives Schema
+        case class Coin(amount: Int) extends Payment derives Schema
+        case class Cash(bills: Int)  extends Payment derives Schema
       }
       case class Req(p: Payment) derives Schema, ProtobufCodec
       case class Resp(ok: Boolean) derives Schema, ProtobufCodec
 
-      given ProtobufDeriver =
+      given ProtobufDeriver     =
         ProtobufDeriver
           .modifier[Payment.Coin](Modifiers.nestedIn[Payment])
           .modifier[Payment.Cash](Modifiers.nestedIn[Payment])
@@ -166,8 +167,8 @@ object FileDescriptorSpec extends ZIOSpecDefault {
         case class Cash(bills: Int)  extends Payment derives Schema
       }
       case class Wrap(p: Payment) derives Schema, ProtobufCodec
-      case class Req()            derives Schema, ProtobufCodec
-      case class Resp(w: Wrap)    derives Schema, ProtobufCodec
+      case class Req() derives Schema, ProtobufCodec
+      case class Resp(w: Wrap) derives Schema, ProtobufCodec
 
       given ProtobufDeriver     = ProtobufDeriver
       given ProtobufCodec[Req]  = Schema[Req].derive(summon[ProtobufDeriver])
@@ -189,7 +190,7 @@ object FileDescriptorSpec extends ZIOSpecDefault {
       sealed trait B derives Schema
       object B { case class Leaf(x: Int, y: Int) extends B derives Schema }
       case class Bag(as: List[A], bs: List[B]) derives Schema, ProtobufCodec
-      case class Req()        derives Schema, ProtobufCodec
+      case class Req() derives Schema, ProtobufCodec
       case class Resp(b: Bag) derives Schema, ProtobufCodec
 
       given ProtobufDeriver     = ProtobufDeriver
@@ -224,14 +225,14 @@ object FileDescriptorSpec extends ZIOSpecDefault {
 
       sealed trait Payment derives Schema
       object Payment {
-        case class Coin(amount: Int)                   extends Payment derives Schema
+        case class Coin(amount: Int)                    extends Payment derives Schema
         case class SharedName(dataId: Int, amount: Int) extends Payment derives Schema
       }
-      case class Wrap(p: Payment)    derives Schema, ProtobufCodec
-      case class Req(w: Wrap)        derives Schema, ProtobufCodec
-      case class Resp(ok: Boolean)   derives Schema, ProtobufCodec
+      case class Wrap(p: Payment) derives Schema, ProtobufCodec
+      case class Req(w: Wrap) derives Schema, ProtobufCodec
+      case class Resp(ok: Boolean) derives Schema, ProtobufCodec
 
-      given ProtobufDeriver =
+      given ProtobufDeriver     =
         ProtobufDeriver
           .modifier[Payment.Coin](Modifiers.nestedIn[Payment])
           .modifier[Payment.SharedName](Modifiers.nestedIn[Payment])
