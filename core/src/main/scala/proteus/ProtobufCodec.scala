@@ -1239,10 +1239,13 @@ object ProtobufCodec {
         case ProtoIR.TopLevelDef.MessageDef(m) =>
           // Keep this function idempotent: if the parent was produced by an earlier relocation, its
           // children may already be in `m.elements` and we'd double-nest them otherwise.
-          val existingTypeIds = m.elements.iterator.collect {
-            case ProtoIR.MessageElement.NestedMessageElement(nm) => nm.typeId
-            case ProtoIR.MessageElement.NestedEnumElement(ne)    => ne.typeId
-          }.flatten.toSet
+          val existingTypeIds                           = m.elements.iterator
+            .collect {
+              case ProtoIR.MessageElement.NestedMessageElement(nm) => nm.typeId
+              case ProtoIR.MessageElement.NestedEnumElement(ne)    => ne.typeId
+            }
+            .flatten
+            .toSet
           def isDup(e: ProtoIR.MessageElement): Boolean = e match {
             case ProtoIR.MessageElement.NestedMessageElement(nm) => nm.typeId.exists(existingTypeIds.contains)
             case ProtoIR.MessageElement.NestedEnumElement(ne)    => ne.typeId.exists(existingTypeIds.contains)
