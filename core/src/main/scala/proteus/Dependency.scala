@@ -22,10 +22,12 @@ final case class Dependency(
   private[proteus] val allDependencies: Set[Dependency] = dependencies.toSet ++ dependencies.flatMap(_.allDependencies)
   private[proteus] lazy val filteredDependencies        = allDependencies.filter(_.hasAnyOf(typeReferences))
   private lazy val dependencyTypes                      = filteredDependencies.flatMap(_.types)
-  private lazy val filteredTypes                        = types -- dependencyTypes
+  private[proteus] lazy val filteredTypes               = types -- dependencyTypes
 
-  private[proteus] lazy val topLevelFqns: Map[String, String] =
-    (allDependencies.flatMap(_.topLevelFqns) ++ types.map(t => (t.name, packageName.fold("")(_ + ".") + t.name))).toMap
+  private[proteus] lazy val topLevelFqns: Map[String, String] = {
+    val pkgPrefix = packageName.fold("")(_ + ".")
+    allDependencies.foldLeft(ProtobufCodec.fqnsByTypeId(types, pkgPrefix))(_ ++ _.topLevelFqns)
+  }
 
   private[proteus] lazy val toImportStatement: ProtoIR.Statement.ImportStatement =
     ProtoIR.Statement.ImportStatement(s"${path.fold("")(_ + "/")}$dependencyName.proto")
@@ -33,8 +35,19 @@ final case class Dependency(
   private lazy val subDepPaths: Map[String, String] =
     filteredDependencies.toList.flatMap(dep => ProtobufCodec.nestedInPaths(dep.types.toList)).toMap
 
+  private lazy val typeIds: Set[String]   = types.flatMap(_.typeId)
+  private lazy val typeNames: Set[String] = types.map(_.name)
+
   private[proteus] def hasAnyOf(typeNames: Set[String]): Boolean =
     types.exists(typeDef => typeNames.contains(typeDef.name))
+
+  // Identity-based membership: prefer typeId so two distinct Scala types sharing a proto short
+  // name stay distinguishable, and fall back to name when typeId is absent (parsed-from-proto IRs).
+  private[proteus] def contains(d: ProtoIR.TopLevelDef): Boolean =
+    d.typeId match {
+      case Some(tid) => typeIds.contains(tid)
+      case None      => typeNames.contains(d.name)
+    }
 
   /**
     * Adds a new type to the current dependency.
@@ -42,7 +55,7 @@ final case class Dependency(
     * @param codec the protobuf codec for the type to add.
     */
   def add[A](using codec: ProtobufCodec[A]): Dependency = {
-    val t = ProtobufCodec.toProtoIR(codec).filter(t => !allDependencies.exists(_.hasAnyOf(Set(t.name))))
+    val t = ProtobufCodec.toProtoIR(codec).filter(d => !allDependencies.exists(_.contains(d)))
     copy(types = types ++ t)
   }
 
@@ -64,12 +77,7 @@ final case class Dependency(
     val rawTypes      = filteredTypes.toList.distinctBy(ProtobufCodec.dedupKey)
     val ownPaths      = ProtobufCodec.nestedInPaths(rawTypes)
     val resolvedTypes = ProtobufCodec.relocateNestedIn(rawTypes)
-    val conflicts     = ProtobufCodec.conflictsOf(resolvedTypes)
-    if (conflicts.nonEmpty) {
-      throw new ProteusException(
-        s"Conflicts found in dependency $dependencyName:\n ${conflicts.map { case (name, defs) => s"- Type `$name` is defined in different ways: \n${defs.mkString("\n")}" }.mkString("\n")}\n"
-      )
-    }
+    ProtobufCodec.throwIfConflicts("dependency", dependencyName, ProtobufCodec.conflictsOf(resolvedTypes))
     Renderer.render(
       ProtoIR.CompilationUnit(
         packageName = packageName,

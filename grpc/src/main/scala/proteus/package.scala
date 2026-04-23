@@ -39,16 +39,16 @@ extension (field: ProtoIR.Field) {
     val fieldBuilder = FieldDescriptorProto.newBuilder().setJsonName(toCamelCase(field.name)).setName(field.name).setNumber(field.number)
     oneOfIndex.foreach(fieldBuilder.setOneofIndex)
 
-    def makeFqn(name: String): String =
-      s".${topLevelFqns.getOrElse(name, s"$parentFqn.$name")}"
+    def makeFqn(name: String, typeId: Option[String]): String =
+      s".${typeId.flatMap(topLevelFqns.get).getOrElse(s"$parentFqn.$name")}"
 
     field.ty match {
       case listType: ProtoIR.Type.ListType    =>
         fieldBuilder.setLabel(FieldDescriptorProto.Label.LABEL_REPEATED)
         fieldBuilder.setType(listType.valueType.toDescriptorType)
         listType.valueType match {
-          case enumType: ProtoIR.Type.EnumRefType => fieldBuilder.setTypeName(makeFqn(enumType.name))
-          case messageType: ProtoIR.Type.RefType  => fieldBuilder.setTypeName(makeFqn(messageType.name))
+          case enumType: ProtoIR.Type.EnumRefType => fieldBuilder.setTypeName(makeFqn(enumType.name, enumType.typeId))
+          case messageType: ProtoIR.Type.RefType  => fieldBuilder.setTypeName(makeFqn(messageType.name, messageType.typeId))
           case _                                  =>
         }
       case mapType: ProtoIR.Type.MapType      =>
@@ -63,8 +63,8 @@ extension (field: ProtoIR.Field) {
           .setNumber(1)
           .setType(mapType.keyType.toDescriptorType)
         mapType.keyType match {
-          case enumType: ProtoIR.Type.EnumRefType => mapKeyFieldBuilder.setTypeName(makeFqn(enumType.name))
-          case messageType: ProtoIR.Type.RefType  => mapKeyFieldBuilder.setTypeName(makeFqn(messageType.name))
+          case enumType: ProtoIR.Type.EnumRefType => mapKeyFieldBuilder.setTypeName(makeFqn(enumType.name, enumType.typeId))
+          case messageType: ProtoIR.Type.RefType  => mapKeyFieldBuilder.setTypeName(makeFqn(messageType.name, messageType.typeId))
           case _                                  =>
         }
         mapEntryBuilder.addField(mapKeyFieldBuilder.build())
@@ -74,18 +74,18 @@ extension (field: ProtoIR.Field) {
           .setNumber(2)
           .setType(mapType.valueType.toDescriptorType)
         mapType.valueType match {
-          case enumType: ProtoIR.Type.EnumRefType => mapValueFieldBuilder.setTypeName(makeFqn(enumType.name))
-          case messageType: ProtoIR.Type.RefType  => mapValueFieldBuilder.setTypeName(makeFqn(messageType.name))
+          case enumType: ProtoIR.Type.EnumRefType => mapValueFieldBuilder.setTypeName(makeFqn(enumType.name, enumType.typeId))
+          case messageType: ProtoIR.Type.RefType  => mapValueFieldBuilder.setTypeName(makeFqn(messageType.name, messageType.typeId))
           case _                                  =>
         }
         mapEntryBuilder.addField(mapValueFieldBuilder.build())
         builder.addNestedType(mapEntryBuilder.build())
       case enumType: ProtoIR.Type.EnumRefType =>
         fieldBuilder.setType(FieldDescriptorProto.Type.TYPE_ENUM)
-        fieldBuilder.setTypeName(makeFqn(enumType.name))
+        fieldBuilder.setTypeName(makeFqn(enumType.name, enumType.typeId))
       case messageType: ProtoIR.Type.RefType  =>
         fieldBuilder.setType(FieldDescriptorProto.Type.TYPE_MESSAGE)
-        fieldBuilder.setTypeName(makeFqn(messageType.name))
+        fieldBuilder.setTypeName(makeFqn(messageType.name, messageType.typeId))
       case _                                  =>
         fieldBuilder.setType(field.ty.toDescriptorType)
     }
@@ -95,29 +95,22 @@ extension (field: ProtoIR.Field) {
 }
 
 extension (msg: ProtoIR.Message) {
+  // `topLevelFqns` already contains every typeId in the file (computed once at the outer
+  // Service/Dependency level), so we don't need to augment it as we descend into nested types.
   private[proteus] def toDescriptor(fqn: String, topLevelFqns: Map[String, String]): DescriptorProto = {
     val builder = DescriptorProto.newBuilder().setName(msg.name)
-
-    val nestedTypeNames = msg.elements.collect {
-      case ProtoIR.MessageElement.NestedMessageElement(nestedMessage) => nestedMessage.name
-      case ProtoIR.MessageElement.NestedEnumElement(nestedEnum)       => nestedEnum.name
-    }.toSet
-
-    val augmentedFqns = topLevelFqns ++ nestedTypeNames.map(name => (name, s"$fqn.$name"))
-
     msg.elements.foreach {
       case ProtoIR.MessageElement.FieldElement(field)                 =>
-        if (field != ProtoIR.excludedField) field.addToDescriptor(builder, None, fqn, augmentedFqns)
+        if (field != ProtoIR.excludedField) field.addToDescriptor(builder, None, fqn, topLevelFqns)
       case ProtoIR.MessageElement.OneOfElement(oneOf)                 =>
         builder.addOneofDecl(OneofDescriptorProto.newBuilder().setName(oneOf.name).build())
         val oneOfIndex = builder.getOneofDeclCount - 1
-        oneOf.fields.foreach(_.addToDescriptor(builder, Some(oneOfIndex), fqn, augmentedFqns))
+        oneOf.fields.foreach(_.addToDescriptor(builder, Some(oneOfIndex), fqn, topLevelFqns))
       case ProtoIR.MessageElement.NestedMessageElement(nestedMessage) =>
         builder.addNestedType(nestedMessage.toDescriptor(s"$fqn.${nestedMessage.name}", topLevelFqns))
       case ProtoIR.MessageElement.NestedEnumElement(nestedEnum)       =>
         builder.addEnumType(nestedEnum.toDescriptor)
     }
-
     builder.build()
   }
 }
@@ -154,6 +147,7 @@ extension (service: ProtoIR.Service) {
 extension (dependency: Dependency) {
   private[proteus] def fileDescriptor: Option[FileDescriptor] =
     if (dependency.types.nonEmpty) {
+      ProtobufCodec.throwIfConflicts("dependency", dependency.dependencyName, dependency.findConflicts)
       val sharedFileBuilder         =
         FileDescriptorProto
           .newBuilder()
@@ -161,9 +155,12 @@ extension (dependency: Dependency) {
           .setPackage(dependency.packageName.getOrElse(""))
       val dependencyFileDescriptors = dependency.filteredDependencies.flatMap(_.fileDescriptor)
       dependencyFileDescriptors.foreach(fd => sharedFileBuilder.addDependency(fd.getName))
-      dependency.types.foreach {
+      val pkgPrefix                 = dependency.packageName.fold("")(_ + ".")
+      val resolvedTypes             =
+        ProtobufCodec.relocateNestedIn(dependency.filteredTypes.toList.distinctBy(ProtobufCodec.dedupKey))
+      resolvedTypes.foreach {
         case ProtoIR.TopLevelDef.MessageDef(msg)  =>
-          sharedFileBuilder.addMessageType(msg.toDescriptor(dependency.packageName.fold("")(_ + ".") + msg.name, dependency.topLevelFqns))
+          sharedFileBuilder.addMessageType(msg.toDescriptor(pkgPrefix + msg.name, dependency.topLevelFqns))
         case ProtoIR.TopLevelDef.EnumDef(enumDef) => sharedFileBuilder.addEnumType(enumDef.toDescriptor)
         case ProtoIR.TopLevelDef.ServiceDef(_)    =>
       }

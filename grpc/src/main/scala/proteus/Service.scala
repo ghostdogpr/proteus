@@ -32,24 +32,20 @@ case class Service[Rpcs] private (
     */
   val fullyQualifiedName: String = packageName.fold(name)(s => s"$s.$name")
 
-  private case class ProtoIRResult(defs: List[ProtoIR.TopLevelDef], nestedInPaths: Map[String, String])
-
   // Defs are kept un-relocated so that, when aggregated across services via `fromServices`, contributions
   // for the same Scala type merge cleanly before relocation runs once at the dependency level.
-  private lazy val protoIRResult: ProtoIRResult = {
-    val raw         = ProtoIR.TopLevelDef.ServiceDef(ProtoIR.Service(name, rpcs.map(_.toProtoIR), comment)) ::
+  // Pre-dedup: two Scala types that `dedupKey` collapses still have distinct typeIds that must all
+  // resolve to the merged FQN, so typeId→FQN maps walk this list.
+  private[proteus] lazy val rawProtoIR: List[ProtoIR.TopLevelDef] =
+    ProtoIR.TopLevelDef.ServiceDef(ProtoIR.Service(name, rpcs.map(_.toProtoIR), comment)) ::
       rpcs.flatMap(_.messagesToProtoIR)
-    val deduped     = raw.distinctBy(ProtobufCodec.dedupKey)
-    val nestedPaths = ProtobufCodec.nestedInPaths(deduped)
-    ProtoIRResult(deduped, nestedPaths)
-  }
 
   /**
     * Converts the service to a ProtoIR representation.
     */
-  lazy val toProtoIR: List[ProtoIR.TopLevelDef] = protoIRResult.defs
+  lazy val toProtoIR: List[ProtoIR.TopLevelDef] = rawProtoIR.distinctBy(ProtobufCodec.dedupKey)
 
-  private lazy val nestedInPaths: Map[String, String] = protoIRResult.nestedInPaths
+  private lazy val nestedInPaths: Map[String, String] = ProtobufCodec.nestedInPaths(toProtoIR)
 
   /**
     * All the dependencies of the service (including transitive dependencies).
@@ -59,8 +55,8 @@ case class Service[Rpcs] private (
   private lazy val typeReferences = toProtoIR.flatMap(_.collectTypeReferences).toSet
 
   private lazy val filteredTypes          = {
-    val dependencyTypes = allDependencies.filter(_.hasAnyOf(typeReferences)).flatMap(_.types).map(_.name).toSet
-    ProtobufCodec.relocateNestedIn(toProtoIR.filterNot(d => dependencyTypes.contains(d.name)))
+    val reachableDeps = allDependencies.filter(_.hasAnyOf(typeReferences))
+    ProtobufCodec.relocateNestedIn(toProtoIR.filterNot(d => reachableDeps.exists(_.contains(d))))
   }
   private lazy val filteredTypeReferences = filteredTypes.flatMap(_.collectTypeReferences).toSet
   private lazy val usedDependencies       = allDependencies.filter(_.hasAnyOf(filteredTypeReferences))
@@ -69,18 +65,20 @@ case class Service[Rpcs] private (
     * Converts the service to a gRPC file descriptor for the reflection service.
     */
   lazy val fileDescriptor: FileDescriptor = {
+    ProtobufCodec.throwIfConflicts("service", name, findConflicts)
     val fileName                  = packageName.fold(toSnakeCase(name))(p => s"${p.replace('.', '/')}/${toSnakeCase(name)}")
     val fileBuilder               = FileDescriptorProto.newBuilder().setName(s"$fileName.proto").setPackage(packageName.getOrElse(""))
     val dependencyFileDescriptors = usedDependencies.flatMap(_.fileDescriptor)
 
     dependencyFileDescriptors.foreach(fileDescriptor => fileBuilder.addDependency(fileDescriptor.getName))
 
-    val topLevelFqns: Map[String, String] =
-      (usedDependencies.flatMap(_.topLevelFqns) ++ filteredTypes.map(t => (t.name, packageName.fold("")(_ + ".") + t.name))).toMap
+    val pkgPrefix    = packageName.fold("")(_ + ".")
+    val topLevelFqns =
+      usedDependencies.foldLeft(ProtobufCodec.fqnsByTypeId(rawProtoIR, pkgPrefix))(_ ++ _.topLevelFqns)
 
     filteredTypes.foreach {
       case ProtoIR.TopLevelDef.MessageDef(msg)     =>
-        fileBuilder.addMessageType(msg.toDescriptor(packageName.fold("")(_ + ".") + msg.name, topLevelFqns)): Unit
+        fileBuilder.addMessageType(msg.toDescriptor(pkgPrefix + msg.name, topLevelFqns)): Unit
       case ProtoIR.TopLevelDef.EnumDef(enumDef)    => fileBuilder.addEnumType(enumDef.toDescriptor): Unit
       case ProtoIR.TopLevelDef.ServiceDef(service) => fileBuilder.addService(service.toDescriptor): Unit
     }
@@ -105,13 +103,8 @@ case class Service[Rpcs] private (
     * @param options options to write at the top of the .proto file.
     */
   def render(options: List[ProtoIR.TopLevelOption]): String = {
-    val conflicts = findConflicts
-    if (conflicts.nonEmpty) {
-      throw new ProteusException(
-        s"Conflicts found in service $name:\n ${conflicts.map { case (name, defs) => s"- Type `$name` is defined in different ways: \n${defs.mkString("\n")}" }.mkString("\n")}\n"
-      )
-    }
-    val depPaths  = usedDependencies.toList.flatMap(d => ProtobufCodec.nestedInPaths(d.types.toList)).toMap
+    ProtobufCodec.throwIfConflicts("service", name, findConflicts)
+    val depPaths = usedDependencies.toList.flatMap(d => ProtobufCodec.nestedInPaths(d.types.toList)).toMap
     Renderer.render(
       ProtoIR.CompilationUnit(
         packageName = packageName,
@@ -220,9 +213,12 @@ extension (dep: Dependency.type) {
     fromServices(dependencyName, Some(packageName), Some(path), services*)
 
   private def fromServices(dependencyName: String, packageName: Option[String], path: Option[String], services: Service[?]*): Dependency = {
-    val allTypes      = ListSet.from(services.flatMap(_.toProtoIR).distinctBy(ProtobufCodec.dedupKey))
+    // Don't dedup here: dedup collapses typeIds of structurally-identical Scala types, losing the
+    // information `topLevelFqns` needs to resolve all their refs. The descriptor-building path
+    // dedups later at the point of iteration.
+    val allTypes      = ListSet.from(services.flatMap(_.rawProtoIR))
     val dependencies  = services.toList.flatMap(_.allDependencies).distinct
-    val filteredTypes = allTypes.filterNot(t => dependencies.exists(_.hasAnyOf(Set(t.name))))
+    val filteredTypes = allTypes.filterNot(t => dependencies.exists(_.contains(t)))
 
     val requestResponseTypeNames =
       services.flatMap(_.rpcs.flatMap(rpc => List(rpc.toProtoIR.request.fqn.name, rpc.toProtoIR.response.fqn.name))).toSet

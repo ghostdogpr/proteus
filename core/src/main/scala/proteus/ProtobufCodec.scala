@@ -1237,12 +1237,36 @@ object ProtobufCodec {
       }
       d match {
         case ProtoIR.TopLevelDef.MessageDef(m) =>
-          ProtoIR.TopLevelDef.MessageDef(m.copy(elements = added ++ m.elements))
+          // Keep this function idempotent: if the parent was produced by an earlier relocation, its
+          // children may already be in `m.elements` and we'd double-nest them otherwise.
+          val existingTypeIds = m.elements.iterator.collect {
+            case ProtoIR.MessageElement.NestedMessageElement(nm) => nm.typeId
+            case ProtoIR.MessageElement.NestedEnumElement(ne)    => ne.typeId
+          }.flatten.toSet
+          def isDup(e: ProtoIR.MessageElement): Boolean = e match {
+            case ProtoIR.MessageElement.NestedMessageElement(nm) => nm.typeId.exists(existingTypeIds.contains)
+            case ProtoIR.MessageElement.NestedEnumElement(ne)    => ne.typeId.exists(existingTypeIds.contains)
+            case _                                               => false
+          }
+          ProtoIR.TopLevelDef.MessageDef(m.copy(elements = added.filterNot(isDup) ++ m.elements))
         case other                             => other
       }
     }
 
     defs.flatMap(d => if (childRefs.contains(d)) None else Some(finalize(d)))
+  }
+
+  private[proteus] def throwIfConflicts(kind: String, name: String, conflicts: Map[String, List[String]]): Unit =
+    if (conflicts.nonEmpty) {
+      throw new ProteusException(
+        s"Conflicts found in $kind $name:\n ${conflicts.map { case (n, defs) => s"- Type `$n` is defined in different ways: \n${defs.mkString("\n")}" }.mkString("\n")}\n"
+      )
+    }
+
+  // Must be called on pre-dedup, pre-relocation defs — see `Service.rawProtoIR` for why.
+  private[proteus] def fqnsByTypeId(defs: Iterable[ProtoIR.TopLevelDef], pkgPrefix: String): Map[String, String] = {
+    val paths = nestedInPaths(defs.toList)
+    defs.iterator.flatMap(d => d.typeId.map(tid => tid -> (pkgPrefix + paths.getOrElse(tid, d.name)))).toMap
   }
 
   // Must be called BEFORE `relocateNestedIn`: once children are spliced, their `nestedIn` metadata is cleared.
