@@ -84,23 +84,24 @@ implicit def jsonWriterCodec[A](using codec: ProtobufCodec[A], registry: Registr
                     val builder    = List.newBuilder[(String, Json)]
                     var i          = 0
                     while (i < c.fields.length) {
-                      val field = c.fields(i) match {
-                        case f: SimpleField[?]   => Some(f)
+                      val field: SimpleField[?] | Null = c.fields(i) match {
+                        case f: SimpleField[?]   => f
                         case f: OneOfField[b]    =>
                           val v = getFromRegister(registers, offset, f.register).asInstanceOf[b]
-                          Some(f.cases(f.discriminator.discriminate(v)))
-                        case _: ExcludedField[?] => None
+                          f.cases(f.discriminator.discriminate(v)) match {
+                            case sf: SimpleField[?]  => sf
+                            case _: ExcludedField[?] => null
+                          }
+                        case _: ExcludedField[?] => null
                       }
-                      field.foreach {
-                        case f: SimpleField[?]   =>
-                          builder +=
-                            toCamelCase(f.name) ->
-                              loop(getFromRegister(registers, offset, f.register).asInstanceOf[f.codec.Focus], f.codec, nextOffset)
-                        case f: ExcludedField[?] => ()
+                      if (field != null) {
+                        val f    = field
+                        val json = loop(getFromRegister(registers, offset, f.register).asInstanceOf[f.codec.Focus], f.codec, nextOffset)
+                        if (json ne Json.Null) builder += f.jsonName -> json
                       }
                       i += 1
                     }
-                    Json.obj(builder.result()*).dropNullValues
+                    Json.fromFields(builder.result())
                   case c: Repeated[c, e]       =>
                     val it      = c.deconstructor.deconstruct[e](b)
                     val builder = List.newBuilder[Json]
@@ -108,7 +109,7 @@ implicit def jsonWriterCodec[A](using codec: ProtobufCodec[A], registry: Registr
                       val v = it.next
                       builder += loop(v, c.element, offset)
                     }
-                    Json.arr(builder.result()*)
+                    Json.fromValues(builder.result())
                   case c: RepeatedMap[m, k, v] =>
                     val it      = c.deconstructor.deconstruct(b.asInstanceOf[m[k, v]])
                     val builder = List.newBuilder[Json]
@@ -119,7 +120,7 @@ implicit def jsonWriterCodec[A](using codec: ProtobufCodec[A], registry: Registr
                       if (options.formatMapEntriesAsKeyValuePairs) builder += Json.obj("key" -> key, "value" -> value)
                       else builder += Json.obj(key.asString.getOrElse(key.noSpaces) -> value)
                     }
-                    Json.arr(builder.result()*)
+                    Json.fromValues(builder.result())
                   case Bytes                   => Json.fromString("<bytes>")
                   case c: Transform[_, _]      => loop(c.to(b), c.codec, offset)
                   case c: RecursiveMessage[_]  => loop(b, c.codec, offset)
