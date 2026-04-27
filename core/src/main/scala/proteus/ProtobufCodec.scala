@@ -276,6 +276,8 @@ object ProtobufCodec {
           }
         loop(codec)
       }
+
+      private[proteus] val jsonName: String = proteus.internal.toCamelCase(name)
     }
 
     /**
