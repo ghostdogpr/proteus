@@ -66,7 +66,8 @@ sealed trait Rpc[Req, Resp] { self =>
     * Converts the RPC to a gRPC method descriptor for the reflection service.
     */
   def toMethodDescriptor(service: Service[?]): MethodDescriptor[Request, Response] = {
-    val serviceDescriptor = service.fileDescriptor.findServiceByName(service.name)
+    val fileDescriptor    = service.fileDescriptor
+    val serviceDescriptor = fileDescriptor.findServiceByName(service.name)
     val methodDescriptor  = serviceDescriptor.findMethodByName(name)
 
     MethodDescriptor
@@ -84,7 +85,7 @@ sealed trait Rpc[Req, Resp] { self =>
       .setSchemaDescriptor(new ProtoMethodDescriptorSupplier {
         def getMethodDescriptor: PbMethodDescriptor   = methodDescriptor
         def getServiceDescriptor: PbServiceDescriptor = serviceDescriptor
-        def getFileDescriptor: FileDescriptor         = service.fileDescriptor
+        def getFileDescriptor: FileDescriptor         = fileDescriptor
       })
       .build()
   }

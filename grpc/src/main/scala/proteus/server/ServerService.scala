@@ -123,13 +123,15 @@ case class ServerService[Unary[_], Streaming[_], Context, Rpcs] private (
     val methodDescriptors: List[MethodDescriptor[?, ?]] =
       rpcs.map(_.toMethodDescriptor(service))
 
+    val fileDescriptor = service.fileDescriptor
+
     val serviceDescriptor: ServiceDescriptor =
       methodDescriptors
         .foldLeft(
           ServiceDescriptor
             .newBuilder(service.fullyQualifiedName)
             .setSchemaDescriptor(new ProtoFileDescriptorSupplier {
-              def getFileDescriptor: FileDescriptor = service.fileDescriptor
+              def getFileDescriptor: FileDescriptor = fileDescriptor
             })
         )((builder, methodDescriptor) => builder.addMethod(methodDescriptor))
         .build()
