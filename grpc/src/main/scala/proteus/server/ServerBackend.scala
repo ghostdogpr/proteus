@@ -12,6 +12,11 @@ trait ServerBackend[Unary[_], Streaming[_], Context] { self =>
 }
 
 object ServerBackend {
+  private[server] def sendUnaryResponse[Response](call: ServerCall[?, Response], response: Response): Unit = {
+    call.sendHeaders(new Metadata())
+    call.sendMessage(response)
+  }
+
   private[server] def closeCallWithError[Request, Response](call: ServerCall[Request, Response], ex: Throwable): Unit =
     closeCallWithError(call, ex, new Metadata())
 

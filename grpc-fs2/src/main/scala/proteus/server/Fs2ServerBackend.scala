@@ -80,6 +80,9 @@ class Fs2ServerBackend[F[_]: Async, G[_], Context](
   private def forkScoped(scope: CallScope, effect: F[Unit]): Unit =
     scope.attach(dispatcher.unsafeRunCancelable(effect))
 
+  private def sendUnaryResponse[Response](call: ServerCall[?, Response], response: Response): F[Unit] =
+    F.delay(ServerBackend.sendUnaryResponse(call, response))
+
   def handler[Request, Response](
     rpc: ServerRpc[G, Stream[G, *], Context, Request, Response]
   ): ServerCallHandler[Request, Response] =
@@ -106,12 +109,7 @@ class Fs2ServerBackend[F[_]: Async, G[_], Context](
             val effect: F[Unit] =
               interceptor
                 .unary(c => logic(req, c))(using rpc.requestCodec, rpc.responseCodec)(req)(ctx)
-                .flatMap { response =>
-                  F.delay {
-                    call.sendHeaders(new Metadata())
-                    call.sendMessage(response)
-                  }
-                }
+                .flatMap(sendUnaryResponse(call, _))
             forkScoped(scope, F.guaranteeCase(effect)(closeOnExit(call, responseMetadata)))
           }
 
@@ -165,12 +163,7 @@ class Fs2ServerBackend[F[_]: Async, G[_], Context](
         val requestStream  = Stream.fromQueueNoneTerminated(queue)
         val responseEffect = interceptor
           .clientStreaming[Request, Response](req => c => logic(req, c))(using rpc.requestCodec, rpc.responseCodec)(requestStream)(ctx)
-        val effect         = responseEffect.flatMap { response =>
-          F.delay {
-            call.sendHeaders(new Metadata())
-            call.sendMessage(response)
-          }
-        }
+        val effect         = responseEffect.flatMap(sendUnaryResponse(call, _))
         forkScoped(scope, F.guaranteeCase(effect)(closeOnExit(call, responseMetadata)))
 
         new ServerCall.Listener[Request] {

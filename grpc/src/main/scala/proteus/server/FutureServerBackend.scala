@@ -32,8 +32,7 @@ class FutureServerBackend[Context](interceptor: ServerContextInterceptor[Future,
                     interceptor.unary(c => logic(req, c))(using rpc.requestCodec, rpc.responseCodec)(req)(ctx)
                   futureResponse.onComplete {
                     case scala.util.Success(response) =>
-                      call.sendHeaders(new Metadata())
-                      call.sendMessage(response)
+                      ServerBackend.sendUnaryResponse(call, response)
                       call.close(Status.OK, responseMetadata)
                     case scala.util.Failure(ex)       =>
                       ServerBackend.closeCallWithError(call, ex, responseMetadata)

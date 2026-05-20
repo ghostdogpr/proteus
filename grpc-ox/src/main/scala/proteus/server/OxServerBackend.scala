@@ -98,8 +98,7 @@ class OxServerBackend[Context](
                 try {
                   val response =
                     interceptor.unary(c => logic(req, c))(using rpc.requestCodec, rpc.responseCodec)(req)(ctx)
-                  call.sendHeaders(new Metadata())
-                  call.sendMessage(response)
+                  ServerBackend.sendUnaryResponse(call, response)
                   call.close(Status.OK, responseMetadata)
                 } catch {
                   case NonFatal(ex) => ServerBackend.closeCallWithError(call, ex, responseMetadata)
@@ -123,8 +122,7 @@ class OxServerBackend[Context](
                 interceptor.clientStreaming[Request, Response](req => ctx => logic(req, ctx))(using rpc.requestCodec, rpc.responseCodec)(
                   requestFlow
                 )(RequestResponseMetadata(headers, responseMetadata))
-              call.sendHeaders(new Metadata())
-              call.sendMessage(response)
+              ServerBackend.sendUnaryResponse(call, response)
               call.close(Status.OK, responseMetadata)
             }
 

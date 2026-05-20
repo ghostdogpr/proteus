@@ -85,6 +85,9 @@ class ZioServerBackend[R, E, Context](
   private def forkScoped(scope: CallScope, effect: ZIO[R, StatusException, Unit]): Unit =
     scope.attach(Unsafe.unsafely(runtime.unsafe.fork(effect)))
 
+  private def sendUnaryResponse[Response](call: ServerCall[?, Response], response: Response): UIO[Unit] =
+    ZIO.succeed(ServerBackend.sendUnaryResponse(call, response))
+
   def handler[Request, Response](
     rpc: ServerRpc[ZIO[R, E, *], ZStream[R, E, *], Context, Request, Response]
   ): ServerCallHandler[Request, Response] =
@@ -111,12 +114,7 @@ class ZioServerBackend[R, E, Context](
             val effect: IO[StatusException, Unit] =
               interceptor
                 .unary(c => logic(req, c))(using rpc.requestCodec, rpc.responseCodec)(req)(ctx)
-                .flatMap { response =>
-                  ZIO.succeed {
-                    call.sendHeaders(new Metadata())
-                    call.sendMessage(response)
-                  }
-                }
+                .flatMap(sendUnaryResponse(call, _))
             forkScoped(scope, effect.onExit(closeOnExit(call, responseMetadata)))
           }
 
@@ -168,12 +166,7 @@ class ZioServerBackend[R, E, Context](
         val requestStream  = ZStream.fromQueue(queue).collectWhileSome
         val responseEffect =
           interceptor.clientStreaming[Request, Response](req => c => logic(req, c))(using rpc.requestCodec, rpc.responseCodec)(requestStream)(ctx)
-        val effect         = responseEffect.flatMap { response =>
-          ZIO.succeed {
-            call.sendHeaders(new Metadata())
-            call.sendMessage(response)
-          }
-        }
+        val effect         = responseEffect.flatMap(sendUnaryResponse(call, _))
         forkScoped(scope, effect.onExit(closeOnExit(call, responseMetadata)))
 
         new ServerCall.Listener[Request] {

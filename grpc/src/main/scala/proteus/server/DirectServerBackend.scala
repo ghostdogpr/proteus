@@ -26,8 +26,7 @@ class DirectServerBackend[Context](interceptor: ServerContextInterceptor[[A] =>>
                 try {
                   val response =
                     interceptor.unary(c => logic(req, c))(using rpc.requestCodec, rpc.responseCodec)(req)(ctx)
-                  call.sendHeaders(new Metadata())
-                  call.sendMessage(response)
+                  ServerBackend.sendUnaryResponse(call, response)
                   call.close(Status.OK, responseMetadata)
                 } catch {
                   case NonFatal(ex) => ServerBackend.closeCallWithError(call, ex, responseMetadata)
