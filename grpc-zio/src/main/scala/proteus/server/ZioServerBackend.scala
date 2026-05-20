@@ -62,11 +62,10 @@ class ZioServerBackend[R, E, Context](
     exit: Exit[StatusException, Any]
   ): UIO[Unit] = ZIO.succeed {
     exit match {
-      case Exit.Success(_)                                      => call.close(Status.OK, responseMetadata)
-      case Exit.Failure(cause) if cause.isInterruptedOnly       => call.close(Status.CANCELLED, responseMetadata)
-      case Exit.Failure(cause) if cause.failureOption.isDefined => ServerBackend.closeCallWithError(call, cause.failureOption.get, responseMetadata)
-      case Exit.Failure(cause)                                  =>
-        cause.dieOption match {
+      case Exit.Success(_)                                => call.close(Status.OK, responseMetadata)
+      case Exit.Failure(cause) if cause.isInterruptedOnly => call.close(Status.CANCELLED, responseMetadata)
+      case Exit.Failure(cause)                            =>
+        cause.failureOption.orElse(cause.dieOption) match {
           case Some(t) => ServerBackend.closeCallWithError(call, t, responseMetadata)
           case None    => call.close(Status.INTERNAL, responseMetadata)
         }
@@ -152,7 +151,7 @@ class ZioServerBackend[R, E, Context](
     }
 
   private def unsafeOffer[A](queue: Queue[A], a: A): Unit =
-    Unsafe.unsafely { runtime.unsafe.run(queue.offer(a)).getOrThrowFiberFailure(); () }
+    Unsafe.unsafely(runtime.unsafe.run(queue.offer(a)).getOrThrowFiberFailure(): Unit)
 
   private def clientStreamingHandler[Request, Response](
     rpc: Rpc[Request, Response],

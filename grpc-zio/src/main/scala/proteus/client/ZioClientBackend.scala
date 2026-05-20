@@ -14,7 +14,7 @@ import zio.stream.*
 class ZioClientBackend(channel: Channel, runtime: Runtime[Any] = Runtime.default)
   extends ClientBackend[IO[StatusException, *], ZStream[Any, StatusException, *]] {
 
-  final private class UnaryListener[Response] extends ClientCall.Listener[Response] {
+  private class UnaryListener[Response] extends ClientCall.Listener[Response] {
     private val headersRef                                                = new AtomicReference[Metadata](null)
     private val messageRef                                                = new AtomicReference[Response]()
     val promise: Promise[StatusException, (Response, Metadata, Metadata)] =
@@ -42,7 +42,7 @@ class ZioClientBackend(channel: Channel, runtime: Runtime[Any] = Runtime.default
   private class StreamingListener[Response](queue: Queue[Exit[Option[StatusException], Response]]) extends ClientCall.Listener[Response] {
     val trailersRef                                                       = new AtomicReference[Metadata](new Metadata())
     protected def offer(a: Exit[Option[StatusException], Response]): Unit =
-      Unsafe.unsafely { runtime.unsafe.run(queue.offer(a)).getOrThrowFiberFailure(); () }
+      Unsafe.unsafely(runtime.unsafe.run(queue.offer(a)).getOrThrowFiberFailure(): Unit)
 
     override def onHeaders(headers: Metadata): Unit = ()
 
@@ -153,17 +153,12 @@ class ZioClientBackend(channel: Channel, runtime: Runtime[Any] = Runtime.default
     headers: Metadata,
     requestStream: ZStream[Any, StatusException, Request]
   ): IO[StatusException, (Response, Metadata, Metadata)] = ZIO.suspendSucceed {
-    val call         = channel.newCall(descriptor, options)
-    val listener     = new UnaryListener[Response]
-    val readySignal  = new ClientReadySignal(call)
-    val bidiListener =
-      new ClientCall.Listener[Response] {
-        override def onHeaders(h: Metadata): Unit          = listener.onHeaders(h)
-        override def onMessage(m: Response): Unit          = listener.onMessage(m)
-        override def onClose(s: Status, t: Metadata): Unit = listener.onClose(s, t)
-        override def onReady(): Unit                       = readySignal.signal()
-      }
-    call.start(bidiListener, headers)
+    val call        = channel.newCall(descriptor, options)
+    val readySignal = new ClientReadySignal(call)
+    val listener    = new UnaryListener[Response] {
+      override def onReady(): Unit = readySignal.signal()
+    }
+    call.start(listener, headers)
     call.request(2)
 
     val sendAll = requestStream.runForeach { req =>
@@ -203,12 +198,10 @@ class ZioClientBackend(channel: Channel, runtime: Runtime[Any] = Runtime.default
         call.start(listener, headers)
         call.request(1)
 
-        val sendAll = requestStream
-          .runForeach { req =>
-            if (call.isReady) ZIO.succeed(call.sendMessage(req))
-            else readySignal.await *> ZIO.succeed(call.sendMessage(req))
-          }
-          .zipRight(ZIO.succeed(call.halfClose()))
+        val sendAll = (requestStream.runForeach { req =>
+          if (call.isReady) ZIO.succeed(call.sendMessage(req))
+          else readySignal.await *> ZIO.succeed(call.sendMessage(req))
+        } *> ZIO.succeed(call.halfClose()))
           .catchAll(e => ZIO.succeed(call.cancel("Error sending requests", e)) *> ZIO.fail(e))
 
         // HaltStrategy.Right: stop the sender if the server closes the response stream first.

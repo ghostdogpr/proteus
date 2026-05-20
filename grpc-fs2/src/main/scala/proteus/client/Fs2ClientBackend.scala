@@ -17,7 +17,7 @@ class Fs2ClientBackend[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F])
 
   private val F = Async[F]
 
-  final private class UnaryListener[Response] extends ClientCall.Listener[Response] {
+  private class UnaryListener[Response] extends ClientCall.Listener[Response] {
     private val headersRef                                                             = new AtomicReference[Metadata](null)
     private val messageRef                                                             = new AtomicReference[Response]()
     val deferred: Deferred[F, Either[StatusException, (Response, Metadata, Metadata)]] =
@@ -150,16 +150,12 @@ class Fs2ClientBackend[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F])
     headers: Metadata,
     requestStream: Stream[F, Request]
   ): F[(Response, Metadata, Metadata)] = F.defer {
-    val call         = channel.newCall(descriptor, options)
-    val listener     = new UnaryListener[Response]
-    val readySignal  = new ClientReadySignal(call)
-    val bidiListener = new ClientCall.Listener[Response] {
-      override def onHeaders(h: Metadata): Unit          = listener.onHeaders(h)
-      override def onMessage(m: Response): Unit          = listener.onMessage(m)
-      override def onClose(s: Status, t: Metadata): Unit = listener.onClose(s, t)
-      override def onReady(): Unit                       = readySignal.signal()
+    val call        = channel.newCall(descriptor, options)
+    val readySignal = new ClientReadySignal(call)
+    val listener    = new UnaryListener[Response] {
+      override def onReady(): Unit = readySignal.signal()
     }
-    call.start(bidiListener, headers)
+    call.start(listener, headers)
     call.request(2)
 
     val sendAll: F[Unit] =
