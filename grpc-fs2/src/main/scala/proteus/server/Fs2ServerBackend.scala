@@ -148,6 +148,29 @@ class Fs2ServerBackend[F[_]: Async, G[_], Context](
   private def unsafeOffer[A](queue: Queue[F, A], a: A): Unit =
     dispatcher.unsafeRunSync(queue.offer(a))
 
+  private def streamingInputListener[Request](
+    call: ServerCall[Request, ?],
+    queue: Queue[F, Option[Request]],
+    scope: CallScope,
+    onReadyCallback: () => Unit
+  ): ServerCall.Listener[Request] =
+    new ServerCall.Listener[Request] {
+      override def onMessage(message: Request): Unit = {
+        call.request(1)
+        unsafeOffer(queue, Some(message))
+      }
+
+      override def onHalfClose(): Unit =
+        unsafeOffer(queue, None)
+
+      override def onCancel(): Unit = {
+        unsafeOffer(queue, None)
+        scope.cancel()
+      }
+
+      override def onReady(): Unit = onReadyCallback()
+    }
+
   private def clientStreamingHandler[Request, Response](
     rpc: Rpc[Request, Response],
     logic: (Stream[G, Request], Context) => G[Response]
@@ -166,22 +189,7 @@ class Fs2ServerBackend[F[_]: Async, G[_], Context](
         val effect         = responseEffect.flatMap(sendUnaryResponse(call, _))
         forkScoped(scope, F.guaranteeCase(effect)(closeOnExit(call, responseMetadata)))
 
-        new ServerCall.Listener[Request] {
-          override def onMessage(message: Request): Unit = {
-            call.request(1)
-            unsafeOffer(queue, Some(message))
-          }
-
-          override def onHalfClose(): Unit =
-            unsafeOffer(queue, None)
-
-          override def onCancel(): Unit = {
-            unsafeOffer(queue, None)
-            scope.cancel()
-          }
-
-          override def onReady(): Unit = ()
-        }
+        streamingInputListener(call, queue, scope, () => ())
       }
     }
 
@@ -205,22 +213,7 @@ class Fs2ServerBackend[F[_]: Async, G[_], Context](
           F.delay(call.sendHeaders(new Metadata())) *> sendStream(call, responseStream, readySignal)
         forkScoped(scope, F.guaranteeCase(effect)(closeOnExit(call, responseMetadata)))
 
-        new ServerCall.Listener[Request] {
-          override def onMessage(message: Request): Unit = {
-            call.request(1)
-            unsafeOffer(queue, Some(message))
-          }
-
-          override def onHalfClose(): Unit =
-            unsafeOffer(queue, None)
-
-          override def onCancel(): Unit = {
-            unsafeOffer(queue, None)
-            scope.cancel()
-          }
-
-          override def onReady(): Unit = readySignal.signal()
-        }
+        streamingInputListener(call, queue, scope, () => readySignal.signal())
       }
     }
 }
@@ -238,7 +231,7 @@ object Fs2ServerBackend {
     apply(ServerInterceptor.empty, dispatcher)
 
   /**
-    * Creates a new fs2 server backend with the given interceptor.
+    * Creates a new fs2 server backend with the given context interceptor.
     *
     * @param interceptor an interceptor that can run on every request.
     * @param dispatcher a Cats Effect dispatcher.
@@ -247,5 +240,18 @@ object Fs2ServerBackend {
     interceptor: ServerContextInterceptor[F, Stream[F, *], RequestResponseMetadata, Context],
     dispatcher: Dispatcher[F]
   ): Fs2ServerBackend[F, F, Context] =
+    new Fs2ServerBackend(interceptor, dispatcher)
+
+  /**
+    * Creates a new fs2 server backend with the given interceptor, allowing the user-handler
+    * effect `G` to differ from the transport effect `F`.
+    *
+    * @param interceptor an interceptor that can run on every request.
+    * @param dispatcher a Cats Effect dispatcher.
+    */
+  def apply[F[_]: Async, G[_], Context](
+    interceptor: ServerInterceptor[F, G, Stream[F, *], Stream[G, *], RequestResponseMetadata, Context],
+    dispatcher: Dispatcher[F]
+  ): Fs2ServerBackend[F, G, Context] =
     new Fs2ServerBackend(interceptor, dispatcher)
 }

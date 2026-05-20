@@ -41,8 +41,6 @@ class Fs2ClientBackend[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F])
   }
 
   private class StreamingListener[Response](queue: Queue[F, Either[Option[StatusException], Response]]) extends ClientCall.Listener[Response] {
-    val trailersRef = new AtomicReference[Metadata](new Metadata())
-
     protected def offer(a: Either[Option[StatusException], Response]): Unit =
       dispatcher.unsafeRunSync(queue.offer(a))
 
@@ -50,11 +48,9 @@ class Fs2ClientBackend[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F])
 
     override def onMessage(message: Response): Unit = offer(Right(message))
 
-    override def onClose(status: Status, trailers: Metadata): Unit = {
-      trailersRef.set(trailers)
+    override def onClose(status: Status, trailers: Metadata): Unit =
       if (status.isOk) offer(Left(None))
       else offer(Left(Some(new StatusException(status, trailers))))
-    }
   }
 
   final private class ClientReadySignal(call: ClientCall[?, ?]) {
@@ -98,7 +94,7 @@ class Fs2ClientBackend[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F])
     val listener = new UnaryListener[Response]
     F.delay {
       call.start(listener, headers)
-      call.request(2)
+      call.request(1)
       call.sendMessage(request)
       call.halfClose()
     }.attempt
@@ -156,7 +152,7 @@ class Fs2ClientBackend[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F])
       override def onReady(): Unit = readySignal.signal()
     }
     call.start(listener, headers)
-    call.request(2)
+    call.request(1)
 
     val sendAll: F[Unit] =
       requestStream

@@ -151,6 +151,29 @@ class ZioServerBackend[R, E, Context](
   private def unsafeOffer[A](queue: Queue[A], a: A): Unit =
     Unsafe.unsafely(runtime.unsafe.run(queue.offer(a)).getOrThrowFiberFailure(): Unit)
 
+  private def streamingInputListener[Request](
+    call: ServerCall[Request, ?],
+    queue: Queue[Option[Request]],
+    scope: CallScope,
+    onReadyCallback: () => Unit
+  ): ServerCall.Listener[Request] =
+    new ServerCall.Listener[Request] {
+      override def onMessage(message: Request): Unit = {
+        call.request(1)
+        unsafeOffer(queue, Some(message))
+      }
+
+      override def onHalfClose(): Unit =
+        unsafeOffer(queue, None)
+
+      override def onCancel(): Unit = {
+        unsafeOffer(queue, None)
+        scope.cancel()
+      }
+
+      override def onReady(): Unit = onReadyCallback()
+    }
+
   private def clientStreamingHandler[Request, Response](
     rpc: Rpc[Request, Response],
     logic: (ZStream[R, E, Request], Context) => ZIO[R, E, Response]
@@ -169,22 +192,7 @@ class ZioServerBackend[R, E, Context](
         val effect         = responseEffect.flatMap(sendUnaryResponse(call, _))
         forkScoped(scope, effect.onExit(closeOnExit(call, responseMetadata)))
 
-        new ServerCall.Listener[Request] {
-          override def onMessage(message: Request): Unit = {
-            call.request(1)
-            unsafeOffer(queue, Some(message))
-          }
-
-          override def onHalfClose(): Unit =
-            unsafeOffer(queue, None)
-
-          override def onCancel(): Unit = {
-            unsafeOffer(queue, None)
-            scope.cancel()
-          }
-
-          override def onReady(): Unit = ()
-        }
+        streamingInputListener(call, queue, scope, () => ())
       }
     }
 
@@ -207,22 +215,7 @@ class ZioServerBackend[R, E, Context](
         val effect         = ZIO.succeed(call.sendHeaders(new Metadata())) *> sendStream(call, responseStream, readySignal)
         forkScoped(scope, effect.onExit(closeOnExit(call, responseMetadata)))
 
-        new ServerCall.Listener[Request] {
-          override def onMessage(message: Request): Unit = {
-            call.request(1)
-            unsafeOffer(queue, Some(message))
-          }
-
-          override def onHalfClose(): Unit =
-            unsafeOffer(queue, None)
-
-          override def onCancel(): Unit = {
-            unsafeOffer(queue, None)
-            scope.cancel()
-          }
-
-          override def onReady(): Unit = readySignal.signal()
-        }
+        streamingInputListener(call, queue, scope, () => readySignal.signal())
       }
     }
 }
