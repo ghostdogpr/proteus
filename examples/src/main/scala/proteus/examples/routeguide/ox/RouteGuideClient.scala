@@ -17,21 +17,21 @@ class RouteGuideClient(host: String, port: Int) {
 
   def getFeature(point: Point): Feature =
     withChannel { channel =>
-      val backend = new OxClientBackend(channel)
+      val backend = OxClientBackend(channel)
       val client  = backend.client(getFeatureRpc, routeGuideService)
       client(point)
     }
 
   def listFeatures(rectangle: Rectangle): List[Feature] =
     withChannel { channel =>
-      val backend = new OxClientBackend(channel)
+      val backend = OxClientBackend(channel)
       val client  = backend.client(listFeaturesRpc, routeGuideService)
       client(rectangle).runToList()
     }
 
   def recordRoute(points: List[Point]): RouteSummary =
     withChannel { channel =>
-      val backend = new OxClientBackend(channel)
+      val backend = OxClientBackend(channel)
       val client  = backend.client(recordRouteRpc, routeGuideService)
       client(Flow.fromIterable(points))
     }
@@ -45,7 +45,7 @@ class RouteGuideClient(host: String, port: Int) {
     )
 
     withChannel { channel =>
-      val backend = new OxClientBackend(channel)
+      val backend = OxClientBackend(channel)
       val client  = backend.client(routeChatRpc, routeGuideService)
       client(Flow.fromIterable(notes)).runToList()
     }

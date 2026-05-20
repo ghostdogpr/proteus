@@ -10,9 +10,15 @@ import zio.stream.*
 /**
   * A client backend that wraps results in a ZIO effect.
   * Streaming is supported using [[zio.stream.ZStream]].
+  *
+  * @param channel the gRPC channel used to issue calls.
+  * @param runtime the ZIO runtime to use for running ZIO effects.
+  * @param prefetchN initial in-flight response window for server-streaming / bidi RPCs; the window is refilled one message at a time as the consumer pulls.
   */
-class ZioClientBackend(channel: Channel, runtime: Runtime[Any] = Runtime.default)
+class ZioClientBackend(channel: Channel, runtime: Runtime[Any], prefetchN: Int)
   extends ClientBackend[IO[StatusException, *], ZStream[Any, StatusException, *]] {
+
+  private val prefetch: Int = math.max(prefetchN, 1)
 
   private class UnaryListener[Response] extends ClientCall.Listener[Response] {
     private val headersRef                                                = new AtomicReference[Metadata](null)
@@ -127,7 +133,7 @@ class ZioClientBackend(channel: Channel, runtime: Runtime[Any] = Runtime.default
         ZIO
           .attempt {
             call.start(listener, headers)
-            call.request(1)
+            call.request(prefetch)
             call.sendMessage(request)
             call.halfClose()
           }
@@ -187,7 +193,7 @@ class ZioClientBackend(channel: Channel, runtime: Runtime[Any] = Runtime.default
         val readySignal = new ClientReadySignal(call)
         val listener    = new BidiListener[Response](queue, readySignal)
         call.start(listener, headers)
-        call.request(1)
+        call.request(prefetch)
 
         val sendAll = (requestStream.runForeach { req =>
           if (call.isReady) ZIO.succeed(call.sendMessage(req))
@@ -285,5 +291,13 @@ class ZioClientBackend(channel: Channel, runtime: Runtime[Any] = Runtime.default
 }
 
 object ZioClientBackend {
-  def apply(channel: Channel): ZioClientBackend = new ZioClientBackend(channel)
+
+  /**
+    * Creates a new ZIO client backend.
+    *
+    * @param channel the gRPC channel used to issue calls.
+    * @param prefetchN initial in-flight response window for streaming RPCs.
+    */
+  def apply(channel: Channel, prefetchN: Int = 16): ZioClientBackend =
+    new ZioClientBackend(channel, Runtime.default, prefetchN)
 }

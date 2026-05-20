@@ -14,8 +14,13 @@ import ox.flow.Flow
 /**
   * A client backend that uses direct style with Ox for streaming.
   * Unary RPCs return plain values, streaming RPCs use Ox Flow.
+  *
+  * @param channel the gRPC channel used to issue calls.
+  * @param prefetchN initial in-flight response window for server-streaming / bidi RPCs; also sizes the response channel buffer.
   */
-class OxClientBackend(channel: Channel) extends ClientBackend[[A] =>> A, Flow] {
+class OxClientBackend(channel: Channel, prefetchN: Int) extends ClientBackend[[A] =>> A, Flow] {
+
+  private val prefetch: Int = math.max(prefetchN, 1)
 
   private def responseListener[T](
     responseChannel: OxChannel[T],
@@ -101,14 +106,14 @@ class OxClientBackend(channel: Channel) extends ClientBackend[[A] =>> A, Flow] {
     val methodDescriptor = rpc.toMethodDescriptor(service)
     request =>
       Flow.usingEmit { emit =>
-        val responseChannel = OxChannel.buffered[Response](1)
+        val responseChannel = OxChannel.buffered[Response](prefetch)
         val readySignal     = OxChannel.buffered[Unit](1)
         val call            = channel.newCall(methodDescriptor, options(CallOptions.DEFAULT))
 
         call.start(responseListener(responseChannel, readySignal), new Metadata())
         call.sendMessage(request)
         call.halfClose()
-        call.request(1)
+        call.request(prefetch)
 
         streamingResponseFlow(responseChannel, call).runForeach(emit.apply)
       }
@@ -121,13 +126,13 @@ class OxClientBackend(channel: Channel) extends ClientBackend[[A] =>> A, Flow] {
     requestFlow =>
       Flow.usingEmit { emit =>
         supervised {
-          val responseChannel = OxChannel.buffered[Response](1)
+          val responseChannel = OxChannel.buffered[Response](prefetch)
           val readySignal     = OxChannel.buffered[Unit](1)
           val senderError     = new AtomicReference[Throwable]()
           val call            = channel.newCall(methodDescriptor, options(CallOptions.DEFAULT))
 
           call.start(responseListener(responseChannel, readySignal), new Metadata())
-          call.request(1)
+          call.request(prefetch)
 
           forkDiscard {
             try {
@@ -218,14 +223,14 @@ class OxClientBackend(channel: Channel) extends ClientBackend[[A] =>> A, Flow] {
     val methodDescriptor = rpc.toMethodDescriptor(service)
     (request, requestMetadata) =>
       Flow.usingEmit { emit =>
-        val responseChannel = OxChannel.buffered[Response](1)
+        val responseChannel = OxChannel.buffered[Response](prefetch)
         val readySignal     = OxChannel.buffered[Unit](1)
         val call            = channel.newCall(methodDescriptor, options(CallOptions.DEFAULT))
 
         call.start(responseListener(responseChannel, readySignal), requestMetadata)
         call.sendMessage(request)
         call.halfClose()
-        call.request(1)
+        call.request(prefetch)
 
         streamingResponseFlow(responseChannel, call).runForeach(emit.apply)
       }
@@ -240,13 +245,13 @@ class OxClientBackend(channel: Channel) extends ClientBackend[[A] =>> A, Flow] {
     (requestFlow, requestMetadata) =>
       Flow.usingEmit { emit =>
         supervised {
-          val responseChannel = OxChannel.buffered[Response](1)
+          val responseChannel = OxChannel.buffered[Response](prefetch)
           val readySignal     = OxChannel.buffered[Unit](1)
           val senderError     = new AtomicReference[Throwable]()
           val call            = channel.newCall(methodDescriptor, options(CallOptions.DEFAULT))
 
           call.start(responseListener(responseChannel, readySignal), requestMetadata)
-          call.request(1)
+          call.request(prefetch)
 
           forkDiscard {
             try {
@@ -273,4 +278,16 @@ class OxClientBackend(channel: Channel) extends ClientBackend[[A] =>> A, Flow] {
         }
       }
   }
+}
+
+object OxClientBackend {
+
+  /**
+    * Creates a new Ox client backend.
+    *
+    * @param channel the gRPC channel used to issue calls.
+    * @param prefetchN initial in-flight response window for streaming RPCs.
+    */
+  def apply(channel: Channel, prefetchN: Int = 16): OxClientBackend =
+    new OxClientBackend(channel, prefetchN)
 }

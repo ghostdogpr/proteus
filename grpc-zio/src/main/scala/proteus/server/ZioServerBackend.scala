@@ -15,6 +15,7 @@ import proteus.server.ServerInterceptor
   *
   * @param interceptor an interceptor that can run on every request.
   * @param runtime the ZIO runtime to use for running ZIO effects.
+  * @param prefetchN initial in-flight request window for client-streaming / bidi RPCs; the window is refilled one message at a time as the handler consumes from the request stream.
   */
 class ZioServerBackend[R, E, Context](
   interceptor: ServerInterceptor[
@@ -25,8 +26,11 @@ class ZioServerBackend[R, E, Context](
     RequestResponseMetadata,
     Context
   ],
-  runtime: Runtime[R]
+  runtime: Runtime[R],
+  prefetchN: Int
 ) extends ServerBackend[ZIO[R, E, *], ZStream[R, E, *], Context] {
+
+  private val prefetch: Int = math.max(prefetchN, 1)
 
   final private class ReadySignal(call: ServerCall[?, ?]) {
     private def mkPromise(): Promise[Nothing, Unit] =
@@ -189,7 +193,7 @@ class ZioServerBackend[R, E, Context](
         val scope            = new CallScope
         val responseMetadata = new Metadata()
         val ctx              = RequestResponseMetadata(headers, responseMetadata)
-        call.request(1)
+        call.request(prefetch)
 
         val requestStream  = ZStream.fromQueue(queue).collectWhileSome
         val responseEffect =
@@ -212,7 +216,7 @@ class ZioServerBackend[R, E, Context](
         val responseMetadata = new Metadata()
         val ctx              = RequestResponseMetadata(headers, responseMetadata)
         val readySignal      = new ReadySignal(call)
-        call.request(1)
+        call.request(prefetch)
 
         val requestStream  = ZStream.fromQueue(queue).collectWhileSome
         val responseStream =
@@ -225,17 +229,29 @@ class ZioServerBackend[R, E, Context](
     }
 }
 
-object ZioServerBackend extends ZioServerBackend(ServerInterceptor.empty, Runtime.default) {
+object ZioServerBackend extends ZioServerBackend(ServerInterceptor.empty, Runtime.default, 16) {
 
   /**
     * A layer that provides a [[ZioServerBackend]] with the current ZIO runtime.
     */
   val layer: ULayer[ZioServerBackend[Any, StatusException, RequestResponseMetadata]] =
-    ZLayer(ZIO.runtime[Any].map(new ZioServerBackend(ServerInterceptor.empty, _)))
+    ZLayer(ZIO.runtime[Any].map(new ZioServerBackend(ServerInterceptor.empty, _, 16)))
 
-  def apply(): ZioServerBackend[Any, StatusException, RequestResponseMetadata] =
-    new ZioServerBackend(ServerInterceptor.empty, Runtime.default)
+  /**
+    * Creates a new ZIO server backend with no interceptor and the default runtime.
+    *
+    * @param prefetchN initial in-flight request window for client-streaming / bidi RPCs.
+    */
+  def apply(prefetchN: Int = 16): ZioServerBackend[Any, StatusException, RequestResponseMetadata] =
+    new ZioServerBackend(ServerInterceptor.empty, Runtime.default, prefetchN)
 
+  /**
+    * Creates a new ZIO server backend with the given interceptor and runtime.
+    *
+    * @param interceptor an interceptor that can run on every request.
+    * @param runtime the ZIO runtime to use for running ZIO effects.
+    * @param prefetchN initial in-flight request window for client-streaming / bidi RPCs.
+    */
   def apply[R, E, Context](
     interceptor: ServerInterceptor[
       IO[StatusException, *],
@@ -245,7 +261,8 @@ object ZioServerBackend extends ZioServerBackend(ServerInterceptor.empty, Runtim
       RequestResponseMetadata,
       Context
     ],
-    runtime: Runtime[R]
+    runtime: Runtime[R],
+    prefetchN: Int
   ): ZioServerBackend[R, E, Context] =
-    new ZioServerBackend(interceptor, runtime)
+    new ZioServerBackend(interceptor, runtime, prefetchN)
 }

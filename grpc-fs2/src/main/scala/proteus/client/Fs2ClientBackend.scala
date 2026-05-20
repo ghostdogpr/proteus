@@ -12,10 +12,15 @@ import io.grpc.*
 /**
   * A client backend that wraps results in an abstract `F[_]` monad backed by Cats Effect typeclasses.
   * Streaming is supported using [[fs2.Stream]].
+  *
+  * @param channel the gRPC channel used to issue calls.
+  * @param dispatcher a Cats Effect [[Dispatcher]] used to bridge gRPC's synchronous callbacks into `F`.
+  * @param prefetchN initial in-flight response window for server-streaming / bidi RPCs; the window is refilled one message at a time as the consumer pulls.
   */
-class Fs2ClientBackend[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F]) extends ClientBackend[F, Stream[F, *]] {
+class Fs2ClientBackend[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F], prefetchN: Int) extends ClientBackend[F, Stream[F, *]] {
 
-  private val F = Async[F]
+  private val F        = Async[F]
+  private val prefetch = math.max(prefetchN, 1)
 
   private class UnaryListener[Response] extends ClientCall.Listener[Response] {
     private val headersRef                                                             = new AtomicReference[Metadata](null)
@@ -131,7 +136,7 @@ class Fs2ClientBackend[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F])
         val queue = dispatcher.unsafeRunSync(Queue.unbounded[F, Either[Option[StatusException], Response]])
         val l     = new StreamingListener[Response](queue)
         call.start(l, headers)
-        call.request(1)
+        call.request(prefetch)
         call.sendMessage(request)
         call.halfClose()
         (call, queue)
@@ -199,7 +204,7 @@ class Fs2ClientBackend[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F])
         val readySignal = new ClientReadySignal(call)
         val l           = new BidiListener[Response](queue, readySignal)
         call.start(l, headers)
-        call.request(1)
+        call.request(prefetch)
         (call, queue, readySignal)
       })
       .flatMap { case (call, queue, readySignal) =>
@@ -303,6 +308,14 @@ class Fs2ClientBackend[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F])
 }
 
 object Fs2ClientBackend {
-  def apply[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F]): Fs2ClientBackend[F] =
-    new Fs2ClientBackend(channel, dispatcher)
+
+  /**
+    * Creates a new fs2 client backend.
+    *
+    * @param channel the gRPC channel used to issue calls.
+    * @param dispatcher a Cats Effect dispatcher.
+    * @param prefetchN initial in-flight response window for server-streaming / bidi RPCs.
+    */
+  def apply[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F], prefetchN: Int = 16): Fs2ClientBackend[F] =
+    new Fs2ClientBackend(channel, dispatcher, prefetchN)
 }

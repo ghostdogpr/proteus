@@ -19,7 +19,7 @@ class RouteGuideClient(host: String, port: Int) {
     ZIO.scoped {
       for {
         channel <- channelResource
-        backend  = new ZioClientBackend(channel)
+        backend  = ZioClientBackend(channel)
         result  <- backend.client(getFeatureRpc, routeGuideService)(point)
       } yield result
     }
@@ -28,7 +28,7 @@ class RouteGuideClient(host: String, port: Int) {
     ZIO.scoped {
       for {
         channel  <- channelResource
-        backend   = new ZioClientBackend(channel)
+        backend   = ZioClientBackend(channel)
         features <- backend.client(listFeaturesRpc, routeGuideService)(rectangle).runCollect
       } yield features.toList
     }
@@ -37,7 +37,7 @@ class RouteGuideClient(host: String, port: Int) {
     ZIO.scoped {
       for {
         channel <- channelResource
-        backend  = new ZioClientBackend(channel)
+        backend  = ZioClientBackend(channel)
         result  <- backend.client(recordRouteRpc, routeGuideService)(ZStream.fromIterable(points))
       } yield result
     }
@@ -53,7 +53,7 @@ class RouteGuideClient(host: String, port: Int) {
     ZIO.scoped {
       for {
         channel   <- channelResource
-        backend    = new ZioClientBackend(channel)
+        backend    = ZioClientBackend(channel)
         responses <- backend.client(routeChatRpc, routeGuideService)(ZStream.fromIterable(notes)).runCollect
       } yield responses.toList
     }

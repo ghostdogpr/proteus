@@ -144,10 +144,10 @@ val backend = DirectClientBackend(channel)
 val sayHelloClient = backend.client(sayHelloRpc, greeterService)
 ```
 Once again, the return type of `client` depends on the backend you are using:
-- Unary: `Unary[Request => Unary[Response]]`
-- Client Streaming: `Unary[Streaming[Request] => Unary[Response]]`
-- Server Streaming: `Unary[Request => Streaming[Response]]`
-- Bidirectional Streaming: `Unary[Streaming[Request] => Streaming[Response]]`
+- Unary: `Request => Unary[Response]`
+- Client Streaming: `Streaming[Request] => Unary[Response]`
+- Server Streaming: `Request => Streaming[Response]`
+- Bidirectional Streaming: `Streaming[Request] => Streaming[Response]`
 
 So with our direct backend, the return type is `Request => Response`.
 ```scala
@@ -158,10 +158,10 @@ sayHelloClient(HelloRequest("Pierre"))
 ### Metadata
 
 There is also a variant of `client` that allows you to send and receive metadata. It is called `clientWithMetadata` and returns a function that has the following shape:
-- Unary: `Unary[(Request, Metadata) => Unary[(Response, Metadata)]]`
-- Client Streaming: `Unary[(Streaming[Request], Metadata) => Unary[(Response, Metadata)]]`
-- Server Streaming: `Unary[(Request, Metadata) => Streaming[Response]]`
-- Bidirectional Streaming: `Unary[(Streaming[Request], Metadata) => Streaming[Response]]`
+- Unary: `(Request, Metadata) => Unary[(Response, Metadata)]`
+- Client Streaming: `(Streaming[Request], Metadata) => Unary[(Response, Metadata)]`
+- Server Streaming: `(Request, Metadata) => Streaming[Response]`
+- Bidirectional Streaming: `(Streaming[Request], Metadata) => Streaming[Response]`
 
 So with our direct backend, the return type is `(Request, Metadata) => (Response, Metadata)`.
 ```scala

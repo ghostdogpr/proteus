@@ -50,7 +50,7 @@ object OxBackendSpec extends ZIOSpecDefault {
         val channel = NettyChannelBuilder.forAddress("localhost", port).usePlaintext().build()
 
         try {
-          val clientBackend = new OxClientBackend(channel)
+          val clientBackend = OxClientBackend(channel)
           val client1       = clientBackend.client(complexRpc, testService)
           val client2       = clientBackend.client(complexRpc, testService)
           val client3       = clientBackend.client(complexRpc, testService)
@@ -78,7 +78,7 @@ object OxBackendSpec extends ZIOSpecDefault {
         val channel = NettyChannelBuilder.forAddress("localhost", port).usePlaintext().build()
 
         try {
-          val clientBackend = new OxClientBackend(channel)
+          val clientBackend = OxClientBackend(channel)
 
           val requestMetadata = new Metadata()
           requestMetadata.put(Metadata.Key.of("client-id", Metadata.ASCII_STRING_MARSHALLER), "ox-client-101")
@@ -107,7 +107,7 @@ object OxBackendSpec extends ZIOSpecDefault {
         val channel = NettyChannelBuilder.forAddress("localhost", port).usePlaintext().build()
 
         try {
-          val clientBackend = new OxClientBackend(channel)
+          val clientBackend = OxClientBackend(channel)
           val client        = clientBackend.client(clientStreamingRpc, clientStreamingService)
           val requestFlow   = Flow.fromIterable(List(StreamRequest(1), StreamRequest(2), StreamRequest(3), StreamRequest(4)))
           val response      = client(requestFlow)
@@ -132,7 +132,7 @@ object OxBackendSpec extends ZIOSpecDefault {
         val channel = NettyChannelBuilder.forAddress("localhost", port).usePlaintext().build()
 
         try {
-          val clientBackend = new OxClientBackend(channel)
+          val clientBackend = OxClientBackend(channel)
           val client        = clientBackend.client(serverStreamingRpc, serverStreamingService)
           val responseFlow  = client(StreamRequest(5))
           val responses     = responseFlow.runToList()
@@ -157,7 +157,7 @@ object OxBackendSpec extends ZIOSpecDefault {
         val channel = NettyChannelBuilder.forAddress("localhost", port).usePlaintext().build()
 
         try {
-          val clientBackend = new OxClientBackend(channel)
+          val clientBackend = OxClientBackend(channel)
           val client        = clientBackend.client(bidiStreamingRpc, bidiStreamingService)
           val requestFlow   = Flow.fromIterable(List(StreamRequest(10), StreamRequest(20), StreamRequest(30)))
           val responseFlow  = client(requestFlow)

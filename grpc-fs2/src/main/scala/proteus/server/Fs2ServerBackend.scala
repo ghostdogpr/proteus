@@ -17,13 +17,16 @@ import proteus.server.ServerInterceptor
   *
   * @param interceptor an interceptor that can run on every request.
   * @param dispatcher a Cats Effect [[Dispatcher]] used to bridge gRPC's synchronous callbacks into `F`.
+  * @param prefetchN initial in-flight request window for client-streaming / bidi RPCs; the window is refilled one message at a time as the handler consumes from the request stream.
   */
 class Fs2ServerBackend[F[_]: Async, G[_], Context](
   interceptor: ServerInterceptor[F, G, Stream[F, *], Stream[G, *], RequestResponseMetadata, Context],
-  dispatcher: Dispatcher[F]
+  dispatcher: Dispatcher[F],
+  prefetchN: Int
 ) extends ServerBackend[G, Stream[G, *], Context] {
 
-  private val F = Async[F]
+  private val F        = Async[F]
+  private val prefetch = math.max(prefetchN, 1)
 
   final private class ReadySignal(call: ServerCall[?, ?]) {
     private def mkDeferred(): Deferred[F, Unit] = Deferred.unsafe[F, Unit]
@@ -183,7 +186,7 @@ class Fs2ServerBackend[F[_]: Async, G[_], Context](
         val scope            = new CallScope
         val responseMetadata = new Metadata()
         val ctx              = RequestResponseMetadata(headers, responseMetadata)
-        call.request(1)
+        call.request(prefetch)
 
         val requestStream  = Stream.fromQueueNoneTerminated(queue)
         val responseEffect = interceptor
@@ -206,7 +209,7 @@ class Fs2ServerBackend[F[_]: Async, G[_], Context](
         val responseMetadata = new Metadata()
         val ctx              = RequestResponseMetadata(headers, responseMetadata)
         val readySignal      = new ReadySignal(call)
-        call.request(1)
+        call.request(prefetch)
 
         val requestStream  = Stream.fromQueueNoneTerminated(queue)
         val responseStream = interceptor
@@ -225,23 +228,27 @@ object Fs2ServerBackend {
     * Creates a new fs2 server backend.
     *
     * @param dispatcher a Cats Effect dispatcher.
+    * @param prefetchN initial in-flight request window for client-streaming / bidi RPCs.
     */
   def apply[F[_]: Async](
-    dispatcher: Dispatcher[F]
+    dispatcher: Dispatcher[F],
+    prefetchN: Int = 16
   ): Fs2ServerBackend[F, F, RequestResponseMetadata] =
-    apply(ServerInterceptor.empty, dispatcher)
+    apply(ServerInterceptor.empty, dispatcher, prefetchN)
 
   /**
     * Creates a new fs2 server backend with the given context interceptor.
     *
     * @param interceptor an interceptor that can run on every request.
     * @param dispatcher a Cats Effect dispatcher.
+    * @param prefetchN initial in-flight request window for client-streaming / bidi RPCs.
     */
   def apply[F[_]: Async, Context](
     interceptor: ServerContextInterceptor[F, Stream[F, *], RequestResponseMetadata, Context],
-    dispatcher: Dispatcher[F]
+    dispatcher: Dispatcher[F],
+    prefetchN: Int
   ): Fs2ServerBackend[F, F, Context] =
-    new Fs2ServerBackend(interceptor, dispatcher)
+    new Fs2ServerBackend(interceptor, dispatcher, prefetchN)
 
   /**
     * Creates a new fs2 server backend with the given interceptor, allowing the user-handler
@@ -249,10 +256,12 @@ object Fs2ServerBackend {
     *
     * @param interceptor an interceptor that can run on every request.
     * @param dispatcher a Cats Effect dispatcher.
+    * @param prefetchN initial in-flight request window for client-streaming / bidi RPCs.
     */
   def apply[F[_]: Async, G[_], Context](
     interceptor: ServerInterceptor[F, G, Stream[F, *], Stream[G, *], RequestResponseMetadata, Context],
-    dispatcher: Dispatcher[F]
+    dispatcher: Dispatcher[F],
+    prefetchN: Int
   ): Fs2ServerBackend[F, G, Context] =
-    new Fs2ServerBackend(interceptor, dispatcher)
+    new Fs2ServerBackend(interceptor, dispatcher, prefetchN)
 }

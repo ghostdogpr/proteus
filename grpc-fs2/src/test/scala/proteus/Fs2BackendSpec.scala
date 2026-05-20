@@ -60,7 +60,7 @@ object Fs2BackendSpec extends ZIOSpecDefault {
           val reflectionService = io.grpc.protobuf.services.ProtoReflectionServiceV1.newInstance
           val server            = NettyServerBuilder.forPort(port).addService(serverService).addService(reflectionService).build().start()
           val channel           = NettyChannelBuilder.forAddress("localhost", port).usePlaintext().build()
-          val clientBackend     = new Fs2ClientBackend[IO](channel, dispatcher)
+          val clientBackend     = Fs2ClientBackend[IO](channel, dispatcher)
 
           val client         = reflectionClient(clientBackend)
           val requestStream  = Stream.emit(ServerReflectionRequest("localhost", MessageRequest.ListServices("")))
@@ -100,7 +100,7 @@ object Fs2BackendSpec extends ZIOSpecDefault {
           val reflectionService = io.grpc.protobuf.services.ProtoReflectionServiceV1.newInstance
           val server            = NettyServerBuilder.forPort(port).addService(serverService).addService(reflectionService).build().start()
           val channel           = NettyChannelBuilder.forAddress("localhost", port).usePlaintext().build()
-          val clientBackend     = new Fs2ClientBackend[IO](channel, dispatcher)
+          val clientBackend     = Fs2ClientBackend[IO](channel, dispatcher)
 
           val client  = reflectionClient(clientBackend)
           val program = for {
@@ -140,7 +140,7 @@ object Fs2BackendSpec extends ZIOSpecDefault {
           val port          = 6001
           val server        = NettyServerBuilder.forPort(port).addService(serverService).build().start()
           val channel       = NettyChannelBuilder.forAddress("localhost", port).usePlaintext().build()
-          val clientBackend = new Fs2ClientBackend[IO](channel, dispatcher)
+          val clientBackend = Fs2ClientBackend[IO](channel, dispatcher)
 
           val client1 = clientBackend.client(complexRpc, testService)
           val client2 = clientBackend.client(complexRpc, testService)
@@ -175,7 +175,7 @@ object Fs2BackendSpec extends ZIOSpecDefault {
           val port          = 6002
           val server        = NettyServerBuilder.forPort(port).addService(metadataServerService).build().start()
           val channel       = NettyChannelBuilder.forAddress("localhost", port).usePlaintext().build()
-          val clientBackend = new Fs2ClientBackend[IO](channel, dispatcher)
+          val clientBackend = Fs2ClientBackend[IO](channel, dispatcher)
 
           val requestMetadata = new Metadata()
           requestMetadata.put(Metadata.Key.of("client-id", Metadata.ASCII_STRING_MARSHALLER), "fs2-client-101")
@@ -210,7 +210,7 @@ object Fs2BackendSpec extends ZIOSpecDefault {
           val port          = 6003
           val server        = NettyServerBuilder.forPort(port).addService(streamingServerService).build().start()
           val channel       = NettyChannelBuilder.forAddress("localhost", port).usePlaintext().build()
-          val clientBackend = new Fs2ClientBackend[IO](channel, dispatcher)
+          val clientBackend = Fs2ClientBackend[IO](channel, dispatcher)
 
           val client        = clientBackend.client(clientStreamingRpc, clientStreamingService)
           val requestStream = Stream(StreamRequest(1), StreamRequest(2), StreamRequest(3), StreamRequest(4))
@@ -242,7 +242,7 @@ object Fs2BackendSpec extends ZIOSpecDefault {
           val port          = 6004
           val server        = NettyServerBuilder.forPort(port).addService(streamingServerService).build().start()
           val channel       = NettyChannelBuilder.forAddress("localhost", port).usePlaintext().build()
-          val clientBackend = new Fs2ClientBackend[IO](channel, dispatcher)
+          val clientBackend = Fs2ClientBackend[IO](channel, dispatcher)
 
           val client         = clientBackend.client(serverStreamingRpc, serverStreamingService)
           val responseStream = client(StreamRequest(5))
@@ -274,7 +274,7 @@ object Fs2BackendSpec extends ZIOSpecDefault {
           val port          = 6005
           val server        = NettyServerBuilder.forPort(port).addService(streamingServerService).build().start()
           val channel       = NettyChannelBuilder.forAddress("localhost", port).usePlaintext().build()
-          val clientBackend = new Fs2ClientBackend[IO](channel, dispatcher)
+          val clientBackend = Fs2ClientBackend[IO](channel, dispatcher)
 
           val client         = clientBackend.client(bidiStreamingRpc, bidiStreamingService)
           val requestStream  = Stream(StreamRequest(10), StreamRequest(20), StreamRequest(30))
