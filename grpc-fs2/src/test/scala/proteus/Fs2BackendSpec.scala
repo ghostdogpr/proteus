@@ -12,14 +12,14 @@ import zio.test.*
 
 import proteus.GrpcTestUtils.*
 import proteus.client.Fs2ClientBackend
-import proteus.server.{Fs2ServerBackend, RequestResponseMetadata, ServerService}
+import proteus.server.{Fs2ServerBackend, GrpcContext, ServerService}
 
 object Fs2BackendSpec extends ZIOSpecDefault {
 
   def processComplexRequestFs2(req: ComplexRequest): IO[ComplexResponse] =
     IO.pure(processComplexRequest(req))
 
-  def processWithMetadataFs2(req: MetadataRequest, ctx: RequestResponseMetadata): IO[MetadataResponse] =
+  def processWithMetadataFs2(req: MetadataRequest, ctx: GrpcContext): IO[MetadataResponse] =
     IO.pure(processWithMetadata(req, ctx))
 
   def clientStreamingFs2(stream: Stream[IO, StreamRequest]): IO[StreamResponse] =

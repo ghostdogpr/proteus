@@ -20,7 +20,7 @@ import proteus.server.ServerInterceptor
   * @param prefetchN initial in-flight request window for client-streaming / bidi RPCs; the window is refilled one message at a time as the handler consumes from the request stream.
   */
 class Fs2ServerBackend[F[_]: Async, G[_], Context](
-  interceptor: ServerInterceptor[F, G, Stream[F, *], Stream[G, *], RequestResponseMetadata, Context],
+  interceptor: ServerInterceptor[F, G, Stream[F, *], Stream[G, *], GrpcContext, Context],
   dispatcher: Dispatcher[F],
   prefetchN: Int
 ) extends ServerBackend[G, Stream[G, *], Context] {
@@ -110,7 +110,7 @@ class Fs2ServerBackend[F[_]: Async, G[_], Context](
       def startCall(call: ServerCall[Request, Response], headers: Metadata): ServerCall.Listener[Request] = {
         val scope            = new CallScope
         val responseMetadata = new Metadata()
-        val ctx              = RequestResponseMetadata(headers, responseMetadata)
+        val ctx              = GrpcContext.fromCall(call, headers, responseMetadata)
         call.request(2)
 
         new UnaryInputListener[Request, Response](call) {
@@ -135,7 +135,7 @@ class Fs2ServerBackend[F[_]: Async, G[_], Context](
       def startCall(call: ServerCall[Request, Response], headers: Metadata): ServerCall.Listener[Request] = {
         val scope            = new CallScope
         val responseMetadata = new Metadata()
-        val ctx              = RequestResponseMetadata(headers, responseMetadata)
+        val ctx              = GrpcContext.fromCall(call, headers, responseMetadata)
         val readySignal      = new ReadySignal(call)
         call.request(2)
 
@@ -185,7 +185,7 @@ class Fs2ServerBackend[F[_]: Async, G[_], Context](
         val queue            = dispatcher.unsafeRunSync(Queue.unbounded[F, Option[Request]])
         val scope            = new CallScope
         val responseMetadata = new Metadata()
-        val ctx              = RequestResponseMetadata(headers, responseMetadata)
+        val ctx              = GrpcContext.fromCall(call, headers, responseMetadata)
         call.request(prefetch)
 
         val requestStream  = Stream.fromQueueNoneTerminated(queue)
@@ -207,7 +207,7 @@ class Fs2ServerBackend[F[_]: Async, G[_], Context](
         val queue            = dispatcher.unsafeRunSync(Queue.unbounded[F, Option[Request]])
         val scope            = new CallScope
         val responseMetadata = new Metadata()
-        val ctx              = RequestResponseMetadata(headers, responseMetadata)
+        val ctx              = GrpcContext.fromCall(call, headers, responseMetadata)
         val readySignal      = new ReadySignal(call)
         call.request(prefetch)
 
@@ -233,7 +233,7 @@ object Fs2ServerBackend {
   def apply[F[_]: Async](
     dispatcher: Dispatcher[F],
     prefetchN: Int = 16
-  ): Fs2ServerBackend[F, F, RequestResponseMetadata] =
+  ): Fs2ServerBackend[F, F, GrpcContext] =
     apply(ServerInterceptor.empty, dispatcher, prefetchN)
 
   /**
@@ -244,7 +244,7 @@ object Fs2ServerBackend {
     * @param prefetchN initial in-flight request window for client-streaming / bidi RPCs.
     */
   def apply[F[_]: Async, Context](
-    interceptor: ServerContextInterceptor[F, Stream[F, *], RequestResponseMetadata, Context],
+    interceptor: ServerContextInterceptor[F, Stream[F, *], GrpcContext, Context],
     dispatcher: Dispatcher[F],
     prefetchN: Int
   ): Fs2ServerBackend[F, F, Context] =
@@ -259,7 +259,7 @@ object Fs2ServerBackend {
     * @param prefetchN initial in-flight request window for client-streaming / bidi RPCs.
     */
   def apply[F[_]: Async, G[_], Context](
-    interceptor: ServerInterceptor[F, G, Stream[F, *], Stream[G, *], RequestResponseMetadata, Context],
+    interceptor: ServerInterceptor[F, G, Stream[F, *], Stream[G, *], GrpcContext, Context],
     dispatcher: Dispatcher[F],
     prefetchN: Int
   ): Fs2ServerBackend[F, G, Context] =

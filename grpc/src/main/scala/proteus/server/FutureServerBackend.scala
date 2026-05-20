@@ -12,7 +12,7 @@ import io.grpc.{Metadata, ServerCall, ServerCallHandler, Status}
   *
   * @param interceptor an interceptor that can run on every request.
   */
-class FutureServerBackend[Context](interceptor: ServerContextInterceptor[Future, Future, RequestResponseMetadata, Context])
+class FutureServerBackend[Context](interceptor: ServerContextInterceptor[Future, Future, GrpcContext, Context])
   extends ServerBackend[Future, Future, Context] {
   def handler[Request, Response](
     rpc: ServerRpc[Future, Future, Context, Request, Response]
@@ -22,7 +22,7 @@ class FutureServerBackend[Context](interceptor: ServerContextInterceptor[Future,
         new ServerCallHandler[Request, Response] {
           def startCall(call: ServerCall[Request, Response], headers: Metadata): ServerCall.Listener[Request] = {
             val responseMetadata = new Metadata()
-            val ctx              = RequestResponseMetadata(headers, responseMetadata)
+            val ctx              = GrpcContext.fromCall(call, headers, responseMetadata)
             call.request(2)
             new UnaryInputListener[Request, Response](call) {
               protected def onRequest(req: Request): Unit = {

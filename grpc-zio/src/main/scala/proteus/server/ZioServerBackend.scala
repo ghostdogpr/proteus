@@ -23,10 +23,10 @@ class ZioServerBackend[R, E, Context](
     ZIO[R, E, *],
     ZStream[Any, StatusException, *],
     ZStream[R, E, *],
-    RequestResponseMetadata,
+    GrpcContext,
     Context
   ],
-  runtime: Runtime[R],
+  runtime: Runtime[Any],
   prefetchN: Int
 ) extends ServerBackend[ZIO[R, E, *], ZStream[R, E, *], Context] {
 
@@ -54,9 +54,9 @@ class ZioServerBackend[R, E, Context](
 
   private def sendStream[Resp](
     call: ServerCall[?, Resp],
-    stream: ZStream[R, StatusException, Resp],
+    stream: ZStream[Any, StatusException, Resp],
     readySignal: ReadySignal
-  ): ZIO[R, StatusException, Unit] = ZIO.suspendSucceed {
+  ): IO[StatusException, Unit] = ZIO.suspendSucceed {
     var headersSent = false
     stream.runForeach { resp =>
       val send = ZIO.succeed {
@@ -94,7 +94,7 @@ class ZioServerBackend[R, E, Context](
     }
   }
 
-  private def forkScoped(scope: CallScope, effect: ZIO[R, StatusException, Unit]): Unit =
+  private def forkScoped(scope: CallScope, effect: IO[StatusException, Unit]): Unit =
     scope.attach(Unsafe.unsafely(runtime.unsafe.fork(effect)))
 
   private def sendUnaryResponse[Response](call: ServerCall[?, Response], response: Response): UIO[Unit] =
@@ -118,7 +118,7 @@ class ZioServerBackend[R, E, Context](
       def startCall(call: ServerCall[Request, Response], headers: Metadata): ServerCall.Listener[Request] = {
         val scope            = new CallScope
         val responseMetadata = new Metadata()
-        val ctx              = RequestResponseMetadata(headers, responseMetadata)
+        val ctx              = GrpcContext.fromCall(call, headers, responseMetadata)
         call.request(2)
 
         new UnaryInputListener[Request, Response](call) {
@@ -143,7 +143,7 @@ class ZioServerBackend[R, E, Context](
       def startCall(call: ServerCall[Request, Response], headers: Metadata): ServerCall.Listener[Request] = {
         val scope            = new CallScope
         val responseMetadata = new Metadata()
-        val ctx              = RequestResponseMetadata(headers, responseMetadata)
+        val ctx              = GrpcContext.fromCall(call, headers, responseMetadata)
         val readySignal      = new ReadySignal(call)
         call.request(2)
 
@@ -192,7 +192,7 @@ class ZioServerBackend[R, E, Context](
         val queue            = Unsafe.unsafely(Queue.unsafe.unbounded[Option[Request]](FiberId.None))
         val scope            = new CallScope
         val responseMetadata = new Metadata()
-        val ctx              = RequestResponseMetadata(headers, responseMetadata)
+        val ctx              = GrpcContext.fromCall(call, headers, responseMetadata)
         call.request(prefetch)
 
         val requestStream  = ZStream.fromQueue(queue).collectWhileSome
@@ -214,7 +214,7 @@ class ZioServerBackend[R, E, Context](
         val queue            = Unsafe.unsafely(Queue.unsafe.unbounded[Option[Request]](FiberId.None))
         val scope            = new CallScope
         val responseMetadata = new Metadata()
-        val ctx              = RequestResponseMetadata(headers, responseMetadata)
+        val ctx              = GrpcContext.fromCall(call, headers, responseMetadata)
         val readySignal      = new ReadySignal(call)
         call.request(prefetch)
 
@@ -234,7 +234,7 @@ object ZioServerBackend extends ZioServerBackend(ServerInterceptor.empty, Runtim
   /**
     * A layer that provides a [[ZioServerBackend]] with the current ZIO runtime.
     */
-  val layer: ULayer[ZioServerBackend[Any, StatusException, RequestResponseMetadata]] =
+  val layer: ULayer[ZioServerBackend[Any, StatusException, GrpcContext]] =
     ZLayer(ZIO.runtime[Any].map(new ZioServerBackend(ServerInterceptor.empty, _, 16)))
 
   /**
@@ -242,7 +242,7 @@ object ZioServerBackend extends ZioServerBackend(ServerInterceptor.empty, Runtim
     *
     * @param prefetchN initial in-flight request window for client-streaming / bidi RPCs.
     */
-  def apply(prefetchN: Int = 16): ZioServerBackend[Any, StatusException, RequestResponseMetadata] =
+  def apply(prefetchN: Int = 16): ZioServerBackend[Any, StatusException, GrpcContext] =
     new ZioServerBackend(ServerInterceptor.empty, Runtime.default, prefetchN)
 
   /**
@@ -258,10 +258,10 @@ object ZioServerBackend extends ZioServerBackend(ServerInterceptor.empty, Runtim
       ZIO[R, E, *],
       ZStream[Any, StatusException, *],
       ZStream[R, E, *],
-      RequestResponseMetadata,
+      GrpcContext,
       Context
     ],
-    runtime: Runtime[R],
+    runtime: Runtime[Any],
     prefetchN: Int
   ): ZioServerBackend[R, E, Context] =
     new ZioServerBackend(interceptor, runtime, prefetchN)

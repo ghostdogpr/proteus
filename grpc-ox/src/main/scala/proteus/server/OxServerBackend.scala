@@ -20,7 +20,7 @@ import ox.flow.Flow
   * @param prefetchN initial in-flight request window for client-streaming / bidi RPCs; also sizes the request channel buffer.
   */
 class OxServerBackend[Context](
-  interceptor: ServerContextInterceptor[[A] =>> A, Flow, RequestResponseMetadata, Context],
+  interceptor: ServerContextInterceptor[[A] =>> A, Flow, GrpcContext, Context],
   runner: InScopeRunner,
   prefetchN: Int
 ) extends ServerBackend[[A] =>> A, Flow, Context] {
@@ -110,7 +110,7 @@ class OxServerBackend[Context](
         new ServerCallHandler[Request, Response] {
           def startCall(call: ServerCall[Request, Response], headers: Metadata): ServerCall.Listener[Request] = {
             val responseMetadata = new Metadata()
-            val ctx              = RequestResponseMetadata(headers, responseMetadata)
+            val ctx              = GrpcContext.fromCall(call, headers, responseMetadata)
             call.request(2)
             new UnaryInputListener[Request, Response](call) {
               protected def onRequest(req: Request): Unit =
@@ -140,7 +140,7 @@ class OxServerBackend[Context](
               val response         =
                 interceptor.clientStreaming[Request, Response](req => ctx => logic(req, ctx))(using rpc.requestCodec, rpc.responseCodec)(
                   requestFlow
-                )(RequestResponseMetadata(headers, responseMetadata))
+                )(GrpcContext.fromCall(call, headers, responseMetadata))
               ServerBackend.sendUnaryResponse(call, response)
               call.close(Status.OK, responseMetadata)
             }
@@ -161,7 +161,7 @@ class OxServerBackend[Context](
                   val responseMetadata = new Metadata()
                   val responseFlow     =
                     interceptor.serverStreaming(ctx => logic(message, ctx))(using rpc.requestCodec, rpc.responseCodec)(message)(
-                      RequestResponseMetadata(headers, responseMetadata)
+                      GrpcContext.fromCall(call, headers, responseMetadata)
                     )
                   sendResponseFlow(call, responseFlow, readySignal)
                   call.close(Status.OK, responseMetadata)
@@ -192,7 +192,7 @@ class OxServerBackend[Context](
               val responseFlow     =
                 interceptor.bidiStreaming[Request, Response](req => ctx => logic(req, ctx))(using rpc.requestCodec, rpc.responseCodec)(
                   requestFlow
-                )(RequestResponseMetadata(headers, responseMetadata))
+                )(GrpcContext.fromCall(call, headers, responseMetadata))
               sendResponseFlow(call, responseFlow, readySignal)
               call.close(Status.OK, responseMetadata)
             }
@@ -211,7 +211,7 @@ object OxServerBackend {
     * @param runner an InScopeRunner used to start handler threads within a structured concurrency scope.
     * @param prefetchN initial in-flight request window for client-streaming / bidi RPCs.
     */
-  def apply(runner: InScopeRunner, prefetchN: Int = 16): OxServerBackend[RequestResponseMetadata] =
+  def apply(runner: InScopeRunner, prefetchN: Int = 16): OxServerBackend[GrpcContext] =
     new OxServerBackend(ServerInterceptor.empty, runner, prefetchN)
 
   /**
@@ -222,7 +222,7 @@ object OxServerBackend {
     * @param prefetchN initial in-flight request window for client-streaming / bidi RPCs.
     */
   def apply[Context](
-    interceptor: ServerContextInterceptor[[A] =>> A, Flow, RequestResponseMetadata, Context],
+    interceptor: ServerContextInterceptor[[A] =>> A, Flow, GrpcContext, Context],
     runner: InScopeRunner,
     prefetchN: Int
   ): OxServerBackend[Context] =

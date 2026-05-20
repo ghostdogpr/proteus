@@ -10,7 +10,7 @@ import zio.test.*
 
 import proteus.GrpcTestUtils.*
 import proteus.client.OxClientBackend
-import proteus.server.{OxServerBackend, RequestResponseMetadata, ServerService}
+import proteus.server.{GrpcContext, OxServerBackend, ServerService}
 
 object OxBackendSpec extends ZIOSpecDefault {
 

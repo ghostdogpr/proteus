@@ -22,7 +22,7 @@ object ZioBackendSpec extends ZIOSpecDefault {
     .rpc(complexRpc, processComplexRequestZio)
     .build(testService)
 
-  def processWithMetadataZio(req: MetadataRequest, ctx: RequestResponseMetadata): IO[StatusException, MetadataResponse] = ZIO.succeed {
+  def processWithMetadataZio(req: MetadataRequest, ctx: GrpcContext): IO[StatusException, MetadataResponse] = ZIO.succeed {
     val requestMetadata =
       Option(ctx.requestMetadata.get(Metadata.Key.of("client-id", Metadata.ASCII_STRING_MARSHALLER))).getOrElse("unknown")
     ctx.responseMetadata.put(Metadata.Key.of("server-response", Metadata.ASCII_STRING_MARSHALLER), "processed")
@@ -218,24 +218,24 @@ object ZioBackendSpec extends ZIOSpecDefault {
           IO[String, *],
           ZStream[Any, StatusException, *],
           ZStream[Any, String, *],
-          RequestResponseMetadata,
-          RequestResponseMetadata
+          GrpcContext,
+          GrpcContext
         ] {
           def unary[Req: ProtobufCodec, Resp: ProtobufCodec](
-            io: RequestResponseMetadata => IO[String, Resp]
-          ): (Req => RequestResponseMetadata => IO[StatusException, Resp])                                          =
+            io: GrpcContext => IO[String, Resp]
+          ): (Req => GrpcContext => IO[StatusException, Resp])                                          =
             _ => ctx => io(ctx).mapError(error => Status.INTERNAL.withDescription(error).asException())
           def clientStreaming[Req: ProtobufCodec, Resp: ProtobufCodec](
-            io: ZStream[Any, String, Req] => RequestResponseMetadata => IO[String, Resp]
-          ): (ZStream[Any, StatusException, Req] => RequestResponseMetadata => IO[StatusException, Resp])           =
+            io: ZStream[Any, String, Req] => GrpcContext => IO[String, Resp]
+          ): (ZStream[Any, StatusException, Req] => GrpcContext => IO[StatusException, Resp])           =
             stream => ctx => io(stream.mapError(_.getMessage))(ctx).mapError(error => Status.INTERNAL.withDescription(error).asException())
           def serverStreaming[Req: ProtobufCodec, Resp: ProtobufCodec](
-            io: RequestResponseMetadata => ZStream[Any, String, Resp]
-          ): (Req => RequestResponseMetadata => ZStream[Any, StatusException, Resp])                                =
+            io: GrpcContext => ZStream[Any, String, Resp]
+          ): (Req => GrpcContext => ZStream[Any, StatusException, Resp])                                =
             _ => ctx => io(ctx).mapError(error => Status.INTERNAL.withDescription(error).asException())
           def bidiStreaming[Req: ProtobufCodec, Resp: ProtobufCodec](
-            io: ZStream[Any, String, Req] => RequestResponseMetadata => ZStream[Any, String, Resp]
-          ): (ZStream[Any, StatusException, Req] => RequestResponseMetadata => ZStream[Any, StatusException, Resp]) =
+            io: ZStream[Any, String, Req] => GrpcContext => ZStream[Any, String, Resp]
+          ): (ZStream[Any, StatusException, Req] => GrpcContext => ZStream[Any, StatusException, Resp]) =
             stream => ctx => io(stream.mapError(_.getMessage))(ctx).mapError(error => Status.INTERNAL.withDescription(error).asException())
         },
         Runtime.default,

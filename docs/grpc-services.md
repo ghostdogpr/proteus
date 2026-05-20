@@ -82,10 +82,10 @@ ServerBuilder.forPort(8080).addService(service).build().start()
 In addition to the `.rpc` method, you can also use `.rpcWithContext` if you want to receive the context of the call.
 In this case, the logic function has the following shape: `(Request, Context) => Unary[Response]`, `(Streaming[Request], Context) => Unary[Response]`, etc.
 
-The default `Context` is `proteus.server.RequestResponseMetadata`, a type that contains request and response metadata.
+The default `Context` is `proteus.server.GrpcContext`, which contains request and response metadata as well as call-level information (`authority`, `methodDescriptor`, `attributes`) taken from `io.grpc.ServerCall`.
 
 ```scala
-def processHello(request: HelloRequest, ctx: RequestResponseMetadata): HelloReply = {
+def processHello(request: HelloRequest, ctx: GrpcContext): HelloReply = {
   println(s"Request metadata: ${ctx.requestMetadata}")
   HelloReply(s"Hello, ${request.name}!")
 }
@@ -107,12 +107,12 @@ The second one is a more specific trait that can only transform the context.
 Let's look at an example:
 ```scala
 val interceptor = 
-  new ServerContextInterceptor[[A] =>> A, [A] =>> A, RequestResponseMetadata, String] {
-    def transformContext(context: RequestResponseMetadata): String =
+  new ServerContextInterceptor[[A] =>> A, [A] =>> A, GrpcContext, String] {
+    def transformContext(context: GrpcContext): String =
       context.requestMetadata.get(Metadata.Key.of("auth-token", Metadata.ASCII_STRING_MARSHALLER))
   }
 ```
-This interceptor changes the `Context` type from initial `RequestResponseMetadata` to `String` for the direct backend.
+This interceptor changes the `Context` type from initial `GrpcContext` to `String` for the direct backend.
 On every request, it will extract the `auth-token` from the request metadata and pass it to the logic function. Your logic function just needs to be `(Request, String) => Response`.
 
 ::: tip

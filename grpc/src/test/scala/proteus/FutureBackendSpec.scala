@@ -11,14 +11,14 @@ import zio.test.*
 
 import proteus.GrpcTestUtils.*
 import proteus.client.FutureClientBackend
-import proteus.server.{FutureServerBackend, RequestResponseMetadata, ServerService}
+import proteus.server.{FutureServerBackend, GrpcContext, ServerService}
 
 object FutureBackendSpec extends ZIOSpecDefault {
 
   def processComplexRequestFuture(req: ComplexRequest): Future[ComplexResponse] =
     Future.successful(processComplexRequest(req))
 
-  def processWithMetadataFuture(req: MetadataRequest, ctx: RequestResponseMetadata): Future[MetadataResponse] =
+  def processWithMetadataFuture(req: MetadataRequest, ctx: GrpcContext): Future[MetadataResponse] =
     Future.successful(processWithMetadata(req, ctx))
 
   val testServiceDef = ServerService(using FutureServerBackend)

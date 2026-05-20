@@ -10,7 +10,7 @@ import io.grpc.protobuf.services.ProtoReflectionServiceV1
 import io.grpc.reflection.v1.{ServerReflectionGrpc, ServerReflectionRequest}
 import zio.blocks.schema.Schema
 
-import proteus.server.RequestResponseMetadata
+import proteus.server.GrpcContext
 
 object GrpcTestUtils {
 
@@ -142,7 +142,7 @@ object GrpcTestUtils {
       timestamp = java.lang.System.currentTimeMillis()
     )
 
-  def processWithMetadata(req: MetadataRequest, ctx: RequestResponseMetadata): MetadataResponse = {
+  def processWithMetadata(req: MetadataRequest, ctx: GrpcContext): MetadataResponse = {
     val clientId = Option(ctx.requestMetadata.get(Metadata.Key.of("client-id", Metadata.ASCII_STRING_MARSHALLER))).getOrElse("unknown")
     ctx.responseMetadata.put(Metadata.Key.of("server-response", Metadata.ASCII_STRING_MARSHALLER), "processed")
     MetadataResponse(req.message.toUpperCase, clientId, "Server processed with metadata")

@@ -8,7 +8,7 @@ import zio.test.*
 
 import proteus.GrpcTestUtils.*
 import proteus.client.DirectClientBackend
-import proteus.server.{DirectServerBackend, RequestResponseMetadata, ServerService}
+import proteus.server.{DirectServerBackend, GrpcContext, ServerService}
 
 object DirectBackendSpec extends ZIOSpecDefault {
 
