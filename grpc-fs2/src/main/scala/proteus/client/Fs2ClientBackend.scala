@@ -36,7 +36,7 @@ class Fs2ClientBackend[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F])
           if (msg == null) Left(Status.INTERNAL.withDescription("No data received").asException())
           else Right((msg, headersRef.get(), trailers)) // headers may be null; consumers handle it
         } else Left(new StatusException(status, trailers))
-      dispatcher.unsafeRunAndForget(deferred.complete(result).void)
+      dispatcher.unsafeRunAndForget(deferred.complete(result))
     }
   }
 
@@ -71,7 +71,7 @@ class Fs2ClientBackend[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F])
 
     def signal(): Unit = {
       val old = ref.getAndSet(mkDeferred())
-      dispatcher.unsafeRunAndForget(old.complete(()).void)
+      dispatcher.unsafeRunAndForget(old.complete(()))
     }
   }
 
@@ -179,8 +179,7 @@ class Fs2ClientBackend[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F])
         case se: StatusException => se
         case t                   => ClientBackend.toStatusException(t)
       }
-      F.delay(call.cancel("Error sending requests", e)) *>
-        listener.deferred.complete(Left(statusEx)).void
+      F.delay(call.cancel("Error sending requests", e)) <* listener.deferred.complete(Left(statusEx))
     }
 
     // Server may respond and close before the request stream is fully drained — cancel

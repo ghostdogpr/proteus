@@ -39,7 +39,7 @@ class Fs2ServerBackend[F[_]: Async, G[_], Context](
 
     def signal(): Unit = {
       val old = ref.getAndSet(mkDeferred())
-      dispatcher.unsafeRunAndForget(old.complete(()).void)
+      dispatcher.unsafeRunAndForget(old.complete(()))
     }
   }
 

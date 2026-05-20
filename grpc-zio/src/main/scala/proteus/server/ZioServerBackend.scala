@@ -90,14 +90,10 @@ class ZioServerBackend[R, E, Context](
     rpc: ServerRpc[ZIO[R, E, *], ZStream[R, E, *], Context, Request, Response]
   ): ServerCallHandler[Request, Response] =
     rpc match {
-      case ServerRpc.Unary(rpc, logic)           =>
-        unaryHandler(rpc, logic)
-      case ServerRpc.ClientStreaming(rpc, logic) =>
-        clientStreamingHandler(rpc, logic)
-      case ServerRpc.ServerStreaming(rpc, logic) =>
-        serverStreamingHandler(rpc, logic)
-      case ServerRpc.BidiStreaming(rpc, logic)   =>
-        bidiStreamingHandler(rpc, logic)
+      case ServerRpc.Unary(rpc, logic)           => unaryHandler(rpc, logic)
+      case ServerRpc.ClientStreaming(rpc, logic) => clientStreamingHandler(rpc, logic)
+      case ServerRpc.ServerStreaming(rpc, logic) => serverStreamingHandler(rpc, logic)
+      case ServerRpc.BidiStreaming(rpc, logic)   => bidiStreamingHandler(rpc, logic)
     }
 
   private def unaryHandler[Request, Response](
