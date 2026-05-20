@@ -47,16 +47,22 @@ class Fs2ServerBackend[F[_]: Async, G[_], Context](
     call: ServerCall[?, Resp],
     stream: Stream[F, Resp],
     readySignal: ReadySignal
-  ): F[Unit] =
+  ): F[Unit] = F.defer {
+    var headersSent = false
     stream
       .evalMap { resp =>
-        F.defer {
-          if (call.isReady) F.delay(call.sendMessage(resp))
-          else readySignal.await *> F.delay(call.sendMessage(resp))
+        val send = F.delay {
+          if (!headersSent) {
+            call.sendHeaders(new Metadata())
+            headersSent = true
+          }
+          call.sendMessage(resp)
         }
+        F.defer(if (call.isReady) send else readySignal.await *> send)
       }
       .compile
       .drain
+  }
 
   private def closeOnExit(call: ServerCall[?, ?], responseMetadata: Metadata)(
     outcome: Outcome[F, Throwable, Unit]
@@ -134,8 +140,7 @@ class Fs2ServerBackend[F[_]: Async, G[_], Context](
           protected def onRequest(req: Request): Unit = {
             val responseStream =
               interceptor.serverStreaming(c => logic(req, c))(using rpc.requestCodec, rpc.responseCodec)(req)(ctx)
-            val effect         =
-              F.delay(call.sendHeaders(new Metadata())) *> sendStream(call, responseStream, readySignal)
+            val effect         = sendStream(call, responseStream, readySignal)
             forkScoped(scope, F.guaranteeCase(effect)(closeOnExit(call, responseMetadata)))
           }
 
@@ -163,10 +168,7 @@ class Fs2ServerBackend[F[_]: Async, G[_], Context](
       override def onHalfClose(): Unit =
         unsafeOffer(queue, None)
 
-      override def onCancel(): Unit = {
-        unsafeOffer(queue, None)
-        scope.cancel()
-      }
+      override def onCancel(): Unit = scope.cancel()
 
       override def onReady(): Unit = onReadyCallback()
     }
@@ -209,8 +211,7 @@ class Fs2ServerBackend[F[_]: Async, G[_], Context](
         val requestStream  = Stream.fromQueueNoneTerminated(queue)
         val responseStream = interceptor
           .bidiStreaming[Request, Response](req => c => logic(req, c))(using rpc.requestCodec, rpc.responseCodec)(requestStream)(ctx)
-        val effect         =
-          F.delay(call.sendHeaders(new Metadata())) *> sendStream(call, responseStream, readySignal)
+        val effect         = sendStream(call, responseStream, readySignal)
         forkScoped(scope, F.guaranteeCase(effect)(closeOnExit(call, responseMetadata)))
 
         streamingInputListener(call, queue, scope, () => readySignal.signal())

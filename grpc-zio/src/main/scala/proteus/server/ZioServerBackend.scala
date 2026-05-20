@@ -52,11 +52,19 @@ class ZioServerBackend[R, E, Context](
     call: ServerCall[?, Resp],
     stream: ZStream[R, StatusException, Resp],
     readySignal: ReadySignal
-  ): ZIO[R, StatusException, Unit] =
+  ): ZIO[R, StatusException, Unit] = ZIO.suspendSucceed {
+    var headersSent = false
     stream.runForeach { resp =>
-      if (call.isReady) ZIO.succeed(call.sendMessage(resp))
-      else readySignal.await *> ZIO.succeed(call.sendMessage(resp))
+      val send = ZIO.succeed {
+        if (!headersSent) {
+          call.sendHeaders(new Metadata())
+          headersSent = true
+        }
+        call.sendMessage(resp)
+      }
+      if (call.isReady) send else readySignal.await *> send
     }
+  }
 
   private def closeOnExit(call: ServerCall[?, ?], responseMetadata: Metadata)(
     exit: Exit[StatusException, Any]
@@ -138,7 +146,7 @@ class ZioServerBackend[R, E, Context](
         new UnaryInputListener[Request, Response](call) {
           protected def onRequest(req: Request): Unit = {
             val responseStream = interceptor.serverStreaming(c => logic(req, c))(using rpc.requestCodec, rpc.responseCodec)(req)(ctx)
-            val effect         = ZIO.succeed(call.sendHeaders(new Metadata())) *> sendStream(call, responseStream, readySignal)
+            val effect         = sendStream(call, responseStream, readySignal)
             forkScoped(scope, effect.onExit(closeOnExit(call, responseMetadata)))
           }
 
@@ -166,10 +174,7 @@ class ZioServerBackend[R, E, Context](
       override def onHalfClose(): Unit =
         unsafeOffer(queue, None)
 
-      override def onCancel(): Unit = {
-        unsafeOffer(queue, None)
-        scope.cancel()
-      }
+      override def onCancel(): Unit = scope.cancel()
 
       override def onReady(): Unit = onReadyCallback()
     }
@@ -212,7 +217,7 @@ class ZioServerBackend[R, E, Context](
         val requestStream  = ZStream.fromQueue(queue).collectWhileSome
         val responseStream =
           interceptor.bidiStreaming[Request, Response](req => c => logic(req, c))(using rpc.requestCodec, rpc.responseCodec)(requestStream)(ctx)
-        val effect         = ZIO.succeed(call.sendHeaders(new Metadata())) *> sendStream(call, responseStream, readySignal)
+        val effect         = sendStream(call, responseStream, readySignal)
         forkScoped(scope, effect.onExit(closeOnExit(call, responseMetadata)))
 
         streamingInputListener(call, queue, scope, () => readySignal.signal())

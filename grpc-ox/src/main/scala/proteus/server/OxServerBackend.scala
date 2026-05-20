@@ -70,6 +70,21 @@ class OxServerBackend[Context](
     call.sendMessage(message)
   }
 
+  private def sendResponseFlow[Request, Response](
+    call: ServerCall[Request, Response],
+    responseFlow: Flow[Response],
+    readySignal: Channel[Unit]
+  ): Unit = {
+    var headersSent = false
+    responseFlow.runForeach { resp =>
+      if (!headersSent) {
+        call.sendHeaders(new Metadata())
+        headersSent = true
+      }
+      sendWhenReady(call, resp, readySignal)
+    }
+  }
+
   private def forkHandler[Request, Response](
     call: ServerCall[Request, Response],
     workerHandle: WorkerHandle
@@ -144,8 +159,7 @@ class OxServerBackend[Context](
                     interceptor.serverStreaming(ctx => logic(message, ctx))(using rpc.requestCodec, rpc.responseCodec)(message)(
                       RequestResponseMetadata(headers, responseMetadata)
                     )
-                  call.sendHeaders(new Metadata())
-                  responseFlow.runForeach(resp => sendWhenReady(call, resp, readySignal))
+                  sendResponseFlow(call, responseFlow, readySignal)
                   call.close(Status.OK, responseMetadata)
                 }
 
@@ -175,8 +189,7 @@ class OxServerBackend[Context](
                 interceptor.bidiStreaming[Request, Response](req => ctx => logic(req, ctx))(using rpc.requestCodec, rpc.responseCodec)(
                   requestFlow
                 )(RequestResponseMetadata(headers, responseMetadata))
-              call.sendHeaders(new Metadata())
-              responseFlow.runForeach(resp => sendWhenReady(call, resp, readySignal))
+              sendResponseFlow(call, responseFlow, readySignal)
               call.close(Status.OK, responseMetadata)
             }
 
