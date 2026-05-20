@@ -13,12 +13,22 @@ trait ServerBackend[Unary[_], Streaming[_], Context] { self =>
 
 object ServerBackend {
   private[server] def closeCallWithError[Request, Response](call: ServerCall[Request, Response], ex: Throwable): Unit =
-    ex match {
-      case status: StatusException        =>
-        call.close(status.getStatus, Option(status.getTrailers).getOrElse(new Metadata()))
-      case status: StatusRuntimeException =>
-        call.close(status.getStatus, Option(status.getTrailers).getOrElse(new Metadata()))
-      case _                              =>
-        call.close(Status.INTERNAL.withDescription(ex.getMessage).withCause(ex), new Metadata())
+    closeCallWithError(call, ex, new Metadata())
+
+  /**
+    * Merges any `StatusException` trailers into `responseMetadata` (preserving user-set headers) before closing.
+    */
+  private[server] def closeCallWithError[Request, Response](
+    call: ServerCall[Request, Response],
+    ex: Throwable,
+    responseMetadata: Metadata
+  ): Unit = {
+    val (status, trailers) = ex match {
+      case e: StatusException        => (e.getStatus, e.getTrailers)
+      case e: StatusRuntimeException => (e.getStatus, e.getTrailers)
+      case e                         => (Status.INTERNAL.withDescription(e.getMessage).withCause(e), null)
     }
+    if (trailers != null) responseMetadata.merge(trailers)
+    call.close(status, responseMetadata)
+  }
 }

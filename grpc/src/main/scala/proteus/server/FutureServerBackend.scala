@@ -21,27 +21,25 @@ class FutureServerBackend[Context](interceptor: ServerContextInterceptor[Future,
       case server.ServerRpc.Unary(rpc, logic) =>
         new ServerCallHandler[Request, Response] {
           def startCall(call: ServerCall[Request, Response], headers: Metadata): ServerCall.Listener[Request] = {
-            call.request(1)
-            new ServerCall.Listener[Request] {
-              override def onMessage(message: Request): Unit = {
+            val responseMetadata = new Metadata()
+            val ctx              = RequestResponseMetadata(headers, responseMetadata)
+            call.request(2)
+            new UnaryInputListener[Request, Response](call) {
+              protected def onRequest(req: Request): Unit = {
                 import scala.concurrent.ExecutionContext.Implicits.global
-                val responseMetadata = new Metadata()
                 try {
                   val futureResponse =
-                    interceptor.unary(ctx => logic(message, ctx))(using rpc.requestCodec, rpc.responseCodec)(message)(
-                      RequestResponseMetadata(headers, responseMetadata)
-                    )
+                    interceptor.unary(c => logic(req, c))(using rpc.requestCodec, rpc.responseCodec)(req)(ctx)
                   futureResponse.onComplete {
                     case scala.util.Success(response) =>
                       call.sendHeaders(new Metadata())
                       call.sendMessage(response)
                       call.close(Status.OK, responseMetadata)
                     case scala.util.Failure(ex)       =>
-                      ServerBackend.closeCallWithError(call, ex)
+                      ServerBackend.closeCallWithError(call, ex, responseMetadata)
                   }
                 } catch {
-                  case NonFatal(ex) =>
-                    ServerBackend.closeCallWithError(call, ex)
+                  case NonFatal(ex) => ServerBackend.closeCallWithError(call, ex, responseMetadata)
                 }
               }
             }

@@ -3,9 +3,9 @@ val scala3Version = "3.3.7"
 val grpcVersion                 = "1.81.0"
 val scalaProtobufRuntimeVersion = "0.8.16"
 val zioBlocksSchemaVersion      = "0.0.40"
-val zioTestVersion              = "2.1.26"
-val zioGrpcVersion              = "0.6.3"
-val fs2GrpcVersion              = "3.1.1"
+val zioVersion                  = "2.1.26"
+val fs2Version                  = "3.13.0"
+val catsEffectVersion           = "3.7.0"
 val oxVersion                   = "1.0.4"
 val chimneyVersion              = "1.10.0"
 val circeVersion                = "0.14.15"
@@ -46,8 +46,8 @@ lazy val core = crossProject(JSPlatform, JVMPlatform)
     libraryDependencies ++=
       Seq(
         "dev.zio" %%% "zio-blocks-schema" % zioBlocksSchemaVersion,
-        "dev.zio" %%% "zio-test"          % zioTestVersion % Test,
-        "dev.zio" %%% "zio-test-sbt"      % zioTestVersion % Test
+        "dev.zio" %%% "zio-test"          % zioVersion % Test,
+        "dev.zio" %%% "zio-test-sbt"      % zioVersion % Test
       )
   )
   .jvmSettings(
@@ -68,8 +68,8 @@ lazy val tools = crossProject(JSPlatform, JVMPlatform)
     libraryDependencies ++=
       Seq(
         "com.lihaoyi" %%% "fastparse"    % fastparseVersion,
-        "dev.zio"     %%% "zio-test"     % zioTestVersion % Test,
-        "dev.zio"     %%% "zio-test-sbt" % zioTestVersion % Test
+        "dev.zio"     %%% "zio-test"     % zioVersion % Test,
+        "dev.zio"     %%% "zio-test-sbt" % zioVersion % Test
       )
   )
   .dependsOn(core % "compile->compile;test->test")
@@ -83,8 +83,8 @@ lazy val diff = project
   .settings(
     libraryDependencies ++= Seq(
       "com.lihaoyi" %% "mainargs"     % mainargsVersion,
-      "dev.zio"     %% "zio-test"     % zioTestVersion % Test,
-      "dev.zio"     %% "zio-test-sbt" % zioTestVersion % Test
+      "dev.zio"     %% "zio-test"     % zioVersion % Test,
+      "dev.zio"     %% "zio-test-sbt" % zioVersion % Test
     )
   )
   .enablePlugins(JavaAppPackaging, NativeImagePlugin)
@@ -131,10 +131,9 @@ lazy val zioGrpc = project
   .settings(name := "proteus-grpc-zio")
   .settings(commonSettings)
   .settings(
-    libraryDependencies ++=
-      Seq(
-        "com.thesamet.scalapb.zio-grpc" %% "zio-grpc-core" % zioGrpcVersion
-      )
+    libraryDependencies ++= Seq(
+      "dev.zio" %% "zio-streams" % zioVersion
+    )
   )
   .dependsOn(grpc % "compile->compile;test->test")
 
@@ -143,10 +142,10 @@ lazy val fs2Grpc = project
   .settings(name := "proteus-grpc-fs2")
   .settings(commonSettings)
   .settings(
-    libraryDependencies ++=
-      Seq(
-        "org.typelevel" %% "fs2-grpc-runtime" % fs2GrpcVersion
-      )
+    libraryDependencies ++= Seq(
+      "co.fs2"        %% "fs2-core"    % fs2Version,
+      "org.typelevel" %% "cats-effect" % catsEffectVersion
+    )
   )
   .dependsOn(grpc % "compile->compile;test->test")
 

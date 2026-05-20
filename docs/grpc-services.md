@@ -2,7 +2,7 @@
 
 Proteus allows you to define RPCs and gRPC services in Scala using your own types, relying on `ProtobufCodec` to encode and decode the messages.
 
-It uses [grpc-java](https://github.com/grpc/grpc-java) under the hood, either directly (direct style and `Future` backends) or via the [zio-grpc](https://github.com/scalapb/zio-grpc), [fs2-grpc](https://github.com/typelevel/fs2-grpc), or [Ox](https://ox.softwaremill.com) libraries.
+It uses [grpc-java](https://github.com/grpc/grpc-java) directly, with backends for direct style, `Future`, [ZIO](https://zio.dev), [fs2](https://fs2.io), and [Ox](https://ox.softwaremill.com).
 
 In order to use it, you will need to add the following dependency to your `build.sbt` file:
 
@@ -82,7 +82,7 @@ ServerBuilder.forPort(8080).addService(service).build().start()
 In addition to the `.rpc` method, you can also use `.rpcWithContext` if you want to receive the context of the call.
 In this case, the logic function has the following shape: `(Request, Context) => Unary[Response]`, `(Streaming[Request], Context) => Unary[Response]`, etc.
 
-The default `Context` is `proteus.server.RequestResponseMetadata`, a type that contains request and response metadata, except for the ZIO backend, which uses `scalapb.zio_grpc.RequestContext` instead.
+The default `Context` is `proteus.server.RequestResponseMetadata`, a type that contains request and response metadata.
 
 ```scala
 def processHello(request: HelloRequest, ctx: RequestResponseMetadata): HelloReply = {

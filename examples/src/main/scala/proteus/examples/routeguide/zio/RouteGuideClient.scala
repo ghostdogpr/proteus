@@ -3,7 +3,6 @@ package proteus.examples.routeguide.zio
 import java.util.concurrent.TimeUnit
 
 import io.grpc.{ManagedChannel, ManagedChannelBuilder}
-import scalapb.zio_grpc.ZChannel
 import zio.*
 import zio.stream.*
 
@@ -20,10 +19,8 @@ class RouteGuideClient(host: String, port: Int) {
     ZIO.scoped {
       for {
         channel <- channelResource
-        zChannel = ZChannel(channel, Seq.empty)
-        backend  = new ZioClientBackend(zChannel)
-        client  <- backend.client(getFeatureRpc, routeGuideService)
-        result  <- client(point)
+        backend  = new ZioClientBackend(channel)
+        result  <- backend.client(getFeatureRpc, routeGuideService)(point)
       } yield result
     }
 
@@ -31,10 +28,8 @@ class RouteGuideClient(host: String, port: Int) {
     ZIO.scoped {
       for {
         channel  <- channelResource
-        zChannel  = ZChannel(channel, Seq.empty)
-        backend   = new ZioClientBackend(zChannel)
-        client   <- backend.client(listFeaturesRpc, routeGuideService)
-        features <- client(rectangle).runCollect
+        backend   = new ZioClientBackend(channel)
+        features <- backend.client(listFeaturesRpc, routeGuideService)(rectangle).runCollect
       } yield features.toList
     }
 
@@ -42,10 +37,8 @@ class RouteGuideClient(host: String, port: Int) {
     ZIO.scoped {
       for {
         channel <- channelResource
-        zChannel = ZChannel(channel, Seq.empty)
-        backend  = new ZioClientBackend(zChannel)
-        client  <- backend.client(recordRouteRpc, routeGuideService)
-        result  <- client(ZStream.fromIterable(points))
+        backend  = new ZioClientBackend(channel)
+        result  <- backend.client(recordRouteRpc, routeGuideService)(ZStream.fromIterable(points))
       } yield result
     }
 
@@ -60,10 +53,8 @@ class RouteGuideClient(host: String, port: Int) {
     ZIO.scoped {
       for {
         channel   <- channelResource
-        zChannel   = ZChannel(channel, Seq.empty)
-        backend    = new ZioClientBackend(zChannel)
-        client    <- backend.client(routeChatRpc, routeGuideService)
-        responses <- client(ZStream.fromIterable(notes)).runCollect
+        backend    = new ZioClientBackend(channel)
+        responses <- backend.client(routeChatRpc, routeGuideService)(ZStream.fromIterable(notes)).runCollect
       } yield responses.toList
     }
   }

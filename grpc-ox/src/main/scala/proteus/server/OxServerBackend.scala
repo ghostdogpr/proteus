@@ -90,21 +90,19 @@ class OxServerBackend[Context](
       case ServerRpc.Unary(rpc, logic)           =>
         new ServerCallHandler[Request, Response] {
           def startCall(call: ServerCall[Request, Response], headers: Metadata): ServerCall.Listener[Request] = {
-            call.request(1)
-            new ServerCall.Listener[Request] {
-              override def onMessage(message: Request): Unit =
+            val responseMetadata = new Metadata()
+            val ctx              = RequestResponseMetadata(headers, responseMetadata)
+            call.request(2)
+            new UnaryInputListener[Request, Response](call) {
+              protected def onRequest(req: Request): Unit =
                 try {
-                  val responseMetadata = new Metadata()
-                  val response         =
-                    interceptor.unary(ctx => logic(message, ctx))(using rpc.requestCodec, rpc.responseCodec)(message)(
-                      RequestResponseMetadata(headers, responseMetadata)
-                    )
+                  val response =
+                    interceptor.unary(c => logic(req, c))(using rpc.requestCodec, rpc.responseCodec)(req)(ctx)
                   call.sendHeaders(new Metadata())
                   call.sendMessage(response)
                   call.close(Status.OK, responseMetadata)
                 } catch {
-                  case NonFatal(ex) =>
-                    ServerBackend.closeCallWithError(call, ex)
+                  case NonFatal(ex) => ServerBackend.closeCallWithError(call, ex, responseMetadata)
                 }
             }
           }

@@ -1,88 +1,258 @@
 package proteus
 package server
 
-import cats.effect.kernel.Async
-import cats.effect.std.Dispatcher
+import java.util.concurrent.atomic.AtomicReference
+
+import cats.effect.kernel.{Async, Deferred, Outcome}
+import cats.effect.std.{Dispatcher, Queue}
 import cats.syntax.all.*
 import fs2.Stream
-import fs2.grpc.server.*
-import io.grpc.*
+import io.grpc.{ServerInterceptor as _, *}
 
 import proteus.server.ServerInterceptor
 
 /**
-  * A server backend that wraps results in an abstract F[_] monad backed by Cats Effect typeclasses.
-  * Streaming is supported using Fs2 Stream.
+  * A server backend that wraps results in an abstract `F[_]` monad backed by Cats Effect typeclasses.
+  * Streaming is supported using [[fs2.Stream]].
   *
   * @param interceptor an interceptor that can run on every request.
+  * @param dispatcher a Cats Effect [[Dispatcher]] used to bridge gRPC's synchronous callbacks into `F`.
   */
 class Fs2ServerBackend[F[_]: Async, G[_], Context](
   interceptor: ServerInterceptor[F, G, Stream[F, *], Stream[G, *], RequestResponseMetadata, Context],
-  dispatcher: Dispatcher[F],
-  serverOptions: ServerOptions = ServerOptions.default
+  dispatcher: Dispatcher[F]
 ) extends ServerBackend[G, Stream[G, *], Context] {
+
+  private val F = Async[F]
+
+  final private class ReadySignal(call: ServerCall[?, ?]) {
+    private def mkDeferred(): Deferred[F, Unit] = Deferred.unsafe[F, Unit]
+
+    private val ref = new AtomicReference[Deferred[F, Unit]](mkDeferred())
+
+    val await: F[Unit] = F.defer {
+      // Capture deferred BEFORE the isReady check so a concurrent signal() is never lost.
+      val current = ref.get()
+      if (call.isReady) F.unit
+      else current.get
+    }
+
+    def signal(): Unit = {
+      val old = ref.getAndSet(mkDeferred())
+      dispatcher.unsafeRunAndForget(old.complete(()).void)
+    }
+  }
+
+  private def sendStream[Resp](
+    call: ServerCall[?, Resp],
+    stream: Stream[F, Resp],
+    readySignal: ReadySignal
+  ): F[Unit] =
+    stream
+      .evalMap { resp =>
+        F.defer {
+          if (call.isReady) F.delay(call.sendMessage(resp))
+          else readySignal.await *> F.delay(call.sendMessage(resp))
+        }
+      }
+      .compile
+      .drain
+
+  private def closeOnExit(call: ServerCall[?, ?], responseMetadata: Metadata)(
+    outcome: Outcome[F, Throwable, Unit]
+  ): F[Unit] = F.delay {
+    outcome match {
+      case Outcome.Succeeded(_) => call.close(Status.OK, responseMetadata)
+      case Outcome.Canceled()   => call.close(Status.CANCELLED, responseMetadata)
+      case Outcome.Errored(e)   => ServerBackend.closeCallWithError(call, e, responseMetadata)
+    }
+  }
+
+  final private class CallScope {
+    private val ref                                               = new AtomicReference[() => scala.concurrent.Future[Unit]]()
+    def attach(cancel: () => scala.concurrent.Future[Unit]): Unit = ref.set(cancel)
+    def cancel(): Unit                                            = {
+      val c = ref.get()
+      if (c != null) { c(); () }
+    }
+  }
+
+  private def forkScoped(scope: CallScope, effect: F[Unit]): Unit =
+    scope.attach(dispatcher.unsafeRunCancelable(effect))
+
   def handler[Request, Response](
     rpc: ServerRpc[G, Stream[G, *], Context, Request, Response]
   ): ServerCallHandler[Request, Response] =
     rpc match {
-      case ServerRpc.Unary(rpc, logic)           =>
-        Fs2ServerCallHandler[F](dispatcher, serverOptions).unaryToUnaryCallTrailers { (req, context) =>
-          val responseMetadata = new Metadata()
-          interceptor
-            .unary(ctx => logic(req, ctx))(using rpc.requestCodec, rpc.responseCodec)(req)(RequestResponseMetadata(context, responseMetadata))
-            .map((_, responseMetadata))
+      case ServerRpc.Unary(rpc, logic)           => unaryHandler(rpc, logic)
+      case ServerRpc.ClientStreaming(rpc, logic) => clientStreamingHandler(rpc, logic)
+      case ServerRpc.ServerStreaming(rpc, logic) => serverStreamingHandler(rpc, logic)
+      case ServerRpc.BidiStreaming(rpc, logic)   => bidiStreamingHandler(rpc, logic)
+    }
+
+  private def unaryHandler[Request, Response](
+    rpc: Rpc[Request, Response],
+    logic: (Request, Context) => G[Response]
+  ): ServerCallHandler[Request, Response] =
+    new ServerCallHandler[Request, Response] {
+      def startCall(call: ServerCall[Request, Response], headers: Metadata): ServerCall.Listener[Request] = {
+        val scope            = new CallScope
+        val responseMetadata = new Metadata()
+        val ctx              = RequestResponseMetadata(headers, responseMetadata)
+        call.request(2)
+
+        new UnaryInputListener[Request, Response](call) {
+          protected def onRequest(req: Request): Unit = {
+            val effect: F[Unit] =
+              interceptor
+                .unary(c => logic(req, c))(using rpc.requestCodec, rpc.responseCodec)(req)(ctx)
+                .flatMap { response =>
+                  F.delay {
+                    call.sendHeaders(new Metadata())
+                    call.sendMessage(response)
+                  }
+                }
+            forkScoped(scope, F.guaranteeCase(effect)(closeOnExit(call, responseMetadata)))
+          }
+
+          override protected def onCallCancelled(): Unit = scope.cancel()
         }
-      case ServerRpc.ClientStreaming(rpc, logic) =>
-        Fs2ServerCallHandler[F](dispatcher, serverOptions).streamingToUnaryCallTrailers { (req, context) =>
-          val responseMetadata = new Metadata()
-          interceptor
-            .clientStreaming[Request, Response](req => ctx => logic(req, ctx))(using rpc.requestCodec, rpc.responseCodec)(req)(
-              RequestResponseMetadata(context, responseMetadata)
-            )
-            .map((_, responseMetadata))
+      }
+    }
+
+  private def serverStreamingHandler[Request, Response](
+    rpc: Rpc[Request, Response],
+    logic: (Request, Context) => Stream[G, Response]
+  ): ServerCallHandler[Request, Response] =
+    new ServerCallHandler[Request, Response] {
+      def startCall(call: ServerCall[Request, Response], headers: Metadata): ServerCall.Listener[Request] = {
+        val scope            = new CallScope
+        val responseMetadata = new Metadata()
+        val ctx              = RequestResponseMetadata(headers, responseMetadata)
+        val readySignal      = new ReadySignal(call)
+        call.request(2)
+
+        new UnaryInputListener[Request, Response](call) {
+          protected def onRequest(req: Request): Unit = {
+            val responseStream =
+              interceptor.serverStreaming(c => logic(req, c))(using rpc.requestCodec, rpc.responseCodec)(req)(ctx)
+            val effect         =
+              F.delay(call.sendHeaders(new Metadata())) *> sendStream(call, responseStream, readySignal)
+            forkScoped(scope, F.guaranteeCase(effect)(closeOnExit(call, responseMetadata)))
+          }
+
+          override protected def onCallCancelled(): Unit = scope.cancel()
+          override protected def onCallReady(): Unit     = readySignal.signal()
         }
-      case ServerRpc.ServerStreaming(rpc, logic) =>
-        Fs2ServerCallHandler[F](dispatcher, serverOptions).unaryToStreamingCall { (req, context) =>
-          interceptor.serverStreaming(ctx => logic(req, ctx))(using rpc.requestCodec, rpc.responseCodec)(req)(
-            RequestResponseMetadata(context, new Metadata())
-          )
+      }
+    }
+
+  private def unsafeOffer[A](queue: Queue[F, A], a: A): Unit =
+    dispatcher.unsafeRunSync(queue.offer(a))
+
+  private def clientStreamingHandler[Request, Response](
+    rpc: Rpc[Request, Response],
+    logic: (Stream[G, Request], Context) => G[Response]
+  ): ServerCallHandler[Request, Response] =
+    new ServerCallHandler[Request, Response] {
+      def startCall(call: ServerCall[Request, Response], headers: Metadata): ServerCall.Listener[Request] = {
+        val queue            = dispatcher.unsafeRunSync(Queue.unbounded[F, Option[Request]])
+        val scope            = new CallScope
+        val responseMetadata = new Metadata()
+        val ctx              = RequestResponseMetadata(headers, responseMetadata)
+        call.request(1)
+
+        val requestStream  = Stream.fromQueueNoneTerminated(queue)
+        val responseEffect = interceptor
+          .clientStreaming[Request, Response](req => c => logic(req, c))(using rpc.requestCodec, rpc.responseCodec)(requestStream)(ctx)
+        val effect         = responseEffect.flatMap { response =>
+          F.delay {
+            call.sendHeaders(new Metadata())
+            call.sendMessage(response)
+          }
         }
-      case ServerRpc.BidiStreaming(rpc, logic)   =>
-        Fs2ServerCallHandler[F](dispatcher, serverOptions).streamingToStreamingCall { (req, context) =>
-          interceptor.bidiStreaming[Request, Response](req => ctx => logic(req, ctx))(using rpc.requestCodec, rpc.responseCodec)(req)(
-            RequestResponseMetadata(context, new Metadata())
-          )
+        forkScoped(scope, F.guaranteeCase(effect)(closeOnExit(call, responseMetadata)))
+
+        new ServerCall.Listener[Request] {
+          override def onMessage(message: Request): Unit = {
+            call.request(1)
+            unsafeOffer(queue, Some(message))
+          }
+
+          override def onHalfClose(): Unit =
+            unsafeOffer(queue, None)
+
+          override def onCancel(): Unit = {
+            unsafeOffer(queue, None)
+            scope.cancel()
+          }
+
+          override def onReady(): Unit = ()
         }
+      }
+    }
+
+  private def bidiStreamingHandler[Request, Response](
+    rpc: Rpc[Request, Response],
+    logic: (Stream[G, Request], Context) => Stream[G, Response]
+  ): ServerCallHandler[Request, Response] =
+    new ServerCallHandler[Request, Response] {
+      def startCall(call: ServerCall[Request, Response], headers: Metadata): ServerCall.Listener[Request] = {
+        val queue            = dispatcher.unsafeRunSync(Queue.unbounded[F, Option[Request]])
+        val scope            = new CallScope
+        val responseMetadata = new Metadata()
+        val ctx              = RequestResponseMetadata(headers, responseMetadata)
+        val readySignal      = new ReadySignal(call)
+        call.request(1)
+
+        val requestStream  = Stream.fromQueueNoneTerminated(queue)
+        val responseStream = interceptor
+          .bidiStreaming[Request, Response](req => c => logic(req, c))(using rpc.requestCodec, rpc.responseCodec)(requestStream)(ctx)
+        val effect         =
+          F.delay(call.sendHeaders(new Metadata())) *> sendStream(call, responseStream, readySignal)
+        forkScoped(scope, F.guaranteeCase(effect)(closeOnExit(call, responseMetadata)))
+
+        new ServerCall.Listener[Request] {
+          override def onMessage(message: Request): Unit = {
+            call.request(1)
+            unsafeOffer(queue, Some(message))
+          }
+
+          override def onHalfClose(): Unit =
+            unsafeOffer(queue, None)
+
+          override def onCancel(): Unit = {
+            unsafeOffer(queue, None)
+            scope.cancel()
+          }
+
+          override def onReady(): Unit = readySignal.signal()
+        }
+      }
     }
 }
 
 object Fs2ServerBackend {
 
   /**
-    * Creates a new fs2 server backend that wraps results in an abstract F[_] monad backed by Cats Effect typeclasses.
-    * Streaming is supported using Fs2 Stream.
+    * Creates a new fs2 server backend.
     *
     * @param dispatcher a Cats Effect dispatcher.
-    * @param serverOptions the options to use for the server.
     */
   def apply[F[_]: Async](
-    dispatcher: Dispatcher[F],
-    serverOptions: ServerOptions = ServerOptions.default
+    dispatcher: Dispatcher[F]
   ): Fs2ServerBackend[F, F, RequestResponseMetadata] =
-    apply(ServerInterceptor.empty, dispatcher, serverOptions)
+    apply(ServerInterceptor.empty, dispatcher)
 
   /**
-    * Creates a new fs2 server backend that wraps results in an abstract F[_] monad backed by Cats Effect typeclasses.
-    * Streaming is supported using Fs2 Stream.
+    * Creates a new fs2 server backend with the given interceptor.
     *
     * @param interceptor an interceptor that can run on every request.
     * @param dispatcher a Cats Effect dispatcher.
-    * @param serverOptions the options to use for the server.
     */
   def apply[F[_]: Async, Context](
     interceptor: ServerContextInterceptor[F, Stream[F, *], RequestResponseMetadata, Context],
-    dispatcher: Dispatcher[F],
-    serverOptions: ServerOptions
+    dispatcher: Dispatcher[F]
   ): Fs2ServerBackend[F, F, Context] =
-    new Fs2ServerBackend(interceptor, dispatcher, serverOptions)
+    new Fs2ServerBackend(interceptor, dispatcher)
 }

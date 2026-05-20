@@ -42,12 +42,9 @@ class DirectClientBackend(channel: Channel) extends ClientBackendUnary[[A] =>> A
       val metadataAttachingChannel = ClientInterceptors.intercept(interceptedChannel, MetadataUtils.newAttachHeadersInterceptor(requestMetadata))
 
       try {
-        val call             = metadataAttachingChannel.newCall(methodDescriptor, options(CallOptions.DEFAULT))
-        val response         = ClientCalls.blockingUnaryCall(call, request)
-        val combinedMetadata = new Metadata()
-        Option(responseHeaders.get()).foreach(combinedMetadata.merge)
-        Option(responseTrailers.get()).foreach(combinedMetadata.merge)
-        (response, combinedMetadata)
+        val call     = metadataAttachingChannel.newCall(methodDescriptor, options(CallOptions.DEFAULT))
+        val response = ClientCalls.blockingUnaryCall(call, request)
+        (response, ClientBackend.mergeMetadata(responseHeaders.get(), responseTrailers.get()))
       } catch {
         case ex: StatusRuntimeException => throw ex
         case ex: Exception              => throw Status.INTERNAL.withDescription(ex.getMessage).withCause(ex).asRuntimeException()

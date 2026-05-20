@@ -20,7 +20,8 @@ class OxClientBackend(channel: Channel) extends ClientBackend[[A] =>> A, Flow] {
   private def responseListener[T](
     responseChannel: OxChannel[T],
     readySignal: OxChannel[Unit],
-    trailersRef: AtomicReference[Metadata] = null
+    trailersRef: AtomicReference[Metadata] = null,
+    headersRef: AtomicReference[Metadata] = null
   ): ClientCall.Listener[T] =
     new ClientCall.Listener[T] {
       override def onMessage(message: T): Unit =
@@ -33,7 +34,8 @@ class OxClientBackend(channel: Channel) extends ClientBackend[[A] =>> A, Flow] {
         readySignal.doneOrClosed().discard
       }
 
-      override def onHeaders(headers: Metadata): Unit = ()
+      override def onHeaders(headers: Metadata): Unit =
+        if (headersRef != null) headersRef.set(headers)
 
       override def onReady(): Unit =
         readySignal.sendOrClosed(()).discard
@@ -165,12 +167,9 @@ class OxClientBackend(channel: Channel) extends ClientBackend[[A] =>> A, Flow] {
       val metadataAttachingChannel = ClientInterceptors.intercept(interceptedChannel, MetadataUtils.newAttachHeadersInterceptor(requestMetadata))
 
       try {
-        val call             = metadataAttachingChannel.newCall(methodDescriptor, options(CallOptions.DEFAULT))
-        val response         = ClientCalls.blockingUnaryCall(call, request)
-        val combinedMetadata = new Metadata()
-        Option(responseHeaders.get()).foreach(combinedMetadata.merge)
-        Option(responseTrailers.get()).foreach(combinedMetadata.merge)
-        (response, combinedMetadata)
+        val call     = metadataAttachingChannel.newCall(methodDescriptor, options(CallOptions.DEFAULT))
+        val response = ClientCalls.blockingUnaryCall(call, request)
+        (response, ClientBackend.mergeMetadata(responseHeaders.get(), responseTrailers.get()))
       } catch {
         case ex: StatusRuntimeException => throw ex
         case ex: Exception              => throw Status.INTERNAL.withDescription(ex.getMessage).withCause(ex).asRuntimeException()
@@ -188,9 +187,10 @@ class OxClientBackend(channel: Channel) extends ClientBackend[[A] =>> A, Flow] {
       val responseChannel = OxChannel.buffered[Response](1)
       val readySignal     = OxChannel.buffered[Unit](1)
       val trailersRef     = new AtomicReference[Metadata]()
+      val headersRef      = new AtomicReference[Metadata]()
       val call            = channel.newCall(methodDescriptor, options(CallOptions.DEFAULT))
 
-      call.start(responseListener(responseChannel, readySignal, trailersRef), requestMetadata)
+      call.start(responseListener(responseChannel, readySignal, trailersRef, headersRef), requestMetadata)
       call.request(1)
 
       try {
@@ -206,8 +206,7 @@ class OxClientBackend(channel: Channel) extends ClientBackend[[A] =>> A, Flow] {
       }
 
       val response = Flow.fromSource(responseChannel).runLast()
-      val trailers = Option(trailersRef.get()).getOrElse(new Metadata())
-      (response, trailers)
+      (response, ClientBackend.mergeMetadata(headersRef.get(), trailersRef.get()))
     }
   }
 

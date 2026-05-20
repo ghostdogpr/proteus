@@ -17,9 +17,9 @@ class FutureClientBackend(channel: Channel) extends ClientBackendUnary[Future] {
     rpc: Rpc.Unary[Request, Response],
     service: Service[Rpcs],
     options: CallOptions => CallOptions
-  )(using HasRpc[Rpcs, rpc.type]): Future[Request => Future[Response]] = {
+  )(using HasRpc[Rpcs, rpc.type]): Request => Future[Response] = {
     val methodDescriptor = rpc.toMethodDescriptor(service)
-    Future.successful { request =>
+    request => {
       val promise = Promise[Response]()
       val call    = channel.newCall(methodDescriptor, options(CallOptions.DEFAULT))
 
@@ -42,9 +42,9 @@ class FutureClientBackend(channel: Channel) extends ClientBackendUnary[Future] {
     rpc: Rpc.Unary[Request, Response],
     service: Service[Rpcs],
     options: CallOptions => CallOptions
-  )(using HasRpc[Rpcs, rpc.type]): Future[(Request, Metadata) => Future[(Response, Metadata)]] = {
+  )(using HasRpc[Rpcs, rpc.type]): (Request, Metadata) => Future[(Response, Metadata)] = {
     val methodDescriptor = rpc.toMethodDescriptor(service)
-    Future.successful { (request, requestMetadata) =>
+    (request, requestMetadata) => {
       val promise                  = Promise[(Response, Metadata)]()
       val responseHeaders          = new AtomicReference[Metadata]()
       val responseTrailers         = new AtomicReference[Metadata]()
@@ -59,12 +59,8 @@ class FutureClientBackend(channel: Channel) extends ClientBackendUnary[Future] {
         def onNext(value: Response): Unit =
           responseRef.set(value)
         def onError(t: Throwable): Unit   = promise.failure(t)
-        def onCompleted(): Unit           = {
-          val combinedMetadata = new Metadata()
-          Option(responseHeaders.get()).foreach(combinedMetadata.merge)
-          Option(responseTrailers.get()).foreach(combinedMetadata.merge)
-          promise.success((responseRef.get(), combinedMetadata))
-        }
+        def onCompleted(): Unit           =
+          promise.success((responseRef.get(), ClientBackend.mergeMetadata(responseHeaders.get(), responseTrailers.get())))
       }
 
       io.grpc.stub.ClientCalls.asyncUnaryCall(call, request, listener)
