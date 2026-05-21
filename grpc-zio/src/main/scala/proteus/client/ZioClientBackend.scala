@@ -45,17 +45,16 @@ class ZioClientBackend(channel: Channel, runtime: Runtime[Any], prefetchN: Int)
     }
   }
 
-  private class StreamingListener[Response](queue: Queue[Either[Option[StatusException], Response]]) extends ClientCall.Listener[Response] {
-    protected def offer(a: Either[Option[StatusException], Response]): Unit =
+  private class StreamingListener[Response](queue: Queue[Take[StatusException, Response]]) extends ClientCall.Listener[Response] {
+    protected def offer(a: Take[StatusException, Response]): Unit =
       Unsafe.unsafely(runtime.unsafe.run(queue.offer(a)).getOrThrowFiberFailure(): Unit)
 
     override def onHeaders(headers: Metadata): Unit = ()
 
-    override def onMessage(message: Response): Unit = offer(Right(message))
+    override def onMessage(message: Response): Unit = offer(Take.single(message))
 
     override def onClose(status: Status, trailers: Metadata): Unit =
-      if (status.isOk) offer(Left(None))
-      else offer(Left(Some(new StatusException(status, trailers))))
+      if (status.isOk) offer(Take.end) else offer(Take.fail(new StatusException(status, trailers)))
   }
 
   final private class ClientReadySignal(call: ClientCall[?, ?]) {
@@ -78,7 +77,7 @@ class ZioClientBackend(channel: Channel, runtime: Runtime[Any], prefetchN: Int)
   }
 
   final private class BidiListener[Response](
-    queue: Queue[Either[Option[StatusException], Response]],
+    queue: Queue[Take[StatusException, Response]],
     val readySignal: ClientReadySignal
   ) extends StreamingListener[Response](queue) {
     override def onReady(): Unit = readySignal.signal()
@@ -107,16 +106,12 @@ class ZioClientBackend(channel: Channel, runtime: Runtime[Any], prefetchN: Int)
 
   private def streamFromQueue[Response](
     call: ClientCall[?, Response],
-    queue: Queue[Either[Option[StatusException], Response]]
+    queue: Queue[Take[StatusException, Response]]
   ): ZStream[Any, StatusException, Response] =
     ZStream
-      .repeatZIOOption[Any, StatusException, Response] {
-        queue.take.flatMap {
-          case Right(v)      => ZIO.succeed { call.request(1); v }
-          case Left(Some(e)) => ZIO.fail(Some(e))
-          case Left(None)    => ZIO.fail(None)
-        }
-      }
+      .fromQueue(queue)
+      .flattenTake
+      .tapChunks(chunk => ZIO.succeed(call.request(chunk.size)))
       .ensuring(ZIO.succeed(call.cancel("Stream ended", null)))
 
   private def serverStreamingRun[Request, Response](
@@ -128,7 +123,7 @@ class ZioClientBackend(channel: Channel, runtime: Runtime[Any], prefetchN: Int)
     ZStream.unwrap(
       ZIO.suspendSucceed {
         val call     = channel.newCall(descriptor, options)
-        val queue    = Unsafe.unsafely(Queue.unsafe.unbounded[Either[Option[StatusException], Response]](FiberId.None))
+        val queue    = Unsafe.unsafely(Queue.unsafe.unbounded[Take[StatusException, Response]](FiberId.None))
         val listener = new StreamingListener[Response](queue)
         ZIO
           .attempt {
@@ -189,7 +184,7 @@ class ZioClientBackend(channel: Channel, runtime: Runtime[Any], prefetchN: Int)
     ZStream.unwrap(
       ZIO.suspendSucceed {
         val call        = channel.newCall(descriptor, options)
-        val queue       = Unsafe.unsafely(Queue.unsafe.unbounded[Either[Option[StatusException], Response]](FiberId.None))
+        val queue       = Unsafe.unsafely(Queue.unsafe.unbounded[Take[StatusException, Response]](FiberId.None))
         val readySignal = new ClientReadySignal(call)
         val listener    = new BidiListener[Response](queue, readySignal)
         call.start(listener, headers)
