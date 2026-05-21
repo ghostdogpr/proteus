@@ -178,7 +178,7 @@ class Fs2ServerBackend[F[_]: Async, G[_], Context](
     queue: Queue[F, Option[Request]]
   ): Stream[F, Request] =
     Stream
-      .fromQueueNoneTerminated(queue)
+      .fromQueueNoneTerminated(queue, prefetch)
       .chunks
       .evalTap(chunk => F.delay(call.request(chunk.size)))
       .unchunks

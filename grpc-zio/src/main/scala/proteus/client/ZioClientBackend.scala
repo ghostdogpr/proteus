@@ -109,7 +109,7 @@ class ZioClientBackend(channel: Channel, runtime: Runtime[Any], prefetchN: Int)
     queue: Queue[Take[StatusException, Response]]
   ): ZStream[Any, StatusException, Response] =
     ZStream
-      .fromQueue(queue)
+      .fromQueue(queue, prefetch)
       .flattenTake
       .tapChunks(chunk => ZIO.succeed(call.request(chunk.size)))
       .ensuring(ZIO.succeed(call.cancel("Stream ended", null)))

@@ -45,8 +45,8 @@ class Fs2ClientBackend[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F],
     }
   }
 
-  private class StreamingListener[Response](queue: Queue[F, Either[Throwable, Option[Response]]]) extends ClientCall.Listener[Response] {
-    protected def offer(a: Either[Throwable, Option[Response]]): Unit =
+  private class StreamingListener[Response](queue: Queue[F, Either[StatusException, Option[Response]]]) extends ClientCall.Listener[Response] {
+    protected def offer(a: Either[StatusException, Option[Response]]): Unit =
       dispatcher.unsafeRunSync(queue.offer(a))
 
     override def onHeaders(headers: Metadata): Unit = ()
@@ -77,7 +77,7 @@ class Fs2ClientBackend[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F],
   }
 
   final private class BidiListener[Response](
-    queue: Queue[F, Either[Throwable, Option[Response]]],
+    queue: Queue[F, Either[StatusException, Option[Response]]],
     val readySignal: ClientReadySignal
   ) extends StreamingListener[Response](queue) {
     override def onReady(): Unit = readySignal.signal()
@@ -113,7 +113,7 @@ class Fs2ClientBackend[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F],
 
   private def streamFromQueue[Response](
     call: ClientCall[?, Response],
-    queue: Queue[F, Either[Throwable, Option[Response]]]
+    queue: Queue[F, Either[StatusException, Option[Response]]]
   ): Stream[F, Response] =
     Stream
       .fromQueueUnterminated(queue, prefetch)
@@ -122,6 +122,7 @@ class Fs2ClientBackend[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F],
       .chunks
       .evalTap(c => F.delay(call.request(c.size)))
       .unchunks
+      .onFinalize(F.delay(call.cancel("Stream ended", null)))
 
   private def serverStreamingRun[Request, Response](
     descriptor: MethodDescriptor[Request, Response],
@@ -132,7 +133,7 @@ class Fs2ClientBackend[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F],
     Stream
       .eval(F.delay {
         val call  = channel.newCall(descriptor, options)
-        val queue = dispatcher.unsafeRunSync(Queue.unbounded[F, Either[Throwable, Option[Response]]])
+        val queue = dispatcher.unsafeRunSync(Queue.unbounded[F, Either[StatusException, Option[Response]]])
         val l     = new StreamingListener[Response](queue)
         call.start(l, headers)
         call.request(prefetch)
@@ -140,9 +141,7 @@ class Fs2ClientBackend[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F],
         call.halfClose()
         (call, queue)
       })
-      .flatMap { case (call, queue) =>
-        streamFromQueue(call, queue).onFinalize(F.delay(call.cancel("Stream ended", null)))
-      }
+      .flatMap { case (call, queue) => streamFromQueue(call, queue) }
 
   private def clientStreamingRun[Request, Response](
     descriptor: MethodDescriptor[Request, Response],
@@ -199,7 +198,7 @@ class Fs2ClientBackend[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F],
     Stream
       .eval(F.delay {
         val call        = channel.newCall(descriptor, options)
-        val queue       = dispatcher.unsafeRunSync(Queue.unbounded[F, Either[Throwable, Option[Response]]])
+        val queue       = dispatcher.unsafeRunSync(Queue.unbounded[F, Either[StatusException, Option[Response]]])
         val readySignal = new ClientReadySignal(call)
         val l           = new BidiListener[Response](queue, readySignal)
         call.start(l, headers)
@@ -222,9 +221,7 @@ class Fs2ClientBackend[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F],
           .eval(sendAll.handleErrorWith(e => F.delay(call.cancel("Error sending requests", e)) *> F.raiseError[Unit](e)))
           .drain
 
-        streamFromQueue(call, queue)
-          .concurrently(sender)
-          .onFinalize(F.delay(call.cancel("Stream ended", null)))
+        streamFromQueue(call, queue).concurrently(sender)
       }
 
   def client[Rpcs, Request, Response](
