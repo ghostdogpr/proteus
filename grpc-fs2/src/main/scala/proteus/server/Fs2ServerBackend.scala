@@ -157,16 +157,13 @@ class Fs2ServerBackend[F[_]: Async, G[_], Context](
     dispatcher.unsafeRunSync(queue.offer(a))
 
   private def streamingInputListener[Request](
-    call: ServerCall[Request, ?],
     queue: Queue[F, Option[Request]],
     scope: CallScope,
     onReadyCallback: () => Unit
   ): ServerCall.Listener[Request] =
     new ServerCall.Listener[Request] {
-      override def onMessage(message: Request): Unit = {
-        call.request(1)
+      override def onMessage(message: Request): Unit =
         unsafeOffer(queue, Some(message))
-      }
 
       override def onHalfClose(): Unit =
         unsafeOffer(queue, None)
@@ -175,6 +172,16 @@ class Fs2ServerBackend[F[_]: Async, G[_], Context](
 
       override def onReady(): Unit = onReadyCallback()
     }
+
+  private def streamingRequestStream[Request](
+    call: ServerCall[Request, ?],
+    queue: Queue[F, Option[Request]]
+  ): Stream[F, Request] =
+    Stream
+      .fromQueueNoneTerminated(queue)
+      .chunks
+      .evalTap(chunk => F.delay(call.request(chunk.size)))
+      .unchunks
 
   private def clientStreamingHandler[Request, Response](
     rpc: Rpc[Request, Response],
@@ -188,13 +195,13 @@ class Fs2ServerBackend[F[_]: Async, G[_], Context](
         val ctx              = GrpcContext.fromCall(call, headers, responseMetadata)
         call.request(prefetch)
 
-        val requestStream  = Stream.fromQueueNoneTerminated(queue)
+        val requestStream  = streamingRequestStream(call, queue)
         val responseEffect = interceptor
           .clientStreaming[Request, Response](req => c => logic(req, c))(using rpc.requestCodec, rpc.responseCodec)(requestStream)(ctx)
         val effect         = responseEffect.flatMap(sendUnaryResponse(call, _))
         forkScoped(scope, F.guaranteeCase(effect)(closeOnExit(call, responseMetadata)))
 
-        streamingInputListener(call, queue, scope, () => ())
+        streamingInputListener(queue, scope, () => ())
       }
     }
 
@@ -211,13 +218,13 @@ class Fs2ServerBackend[F[_]: Async, G[_], Context](
         val readySignal      = new ReadySignal(call)
         call.request(prefetch)
 
-        val requestStream  = Stream.fromQueueNoneTerminated(queue)
+        val requestStream  = streamingRequestStream(call, queue)
         val responseStream = interceptor
           .bidiStreaming[Request, Response](req => c => logic(req, c))(using rpc.requestCodec, rpc.responseCodec)(requestStream)(ctx)
         val effect         = sendStream(call, responseStream, readySignal)
         forkScoped(scope, F.guaranteeCase(effect)(closeOnExit(call, responseMetadata)))
 
-        streamingInputListener(call, queue, scope, () => readySignal.signal())
+        streamingInputListener(queue, scope, () => readySignal.signal())
       }
     }
 }
