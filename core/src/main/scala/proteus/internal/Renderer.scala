@@ -43,6 +43,16 @@ private[proteus] object Renderer {
     }
   }
 
+  private def commentLine(comment: Option[String]): Text =
+    comment.map(renderComment).getOrElse(many())
+
+  private def lineWithComment(comment: Option[String], baseLine: String): Text =
+    comment match {
+      case Some(c) if c.contains("\n") => many(renderComment(c), line(baseLine))
+      case Some(c)                     => line(s"$baseLine // $c")
+      case None                        => line(baseLine)
+    }
+
   private def renderPackageName(packageName: String): Text =
     statement(s"package $packageName")
 
@@ -120,31 +130,15 @@ private[proteus] object Renderer {
 
   private def renderEnumElement(enumValue: EnumValue): Text = {
     val opts = renderInlineOptions(enumValue.options)
-    enumValue match {
-      case EnumValue(identifier, intvalue, comment, _) =>
-        comment match {
-          case Some(c) if c.contains("\n") =>
-            // Multiline comment - render on previous line(s)
-            many(
-              renderComment(c),
-              line(s"$identifier = $intvalue$opts;")
-            )
-          case Some(c)                     =>
-            // Single-line comment - render inline
-            line(s"$identifier = $intvalue$opts; // $c")
-          case None                        =>
-            // No comment
-            line(s"$identifier = $intvalue$opts;")
-        }
-    }
+    lineWithComment(enumValue.comment, s"${enumValue.name} = ${enumValue.intValue}$opts;")
   }
 
   private def renderEnum(enumeration: Enum): Text = {
-    val hasContent  = enumeration.reserved.nonEmpty || enumeration.values.nonEmpty || enumeration.options.nonEmpty
-    val commentLine = enumeration.comment.map(renderComment).getOrElse(many())
+    val hasContent = enumeration.reserved.nonEmpty || enumeration.values.nonEmpty || enumeration.options.nonEmpty
+    val cmt        = commentLine(enumeration.comment)
     if (hasContent) {
       many(
-        commentLine,
+        cmt,
         line(s"enum ${enumeration.name} {"),
         indent(renderStatementOptions(enumeration.options)),
         indent(renderReserved(enumeration.reserved)),
@@ -153,7 +147,7 @@ private[proteus] object Renderer {
       )
     } else
       many(
-        commentLine,
+        cmt,
         line(s"enum ${enumeration.name} {}")
       )
   }
@@ -161,11 +155,11 @@ private[proteus] object Renderer {
   private def renderMessage(message: Message): Text = {
     val hasOtherContent = message.reserved.nonEmpty || message.elements.exists(_ != ProtoIR.excludedMessageElement)
     val hasContent      = hasOtherContent || message.options.nonEmpty
-    val commentLine     = message.comment.map(renderComment).getOrElse(many())
+    val cmt             = commentLine(message.comment)
     val optionsSep      = if (message.options.nonEmpty && hasOtherContent) emptyLine else many()
     if (hasContent) {
       many(
-        commentLine,
+        cmt,
         line(s"message ${message.name} {"),
         indent(renderStatementOptions(message.options)),
         optionsSep,
@@ -175,16 +169,16 @@ private[proteus] object Renderer {
       )
     } else
       many(
-        commentLine,
+        cmt,
         line(s"message ${message.name} {}")
       )
   }
 
   private def renderOneOf(oneOf: OneOf): Text = {
-    val commentLine = oneOf.comment.map(renderComment).getOrElse(many())
+    val cmt = commentLine(oneOf.comment)
     if (oneOf.fields.nonEmpty) {
       many(
-        commentLine,
+        cmt,
         line(s"oneof ${oneOf.name} {"),
         indent(renderStatementOptions(oneOf.options)),
         indent(oneOf.fields.map(renderField(_, isOneOf = true))),
@@ -192,14 +186,14 @@ private[proteus] object Renderer {
       )
     } else if (oneOf.options.nonEmpty) {
       many(
-        commentLine,
+        cmt,
         line(s"oneof ${oneOf.name} {"),
         indent(renderStatementOptions(oneOf.options)),
         line("}")
       )
     } else
       many(
-        commentLine,
+        cmt,
         line(s"oneof ${oneOf.name} {}")
       )
   }
@@ -241,30 +235,17 @@ private[proteus] object Renderer {
           ""
       }
 
-      field.comment match {
-        case Some(c) if c.contains("\n") =>
-          // Multiline comment - render on previous line(s)
-          many(
-            renderComment(c),
-            line(s"$optional$ty ${field.name} = ${field.number}$opts;")
-          )
-        case Some(c)                     =>
-          // Single-line comment - render inline
-          line(s"$optional$ty ${field.name} = ${field.number}$opts; // $c")
-        case None                        =>
-          // No comment
-          line(s"$optional$ty ${field.name} = ${field.number}$opts;")
-      }
+      lineWithComment(field.comment, s"$optional$ty ${field.name} = ${field.number}$opts;")
     }
 
   private def renderService(service: Service): Text = {
-    val commentLine = service.comment.map(renderComment).getOrElse(many())
-    val hasRpcs     = service.rpcs.nonEmpty
-    val hasContent  = service.options.nonEmpty || hasRpcs
-    val optionsSep  = if (service.options.nonEmpty && hasRpcs) emptyLine else many()
+    val cmt        = commentLine(service.comment)
+    val hasRpcs    = service.rpcs.nonEmpty
+    val hasContent = service.options.nonEmpty || hasRpcs
+    val optionsSep = if (service.options.nonEmpty && hasRpcs) emptyLine else many()
     if (hasContent) {
       many(
-        commentLine,
+        cmt,
         line(s"service ${service.name} {"),
         indent(renderStatementOptions(service.options)),
         optionsSep,
@@ -273,26 +254,26 @@ private[proteus] object Renderer {
       )
     } else {
       many(
-        commentLine,
+        cmt,
         line(s"service ${service.name} {}")
       )
     }
   }
 
   private def renderRpc(rpc: Rpc): Text = {
-    val commentLine  = rpc.comment.map(renderComment).getOrElse(many())
+    val cmt          = commentLine(rpc.comment)
     val requestType  = if (rpc.streamingRequest) s"stream ${rpc.request.fqn.render}" else rpc.request.fqn.render
     val responseType = if (rpc.streamingResponse) s"stream ${rpc.response.fqn.render}" else rpc.response.fqn.render
     if (rpc.options.nonEmpty)
       many(
-        commentLine,
+        cmt,
         line(s"rpc ${rpc.name} ($requestType) returns ($responseType) {"),
         indent(renderStatementOptions(rpc.options)),
         line("}")
       )
     else
       many(
-        commentLine,
+        cmt,
         line(s"rpc ${rpc.name} ($requestType) returns ($responseType) {}")
       )
   }
