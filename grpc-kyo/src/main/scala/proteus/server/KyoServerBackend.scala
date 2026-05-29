@@ -72,8 +72,7 @@ class KyoServerBackend[S, Context](
     Sync.defer {
       var headersSent = false
       responseStream.foreach { resp =>
-        readySignal
-          .await
+        readySignal.await
           .andThen(Sync.defer {
             if (!headersSent) {
               call.sendHeaders(new Metadata())
