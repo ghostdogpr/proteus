@@ -1,49 +1,62 @@
 package proteus.examples.routeguide.kyo
 
-import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.TimeUnit
 
+import io.grpc.ServerBuilder
 import io.grpc.StatusException
 import kyo.*
 
 import proteus.examples.routeguide.*
 import proteus.server.{KyoServerBackend, ServerService}
 
-class RouteGuideServer(port: Int) {
-  private val routeNotes = new AtomicReference[Map[Point, List[RouteNote]]](Map.empty)
-
+class RouteGuideServer(port: Int, routeNotes: AtomicRef[Map[Point, List[RouteNote]]]) {
   def getFeature(point: Point): Feature < (Async & Abort[StatusException]) =
-    Console.printLine(s"Server: GetFeature(${point.latitude}, ${point.longitude})").andThen(RouteGuideData.findFeature(point))
+    Console
+      .printLine(s"Server: GetFeature(${point.latitude}, ${point.longitude})")
+      .andThen(RouteGuideData.findFeature(point))
 
   def listFeatures(rectangle: Rectangle): Stream[Feature, Async & Abort[StatusException]] =
-    Stream.init(RouteGuideData.findFeaturesInRectangle(rectangle))
-
-  def recordRoute(points: Stream[Point, Async & Abort[StatusException]]): RouteSummary < (Async & Abort[StatusException]) =
-    points
-      .fold((0, 0, Option.empty[Point])) { case ((count, distance, last), point) =>
-        val added = last.fold(0)(lp => RouteGuideData.calcDistance(lp, point))
-        (count + 1, distance + added, Some(point))
-      }
-      .map { case (count, distance, _) => RouteSummary(count, 0, distance, 0) }
-
-  def routeChat(notes: Stream[RouteNote, Async & Abort[StatusException]]): Stream[RouteNote, Async & Abort[StatusException]] =
-    notes.mapChunk { chunk =>
-      chunk.flatMap { note =>
-        val previous = routeNotes.getAndUpdate(map => map + (note.location -> (note :: map.getOrElse(note.location, List.empty))))
-        previous.getOrElse(note.location, List.empty)
-      }
+    Stream.unwrap {
+      Console.printLine("Server: ListFeatures").andThen(Stream.init(RouteGuideData.findFeaturesInRectangle(rectangle)))
     }
 
-  val backend = KyoServerBackend()
+  def recordRoute(points: Stream[Point, Async & Abort[StatusException]]): RouteSummary < (Async & Abort[StatusException]) =
+    for {
+      _                        <- Console.printLine("Server: RecordRoute")
+      startTime                <- Clock.now
+      res                      <- points
+                                    .fold((0, 0, Option.empty[Point])) { case ((pointCount, distance, lastPoint), point) =>
+                                      val newDistance = lastPoint.map(RouteGuideData.calcDistance(_, point)).getOrElse(0) + distance
+                                      (pointCount + 1, newDistance, Some(point))
+                                    }
+      (pointCount, distance, _) = res
+      endTime                  <- Clock.now
+      elapsedTime               = (endTime - startTime).toSeconds.toInt
+    } yield RouteSummary(pointCount, 0, distance, elapsedTime)
 
-  val service = ServerService(using backend)
+  def routeChat(notes: Stream[RouteNote, Async & Abort[StatusException]]): Stream[RouteNote, Async & Abort[StatusException]] =
+    notes.flatMap { note =>
+      for {
+        oldMap       <- routeNotes.getAndUpdate(map => map + (note.location -> (note :: map.getOrElse(note.location, List.empty))))
+        existingNotes = oldMap.getOrElse(note.location, List.empty)
+      } yield Stream.init(existingNotes)
+    }
+
+  val service = ServerService(using KyoServerBackend())
     .rpc(getFeatureRpc, getFeature)
     .rpc(listFeaturesRpc, listFeatures)
     .rpc(recordRouteRpc, recordRoute)
     .rpc(routeChatRpc, routeChat)
     .build(routeGuideService)
 
-  def start: io.grpc.Server < Sync =
-    Sync.defer(io.grpc.ServerBuilder.forPort(port).addService(service).build().start()).map { server =>
-      Console.printLine(s"Server started on port $port").andThen(server)
-    }
+  val serverResource: io.grpc.Server < (Scope & Async) =
+    Scope.acquireRelease(
+      Sync
+        .defer {
+          val server = ServerBuilder.forPort(port).addService(service).build()
+          server.start()
+          server
+        }
+        .map(server => Console.printLine(s"Server started on port $port").andThen(server))
+    )(server => Sync.defer { server.shutdown().awaitTermination(5, TimeUnit.SECONDS); () })
 }
