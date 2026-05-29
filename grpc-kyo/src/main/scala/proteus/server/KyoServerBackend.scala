@@ -101,7 +101,7 @@ class KyoServerBackend[S, Context](
   private def requestStream[Request](call: ServerCall[Request, ?], channel: Channel[Request])(
     using Tag[Request]
   ): Stream[Request, Async & Abort[StatusException]] =
-    channel.streamUntilClosed(1).tap(_ => Sync.defer(call.request(1)))
+    channel.streamUntilClosed(prefetch).tapChunk(chunk => Sync.defer(if (chunk.nonEmpty) call.request(chunk.size)))
 
   def handler[Request, Response](
     rpc: ServerRpc[[A] =>> A < S, [A] =>> Stream[A, S], Tag, Context, Request, Response]

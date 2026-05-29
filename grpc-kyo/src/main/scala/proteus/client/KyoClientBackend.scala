@@ -74,7 +74,7 @@ class KyoClientBackend(channel: GrpcChannel, prefetchN: Int)
   )(using Tag[Response]): Stream[Response, Async & Abort[StatusException] & Scope] =
     Stream.unwrap {
       Scope.ensure(Sync.defer(call.cancel("Stream ended", null))).map { _ =>
-        responseChannel.streamUntilClosed(prefetch).map(Abort.get(_)).tap(_ => Sync.defer(call.request(1)))
+        responseChannel.streamUntilClosed(prefetch).map(Abort.get(_)).tapChunk(chunk => Sync.defer(if (chunk.nonEmpty) call.request(chunk.size)))
       }
     }
 
