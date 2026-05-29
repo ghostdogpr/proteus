@@ -12,7 +12,7 @@ class RouteGuideClient(host: String, port: Int) {
   val channelResource: ManagedChannel < (Scope & Async) =
     Scope.acquireRelease(
       Sync.defer(ManagedChannelBuilder.forAddress(host, port).usePlaintext().build())
-    )(channel => Sync.defer { channel.shutdown().awaitTermination(5, TimeUnit.SECONDS); () })
+    )(channel => Sync.defer(channel.shutdown().awaitTermination(5, TimeUnit.SECONDS)))
 
   def getFeature(point: Point): Feature < (Async & Abort[StatusException]) =
     Scope.run {

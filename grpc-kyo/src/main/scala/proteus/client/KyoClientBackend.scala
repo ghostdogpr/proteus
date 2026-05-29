@@ -122,9 +122,16 @@ class KyoClientBackend(channel: GrpcChannel, prefetchN: Int)
       val sender =
         sendRequests(call, requestStream, readySignal).handle(Abort.run[StatusException]).map {
           case Result.Success(_) => ()
-          case Result.Failure(e) => Sync.defer { call.cancel("Error sending requests", e); promise.completeDiscard(Result.fail(e)) }
+          case Result.Failure(e) =>
+            Sync.defer {
+              call.cancel("Error sending requests", e)
+              promise.completeDiscard(Result.fail(e))
+            }
           case Result.Panic(e)   =>
-            Sync.defer { call.cancel("Error sending requests", e); promise.completeDiscard(Result.fail(ClientBackend.toStatusException(e))) }
+            Sync.defer {
+              call.cancel("Error sending requests", e)
+              promise.completeDiscard(Result.fail(ClientBackend.toStatusException(e)))
+            }
         }
       Fiber.initUnscoped(sender).map { senderFiber =>
         Sync.ensure(senderFiber.interrupt.andThen(Sync.defer(call.cancel("Interrupted", null))))(promise.safe.get)

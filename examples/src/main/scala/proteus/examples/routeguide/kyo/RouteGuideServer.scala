@@ -58,5 +58,5 @@ class RouteGuideServer(port: Int, routeNotes: AtomicRef[Map[Point, List[RouteNot
           server
         }
         .map(server => Console.printLine(s"Server started on port $port").andThen(server))
-    )(server => Sync.defer { server.shutdown().awaitTermination(5, TimeUnit.SECONDS); () })
+    )(server => Sync.defer(server.shutdown().awaitTermination(5, TimeUnit.SECONDS)))
 }
