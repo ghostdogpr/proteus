@@ -184,7 +184,7 @@ class ZioServerBackend[R, E, Context](
     call: ServerCall[Request, ?],
     queue: Queue[Option[Request]]
   ): ZStream[Any, Nothing, Request] =
-    ZStream.fromQueue(queue, prefetch).collectWhileSome.tapChunks(chunk => ZIO.succeed(call.request(chunk.size)))
+    ZStream.fromQueue(queue, prefetch).collectWhileSome.tapChunks(chunk => ZIO.succeed(if (chunk.nonEmpty) call.request(chunk.size)))
 
   private def clientStreamingHandler[Request, Response](
     rpc: Rpc[Request, Response],
