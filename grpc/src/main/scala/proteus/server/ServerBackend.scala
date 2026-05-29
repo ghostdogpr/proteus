@@ -7,8 +7,8 @@ import io.grpc.{Metadata, ServerCall, ServerCallHandler, Status, StatusException
   * An interface for a server backend that can handle RPCs.
   * The backend is parameterized by the type of unary and streaming RPCs it can handle, and the context type for the server.
   */
-trait ServerBackend[Unary[_], Streaming[_], Context] { self =>
-  def handler[Request, Response](rpc: ServerRpc[Unary, Streaming, Context, Request, Response]): ServerCallHandler[Request, Response]
+trait ServerBackend[Unary[_], Streaming[_], Tag[_], Context] { self =>
+  def handler[Request, Response](rpc: ServerRpc[Unary, Streaming, Tag, Context, Request, Response]): ServerCallHandler[Request, Response]
 }
 
 object ServerBackend {

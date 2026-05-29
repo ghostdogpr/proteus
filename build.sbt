@@ -1,4 +1,5 @@
-val scala3Version = "3.3.7"
+val scala3Version    = "3.3.7"
+val scala3NextVersion = "3.8.3"
 
 val grpcVersion                 = "1.81.0"
 val scalaProtobufRuntimeVersion = "0.8.16"
@@ -7,6 +8,7 @@ val zioVersion                  = "2.1.26"
 val fs2Version                  = "3.13.0"
 val catsEffectVersion           = "3.7.0"
 val oxVersion                   = "1.0.4"
+val kyoVersion                  = "1.0.0-RC2"
 val chimneyVersion              = "1.10.0"
 val circeVersion                = "0.14.15"
 val zioSchemaVersion            = "1.8.5"
@@ -35,7 +37,7 @@ addCommandAlias("check", "all scalafmtSbtCheck scalafmtCheck test:scalafmtCheck"
 lazy val root = project
   .in(file("."))
   .settings(publish / skip := true)
-  .aggregate(core.jvm, core.js, tools.jvm, tools.js, diff, grpc, zioGrpc, fs2Grpc, oxGrpc, json.jvm, json.js, benchmarks, examples)
+  .aggregate(core.jvm, core.js, tools.jvm, tools.js, diff, grpc, zioGrpc, fs2Grpc, oxGrpc, kyoGrpc, json.jvm, json.js, benchmarks, examples)
 
 lazy val core = crossProject(JSPlatform, JVMPlatform)
   .crossType(CrossType.Pure)
@@ -161,6 +163,18 @@ lazy val oxGrpc = project
   )
   .dependsOn(grpc % "compile->compile;test->test")
 
+lazy val kyoGrpc = project
+  .in(file("grpc-kyo"))
+  .settings(name := "proteus-grpc-kyo")
+  .settings(commonSettings)
+  .settings(nextScalaSettings) // Kyo requires Scala 3.8.x (Next)
+  .settings(
+    libraryDependencies ++= Seq(
+      "io.getkyo" %% "kyo-core" % kyoVersion
+    )
+  )
+  .dependsOn(grpc % "compile->compile;test->test")
+
 lazy val json = crossProject(JSPlatform, JVMPlatform)
   .crossType(CrossType.Pure)
   .in(file("json"))
@@ -183,7 +197,7 @@ lazy val benchmarks = project
       "io.bullet"            %% "borer-derivation"    % borerVersion
     ),
     Compile / PB.targets := Seq(
-      scalapb.gen() -> (Compile / sourceManaged).value / "scalapb"
+      scalapb.gen(scala3Sources = true) -> (Compile / sourceManaged).value / "scalapb"
     ),
     scalacOptions ++= Seq("-Wconf:msg=(discarded non-Unit):silent")
   )
@@ -197,6 +211,7 @@ lazy val examples = project
   .settings(name := "proteus-examples")
   .settings(commonSettings)
   .settings(publish / skip := true)
+  .settings(nextScalaSettings) // depends on grpc-kyo (3.8.x)
   .settings(
     libraryDependencies ++=
       Seq(
@@ -206,12 +221,21 @@ lazy val examples = project
         "io.scalaland"         %% "chimney-protobufs" % chimneyVersion
       ),
     Compile / PB.targets := Seq(
-      scalapb.gen() -> (Compile / sourceManaged).value / "scalapb"
+      scalapb.gen(scala3Sources = true) -> (Compile / sourceManaged).value / "scalapb"
     ),
     scalacOptions ++= Seq("-Wconf:msg=(discarded non-Unit):silent"),
     generateProtos       := (Compile / runMain).toTask(" proteus.examples.greeter.ProtoGen").value
   )
-  .dependsOn(zioGrpc, fs2Grpc, oxGrpc)
+  .dependsOn(zioGrpc, fs2Grpc, oxGrpc, kyoGrpc)
+
+lazy val nextScalaSettings = Def.settings(
+  scalaVersion := scala3NextVersion,
+  scalacOptions ~= (_.map {
+    case "-Xfatal-warnings" => "-Werror"
+    case "-Ykind-projector" => "-Xkind-projector"
+    case o                  => o
+  })
+)
 
 lazy val commonSettings = Def.settings(
   scalacOptions ++= Seq(

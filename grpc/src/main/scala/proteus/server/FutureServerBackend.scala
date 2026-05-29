@@ -13,9 +13,9 @@ import io.grpc.{Metadata, ServerCall, ServerCallHandler, Status}
   * @param interceptor an interceptor that can run on every request.
   */
 class FutureServerBackend[Context](interceptor: ServerContextInterceptor[Future, Future, GrpcContext, Context])
-  extends ServerBackend[Future, Future, Context] {
+  extends ServerBackend[Future, Future, NoTag, Context] {
   def handler[Request, Response](
-    rpc: ServerRpc[Future, Future, Context, Request, Response]
+    rpc: ServerRpc[Future, Future, NoTag, Context, Request, Response]
   ): ServerCallHandler[Request, Response] =
     rpc match {
       case server.ServerRpc.Unary(rpc, logic) =>

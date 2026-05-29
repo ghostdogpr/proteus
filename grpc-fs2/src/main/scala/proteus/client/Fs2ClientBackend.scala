@@ -17,7 +17,7 @@ import io.grpc.*
   * @param dispatcher a Cats Effect `Dispatcher` used to bridge gRPC's synchronous callbacks into `F`.
   * @param prefetchN initial in-flight response window for server-streaming / bidi RPCs; the window is refilled one message at a time as the consumer pulls.
   */
-class Fs2ClientBackend[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F], prefetchN: Int) extends ClientBackend[F, Stream[F, *]] {
+class Fs2ClientBackend[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F], prefetchN: Int) extends ClientBackend[F, Stream[F, *], NoTag] {
 
   private val F        = Async[F]
   private val prefetch = math.max(prefetchN, 1)
@@ -237,7 +237,7 @@ class Fs2ClientBackend[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F],
     rpc: Rpc.ClientStreaming[Request, Response],
     service: Service[Rpcs],
     options: CallOptions => CallOptions
-  )(using HasRpc[Rpcs, rpc.type]): Stream[F, Request] => F[Response] = {
+  )(using HasRpc[Rpcs, rpc.type], NoTag[Request]): Stream[F, Request] => F[Response] = {
     val descriptor = rpc.toMethodDescriptor(service)
     reqs => clientStreamingRun(descriptor, options(CallOptions.DEFAULT), new Metadata(), reqs).map(_._1)
   }
@@ -246,7 +246,7 @@ class Fs2ClientBackend[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F],
     rpc: Rpc.ServerStreaming[Request, Response],
     service: Service[Rpcs],
     options: CallOptions => CallOptions
-  )(using HasRpc[Rpcs, rpc.type]): Request => Stream[F, Response] = {
+  )(using HasRpc[Rpcs, rpc.type], NoTag[Response]): Request => Stream[F, Response] = {
     val descriptor = rpc.toMethodDescriptor(service)
     req => serverStreamingRun(descriptor, options(CallOptions.DEFAULT), new Metadata(), req)
   }
@@ -255,7 +255,7 @@ class Fs2ClientBackend[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F],
     rpc: Rpc.BidiStreaming[Request, Response],
     service: Service[Rpcs],
     options: CallOptions => CallOptions
-  )(using HasRpc[Rpcs, rpc.type]): Stream[F, Request] => Stream[F, Response] = {
+  )(using HasRpc[Rpcs, rpc.type], NoTag[Request], NoTag[Response]): Stream[F, Request] => Stream[F, Response] = {
     val descriptor = rpc.toMethodDescriptor(service)
     reqs => bidiRun(descriptor, options(CallOptions.DEFAULT), new Metadata(), reqs)
   }
@@ -276,7 +276,7 @@ class Fs2ClientBackend[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F],
     rpc: Rpc.ClientStreaming[Request, Response],
     service: Service[Rpcs],
     options: CallOptions => CallOptions
-  )(using HasRpc[Rpcs, rpc.type]): (Stream[F, Request], Metadata) => F[(Response, Metadata)] = {
+  )(using HasRpc[Rpcs, rpc.type], NoTag[Request]): (Stream[F, Request], Metadata) => F[(Response, Metadata)] = {
     val descriptor = rpc.toMethodDescriptor(service)
     (reqs, md) =>
       clientStreamingRun(descriptor, options(CallOptions.DEFAULT), md, reqs).map { case (resp, headers, trailers) =>
@@ -288,7 +288,7 @@ class Fs2ClientBackend[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F],
     rpc: Rpc.ServerStreaming[Request, Response],
     service: Service[Rpcs],
     options: CallOptions => CallOptions
-  )(using HasRpc[Rpcs, rpc.type]): (Request, Metadata) => Stream[F, Response] = {
+  )(using HasRpc[Rpcs, rpc.type], NoTag[Response]): (Request, Metadata) => Stream[F, Response] = {
     val descriptor = rpc.toMethodDescriptor(service)
     (req, md) => serverStreamingRun(descriptor, options(CallOptions.DEFAULT), md, req)
   }
@@ -297,7 +297,7 @@ class Fs2ClientBackend[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F],
     rpc: Rpc.BidiStreaming[Request, Response],
     service: Service[Rpcs],
     options: CallOptions => CallOptions
-  )(using HasRpc[Rpcs, rpc.type]): (Stream[F, Request], Metadata) => Stream[F, Response] = {
+  )(using HasRpc[Rpcs, rpc.type], NoTag[Request], NoTag[Response]): (Stream[F, Request], Metadata) => Stream[F, Response] = {
     val descriptor = rpc.toMethodDescriptor(service)
     (reqs, md) => bidiRun(descriptor, options(CallOptions.DEFAULT), md, reqs)
   }

@@ -28,7 +28,7 @@ class ZioServerBackend[R, E, Context](
   ],
   runtime: Runtime[Any],
   prefetchN: Int
-) extends ServerBackend[ZIO[R, E, *], ZStream[R, E, *], Context] {
+) extends ServerBackend[ZIO[R, E, *], ZStream[R, E, *], NoTag, Context] {
 
   private val prefetch: Int = math.max(prefetchN, 1)
 
@@ -101,13 +101,13 @@ class ZioServerBackend[R, E, Context](
     ZIO.succeed(ServerBackend.sendUnaryResponse(call, response))
 
   def handler[Request, Response](
-    rpc: ServerRpc[ZIO[R, E, *], ZStream[R, E, *], Context, Request, Response]
+    rpc: ServerRpc[ZIO[R, E, *], ZStream[R, E, *], NoTag, Context, Request, Response]
   ): ServerCallHandler[Request, Response] =
     rpc match {
-      case ServerRpc.Unary(rpc, logic)           => unaryHandler(rpc, logic)
-      case ServerRpc.ClientStreaming(rpc, logic) => clientStreamingHandler(rpc, logic)
-      case ServerRpc.ServerStreaming(rpc, logic) => serverStreamingHandler(rpc, logic)
-      case ServerRpc.BidiStreaming(rpc, logic)   => bidiStreamingHandler(rpc, logic)
+      case ServerRpc.Unary(rpc, logic)              => unaryHandler(rpc, logic)
+      case ServerRpc.ClientStreaming(rpc, logic, _) => clientStreamingHandler(rpc, logic)
+      case ServerRpc.ServerStreaming(rpc, logic, _) => serverStreamingHandler(rpc, logic)
+      case ServerRpc.BidiStreaming(rpc, logic, _, _) => bidiStreamingHandler(rpc, logic)
     }
 
   private def unaryHandler[Request, Response](
