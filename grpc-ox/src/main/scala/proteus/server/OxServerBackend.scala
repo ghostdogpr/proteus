@@ -106,7 +106,7 @@ class OxServerBackend[Context](
 
   def handler[Request, Response](rpc: ServerRpc[[A] =>> A, Flow, NoTag, Context, Request, Response]): ServerCallHandler[Request, Response] =
     rpc match {
-      case ServerRpc.Unary(rpc, logic)              =>
+      case ServerRpc.Unary(rpc, logic)               =>
         new ServerCallHandler[Request, Response] {
           def startCall(call: ServerCall[Request, Response], headers: Metadata): ServerCall.Listener[Request] = {
             val responseMetadata = new Metadata()
@@ -125,7 +125,7 @@ class OxServerBackend[Context](
             }
           }
         }
-      case ServerRpc.ClientStreaming(rpc, logic, _) =>
+      case ServerRpc.ClientStreaming(rpc, logic, _)  =>
         new ServerCallHandler[Request, Response] {
           def startCall(call: ServerCall[Request, Response], headers: Metadata): ServerCall.Listener[Request] = {
             val requestChannel = Channel.buffered[Request](prefetch)
@@ -148,7 +148,7 @@ class OxServerBackend[Context](
             streamingListener(requestChannel, workerHandle, readySignal)
           }
         }
-      case ServerRpc.ServerStreaming(rpc, logic, _) =>
+      case ServerRpc.ServerStreaming(rpc, logic, _)  =>
         new ServerCallHandler[Request, Response] {
           def startCall(call: ServerCall[Request, Response], headers: Metadata): ServerCall.Listener[Request] = {
             val readySignal  = Channel.buffered[Unit](1)

@@ -237,7 +237,11 @@ class ZioClientBackend(channel: Channel, runtime: Runtime[Any], prefetchN: Int)
     rpc: Rpc.BidiStreaming[Request, Response],
     service: Service[Rpcs],
     options: CallOptions => CallOptions
-  )(using HasRpc[Rpcs, rpc.type], NoTag[Request], NoTag[Response]): ZStream[Any, StatusException, Request] => ZStream[Any, StatusException, Response] = {
+  )(
+    using HasRpc[Rpcs, rpc.type],
+    NoTag[Request],
+    NoTag[Response]
+  ): ZStream[Any, StatusException, Request] => ZStream[Any, StatusException, Response] = {
     val descriptor = rpc.toMethodDescriptor(service)
     reqs => bidiRun(descriptor, options(CallOptions.DEFAULT), new Metadata(), reqs)
   }
@@ -279,7 +283,11 @@ class ZioClientBackend(channel: Channel, runtime: Runtime[Any], prefetchN: Int)
     rpc: Rpc.BidiStreaming[Request, Response],
     service: Service[Rpcs],
     options: CallOptions => CallOptions
-  )(using HasRpc[Rpcs, rpc.type], NoTag[Request], NoTag[Response]): (ZStream[Any, StatusException, Request], Metadata) => ZStream[Any, StatusException, Response] = {
+  )(
+    using HasRpc[Rpcs, rpc.type],
+    NoTag[Request],
+    NoTag[Response]
+  ): (ZStream[Any, StatusException, Request], Metadata) => ZStream[Any, StatusException, Response] = {
     val descriptor = rpc.toMethodDescriptor(service)
     (reqs, md) => bidiRun(descriptor, options(CallOptions.DEFAULT), md, reqs)
   }

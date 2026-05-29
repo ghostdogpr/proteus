@@ -73,7 +73,8 @@ class OxClientBackend(channel: Channel, prefetchN: Int) extends ClientBackend[[A
   }
 
   def client[Rpcs, Request, Response](rpc: Rpc.ClientStreaming[Request, Response], service: Service[Rpcs], options: CallOptions => CallOptions)(
-    using HasRpc[Rpcs, rpc.type], NoTag[Request]
+    using HasRpc[Rpcs, rpc.type],
+    NoTag[Request]
   ): Flow[Request] => Response = {
     val methodDescriptor = rpc.toMethodDescriptor(service)
     requestFlow => {
@@ -101,7 +102,8 @@ class OxClientBackend(channel: Channel, prefetchN: Int) extends ClientBackend[[A
   }
 
   def client[Rpcs, Request, Response](rpc: Rpc.ServerStreaming[Request, Response], service: Service[Rpcs], options: CallOptions => CallOptions)(
-    using HasRpc[Rpcs, rpc.type], NoTag[Response]
+    using HasRpc[Rpcs, rpc.type],
+    NoTag[Response]
   ): Request => Flow[Response] = {
     val methodDescriptor = rpc.toMethodDescriptor(service)
     request =>
@@ -120,7 +122,9 @@ class OxClientBackend(channel: Channel, prefetchN: Int) extends ClientBackend[[A
   }
 
   def client[Rpcs, Request, Response](rpc: Rpc.BidiStreaming[Request, Response], service: Service[Rpcs], options: CallOptions => CallOptions)(
-    using HasRpc[Rpcs, rpc.type], NoTag[Request], NoTag[Response]
+    using HasRpc[Rpcs, rpc.type],
+    NoTag[Request],
+    NoTag[Response]
   ): Flow[Request] => Flow[Response] = {
     val methodDescriptor = rpc.toMethodDescriptor(service)
     requestFlow =>

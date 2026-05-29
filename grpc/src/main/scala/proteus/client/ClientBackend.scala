@@ -151,7 +151,8 @@ trait ClientBackend[Unary[_], Streaming[_], Tag[_]] extends ClientBackendUnary[U
   def clientWithMetadata[Rpcs, Request, Response](
     rpc: Rpc.ClientStreaming[Request, Response],
     service: Service[Rpcs]
-  )(using HasRpc[Rpcs, rpc.type], Tag[Request]): (Streaming[Request], Metadata) => Unary[(Response, Metadata)] = clientWithMetadata(rpc, service, identity)
+  )(using HasRpc[Rpcs, rpc.type], Tag[Request]): (Streaming[Request], Metadata) => Unary[(Response, Metadata)] =
+    clientWithMetadata(rpc, service, identity)
 
   /**
     * Creates a new client streaming client with the ability to send and receive metadata.
@@ -199,7 +200,8 @@ trait ClientBackend[Unary[_], Streaming[_], Tag[_]] extends ClientBackendUnary[U
   def clientWithMetadata[Rpcs, Request, Response](
     rpc: Rpc.BidiStreaming[Request, Response],
     service: Service[Rpcs]
-  )(using HasRpc[Rpcs, rpc.type], Tag[Request], Tag[Response]): (Streaming[Request], Metadata) => Streaming[Response] = clientWithMetadata(rpc, service, identity)
+  )(using HasRpc[Rpcs, rpc.type], Tag[Request], Tag[Response]): (Streaming[Request], Metadata) => Streaming[Response] =
+    clientWithMetadata(rpc, service, identity)
 
   /**
     * Creates a new bidirectional streaming client with the ability to send and receive metadata.
