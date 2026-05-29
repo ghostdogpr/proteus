@@ -180,7 +180,7 @@ class Fs2ServerBackend[F[_]: Async, G[_], Context](
     Stream
       .fromQueueNoneTerminated(queue, prefetch)
       .chunks
-      .evalTap(chunk => F.delay(call.request(chunk.size)))
+      .evalTap(chunk => F.delay(if (chunk.nonEmpty) call.request(chunk.size)))
       .unchunks
 
   private def clientStreamingHandler[Request, Response](

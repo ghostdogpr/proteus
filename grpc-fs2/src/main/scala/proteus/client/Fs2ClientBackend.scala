@@ -120,7 +120,7 @@ class Fs2ClientBackend[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F],
       .rethrow
       .unNoneTerminate
       .chunks
-      .evalTap(c => F.delay(call.request(c.size)))
+      .evalTap(c => F.delay(if (c.nonEmpty) call.request(c.size)))
       .unchunks
       .onFinalize(F.delay(call.cancel("Stream ended", null)))
 

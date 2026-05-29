@@ -111,7 +111,7 @@ class ZioClientBackend(channel: Channel, runtime: Runtime[Any], prefetchN: Int)
     ZStream
       .fromQueue(queue, prefetch)
       .flattenTake
-      .tapChunks(chunk => ZIO.succeed(call.request(chunk.size)))
+      .tapChunks(chunk => ZIO.succeed(if (chunk.nonEmpty) call.request(chunk.size)))
       .ensuring(ZIO.succeed(call.cancel("Stream ended", null)))
 
   private def serverStreamingRun[Request, Response](
