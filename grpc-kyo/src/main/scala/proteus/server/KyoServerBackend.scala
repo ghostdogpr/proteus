@@ -25,7 +25,8 @@ class KyoServerBackend[S, Context](
     Context
   ],
   prefetchN: Int
-) extends ServerBackend[[A] =>> A < S, [A] =>> Stream[A, S], Tag, Context] {
+) extends ServerBackend[[A] =>> A < S, [A] =>> Stream[A, S], Context] {
+  type Tag[A] = kyo.Tag[A]
 
   private val prefetch: Int = math.max(prefetchN, 1)
 

@@ -14,7 +14,8 @@ import kyo.AllowUnsafe.embrace.danger
   * @param prefetchN initial in-flight response window for server-streaming / bidi RPCs; also sizes the response channel buffer.
   */
 class KyoClientBackend(channel: GrpcChannel, prefetchN: Int)
-  extends ClientBackend[[A] =>> A < (Async & Abort[StatusException]), [A] =>> Stream[A, Async & Abort[StatusException]], Tag] {
+  extends ClientBackend[[A] =>> A < (Async & Abort[StatusException]), [A] =>> Stream[A, Async & Abort[StatusException]]] {
+  type Tag[A] = kyo.Tag[A]
 
   private val prefetch: Int = math.max(prefetchN, 1)
 

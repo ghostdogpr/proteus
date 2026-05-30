@@ -28,7 +28,8 @@ class ZioServerBackend[R, E, Context](
   ],
   runtime: Runtime[Any],
   prefetchN: Int
-) extends ServerBackend[ZIO[R, E, *], ZStream[R, E, *], NoTag, Context] {
+) extends ServerBackend[ZIO[R, E, *], ZStream[R, E, *], Context] {
+  type Tag[A] = NoTag[A]
 
   private val prefetch: Int = math.max(prefetchN, 1)
 
@@ -101,7 +102,7 @@ class ZioServerBackend[R, E, Context](
     ZIO.succeed(ServerBackend.sendUnaryResponse(call, response))
 
   def handler[Request, Response](
-    rpc: ServerRpc[ZIO[R, E, *], ZStream[R, E, *], NoTag, Context, Request, Response]
+    rpc: ServerRpc[ZIO[R, E, *], ZStream[R, E, *], Tag, Context, Request, Response]
   ): ServerCallHandler[Request, Response] =
     rpc match {
       case ServerRpc.Unary(rpc, logic)               => unaryHandler(rpc, logic)

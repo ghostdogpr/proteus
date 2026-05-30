@@ -57,7 +57,10 @@ val serverReflectionService = Service("grpc.reflection.v1", "ServerReflection").
   *
   * @param backend the backend to use for the client.
   */
-def reflectionClient[Unary[_], Streaming[_], Tag[_]](
-  backend: client.ClientBackend[Unary, Streaming, Tag]
-)(using Tag[ServerReflectionRequest], Tag[ServerReflectionResponse]): Streaming[ServerReflectionRequest] => Streaming[ServerReflectionResponse] =
+def reflectionClient[Unary[_], Streaming[_]](
+  backend: client.ClientBackend[Unary, Streaming]
+)(
+  using backend.Tag[ServerReflectionRequest],
+  backend.Tag[ServerReflectionResponse]
+): Streaming[ServerReflectionRequest] => Streaming[ServerReflectionResponse] =
   backend.client(serverReflectionInfoRpc, serverReflectionService)

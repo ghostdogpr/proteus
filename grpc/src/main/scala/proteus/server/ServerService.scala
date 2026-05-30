@@ -11,9 +11,10 @@ import io.grpc.protobuf.ProtoFileDescriptorSupplier
   * @param serverRpcs the RPCs of the service with their logic.
   * @param backend the backend to handle the requests.
   */
-case class ServerService[Unary[_], Streaming[_], Tag[_], Context, Rpcs] private (
-  serverRpcs: List[ServerRpc[Unary, Streaming, Tag, Context, ?, ?]]
-)(using val backend: ServerBackend[Unary, Streaming, Tag, Context]) {
+class ServerService[Unary[_], Streaming[_], Context, Rpcs, Backend <: ServerBackend[Unary, Streaming, Context]] private (
+  val backend: Backend,
+  serverRpcs: List[ServerRpc[Unary, Streaming, backend.Tag, Context, ?, ?]]
+) {
 
   /**
     * Provides the logic for the given unary RPC.
@@ -24,8 +25,11 @@ case class ServerService[Unary[_], Streaming[_], Tag[_], Context, Rpcs] private 
   def rpc[Request, Response](
     rpc: Rpc.Unary[Request, Response],
     logic: Request => Unary[Response]
-  ): ServerService[Unary, Streaming, Tag, Context, Rpcs & rpc.type] =
-    ServerService(serverRpcs :+ server.ServerRpc.Unary(rpc, (req, _) => logic(req)))
+  ): ServerService[Unary, Streaming, Context, Rpcs & rpc.type, Backend] =
+    ServerService(
+      backend,
+      serverRpcs :+ server.ServerRpc.Unary[Unary, Streaming, backend.Tag, Context, Request, Response](rpc, (req, _) => logic(req))
+    )
 
   /**
     * Provides the logic for the given client streaming RPC.
@@ -36,8 +40,11 @@ case class ServerService[Unary[_], Streaming[_], Tag[_], Context, Rpcs] private 
   def rpc[Request, Response](
     rpc: Rpc.ClientStreaming[Request, Response],
     logic: Streaming[Request] => Unary[Response]
-  )(using reqTag: Tag[Request]): ServerService[Unary, Streaming, Tag, Context, Rpcs & rpc.type] =
-    ServerService(serverRpcs :+ server.ServerRpc.ClientStreaming(rpc, (req, _) => logic(req), reqTag))
+  )(using reqTag: backend.Tag[Request]): ServerService[Unary, Streaming, Context, Rpcs & rpc.type, Backend] =
+    ServerService(
+      backend,
+      serverRpcs :+ server.ServerRpc.ClientStreaming[Unary, Streaming, backend.Tag, Context, Request, Response](rpc, (req, _) => logic(req), reqTag)
+    )
 
   /**
     * Provides the logic for the given server streaming RPC.
@@ -48,8 +55,11 @@ case class ServerService[Unary[_], Streaming[_], Tag[_], Context, Rpcs] private 
   def rpc[Request, Response](
     rpc: Rpc.ServerStreaming[Request, Response],
     logic: Request => Streaming[Response]
-  )(using respTag: Tag[Response]): ServerService[Unary, Streaming, Tag, Context, Rpcs & rpc.type] =
-    ServerService(serverRpcs :+ server.ServerRpc.ServerStreaming(rpc, (req, _) => logic(req), respTag))
+  )(using respTag: backend.Tag[Response]): ServerService[Unary, Streaming, Context, Rpcs & rpc.type, Backend] =
+    ServerService(
+      backend,
+      serverRpcs :+ server.ServerRpc.ServerStreaming[Unary, Streaming, backend.Tag, Context, Request, Response](rpc, (req, _) => logic(req), respTag)
+    )
 
   /**
     * Provides the logic for the given bidirectional streaming RPC.
@@ -60,8 +70,16 @@ case class ServerService[Unary[_], Streaming[_], Tag[_], Context, Rpcs] private 
   def rpc[Request, Response](
     rpc: Rpc.BidiStreaming[Request, Response],
     logic: Streaming[Request] => Streaming[Response]
-  )(using reqTag: Tag[Request], respTag: Tag[Response]): ServerService[Unary, Streaming, Tag, Context, Rpcs & rpc.type] =
-    ServerService(serverRpcs :+ server.ServerRpc.BidiStreaming(rpc, (req, _) => logic(req), reqTag, respTag))
+  )(using reqTag: backend.Tag[Request], respTag: backend.Tag[Response]): ServerService[Unary, Streaming, Context, Rpcs & rpc.type, Backend] =
+    ServerService(
+      backend,
+      serverRpcs :+ server.ServerRpc.BidiStreaming[Unary, Streaming, backend.Tag, Context, Request, Response](
+        rpc,
+        (req, _) => logic(req),
+        reqTag,
+        respTag
+      )
+    )
 
   /**
     * Provides the logic for the given unary RPC, also receiving the context.
@@ -72,8 +90,8 @@ case class ServerService[Unary[_], Streaming[_], Tag[_], Context, Rpcs] private 
   def rpcWithContext[Request, Response](
     rpc: Rpc.Unary[Request, Response],
     logic: (Request, Context) => Unary[Response]
-  ): ServerService[Unary, Streaming, Tag, Context, Rpcs & rpc.type] =
-    ServerService(serverRpcs :+ server.ServerRpc.Unary(rpc, logic(_, _)))
+  ): ServerService[Unary, Streaming, Context, Rpcs & rpc.type, Backend] =
+    ServerService(backend, serverRpcs :+ server.ServerRpc.Unary[Unary, Streaming, backend.Tag, Context, Request, Response](rpc, logic(_, _)))
 
   /**
     * Provides the logic for the given client streaming RPC, also receiving the context.
@@ -84,8 +102,11 @@ case class ServerService[Unary[_], Streaming[_], Tag[_], Context, Rpcs] private 
   def rpcWithContext[Request, Response](
     rpc: Rpc.ClientStreaming[Request, Response],
     logic: (Streaming[Request], Context) => Unary[Response]
-  )(using reqTag: Tag[Request]): ServerService[Unary, Streaming, Tag, Context, Rpcs & rpc.type] =
-    ServerService(serverRpcs :+ server.ServerRpc.ClientStreaming(rpc, logic(_, _), reqTag))
+  )(using reqTag: backend.Tag[Request]): ServerService[Unary, Streaming, Context, Rpcs & rpc.type, Backend] =
+    ServerService(
+      backend,
+      serverRpcs :+ server.ServerRpc.ClientStreaming[Unary, Streaming, backend.Tag, Context, Request, Response](rpc, logic(_, _), reqTag)
+    )
 
   /**
     * Provides the logic for the given server streaming RPC, also receiving the context.
@@ -96,8 +117,11 @@ case class ServerService[Unary[_], Streaming[_], Tag[_], Context, Rpcs] private 
   def rpcWithContext[Request, Response](
     rpc: Rpc.ServerStreaming[Request, Response],
     logic: (Request, Context) => Streaming[Response]
-  )(using respTag: Tag[Response]): ServerService[Unary, Streaming, Tag, Context, Rpcs & rpc.type] =
-    ServerService(serverRpcs :+ server.ServerRpc.ServerStreaming(rpc, logic(_, _), respTag))
+  )(using respTag: backend.Tag[Response]): ServerService[Unary, Streaming, Context, Rpcs & rpc.type, Backend] =
+    ServerService(
+      backend,
+      serverRpcs :+ server.ServerRpc.ServerStreaming[Unary, Streaming, backend.Tag, Context, Request, Response](rpc, logic(_, _), respTag)
+    )
 
   /**
     * Provides the logic for the given bidirectional streaming RPC, also receiving the context.
@@ -108,8 +132,11 @@ case class ServerService[Unary[_], Streaming[_], Tag[_], Context, Rpcs] private 
   def rpcWithContext[Request, Response](
     rpc: Rpc.BidiStreaming[Request, Response],
     logic: (Streaming[Request], Context) => Streaming[Response]
-  )(using reqTag: Tag[Request], respTag: Tag[Response]): ServerService[Unary, Streaming, Tag, Context, Rpcs & rpc.type] =
-    ServerService(serverRpcs :+ server.ServerRpc.BidiStreaming(rpc, logic(_, _), reqTag, respTag))
+  )(using reqTag: backend.Tag[Request], respTag: backend.Tag[Response]): ServerService[Unary, Streaming, Context, Rpcs & rpc.type, Backend] =
+    ServerService(
+      backend,
+      serverRpcs :+ server.ServerRpc.BidiStreaming[Unary, Streaming, backend.Tag, Context, Request, Response](rpc, logic(_, _), reqTag, respTag)
+    )
 
   /**
     * Builds the server service definition to be provided to grpc-java.
@@ -154,8 +181,14 @@ object ServerService {
     *
     * @param backend the backend to handle the requests.
     */
-  def apply[Unary[_], Streaming[_], Tag[_], Context](
-    using backend: ServerBackend[Unary, Streaming, Tag, Context]
-  ): ServerService[Unary, Streaming, Tag, Context, Any] =
-    ServerService(Nil)
+  private[server] def apply[Unary[_], Streaming[_], Context, Rpcs, Backend <: ServerBackend[Unary, Streaming, Context]](
+    backend: Backend,
+    serverRpcs: List[ServerRpc[Unary, Streaming, backend.Tag, Context, ?, ?]]
+  ): ServerService[Unary, Streaming, Context, Rpcs, Backend] =
+    new ServerService(backend, serverRpcs)
+
+  def apply[Unary[_], Streaming[_], Context](
+    using backend: ServerBackend[Unary, Streaming, Context]
+  ): ServerService[Unary, Streaming, Context, Any, backend.type] =
+    ServerService(backend, Nil)
 }

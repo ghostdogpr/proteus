@@ -16,7 +16,8 @@ import zio.stream.*
   * @param prefetchN initial in-flight response window for server-streaming / bidi RPCs; the window is refilled one message at a time as the consumer pulls.
   */
 class ZioClientBackend(channel: Channel, runtime: Runtime[Any], prefetchN: Int)
-  extends ClientBackend[IO[StatusException, *], ZStream[Any, StatusException, *], NoTag] {
+  extends ClientBackend[IO[StatusException, *], ZStream[Any, StatusException, *]] {
+  type Tag[A] = NoTag[A]
 
   private val prefetch: Int = math.max(prefetchN, 1)
 

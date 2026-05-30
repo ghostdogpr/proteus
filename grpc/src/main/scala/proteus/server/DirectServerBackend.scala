@@ -12,8 +12,10 @@ import io.grpc.{Metadata, ServerCall, ServerCallHandler, Status}
   * @param interceptor an interceptor that can run on every request.
   */
 class DirectServerBackend[Context](interceptor: ServerContextInterceptor[[A] =>> A, [A] =>> A, GrpcContext, Context])
-  extends ServerBackend[[A] =>> A, [A] =>> A, NoTag, Context] {
-  def handler[Request, Response](rpc: ServerRpc[[A] =>> A, [A] =>> A, NoTag, Context, Request, Response]): ServerCallHandler[Request, Response] =
+  extends ServerBackend[[A] =>> A, [A] =>> A, Context] {
+  type Tag[A] = NoTag[A]
+
+  def handler[Request, Response](rpc: ServerRpc[[A] =>> A, [A] =>> A, Tag, Context, Request, Response]): ServerCallHandler[Request, Response] =
     rpc match {
       case server.ServerRpc.Unary(rpc, logic) =>
         new ServerCallHandler[Request, Response] {

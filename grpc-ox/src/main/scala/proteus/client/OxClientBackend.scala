@@ -18,7 +18,8 @@ import ox.flow.Flow
   * @param channel the gRPC channel used to issue calls.
   * @param prefetchN initial in-flight response window for server-streaming / bidi RPCs; also sizes the response channel buffer.
   */
-class OxClientBackend(channel: Channel, prefetchN: Int) extends ClientBackend[[A] =>> A, Flow, NoTag] {
+class OxClientBackend(channel: Channel, prefetchN: Int) extends ClientBackend[[A] =>> A, Flow] {
+  type Tag[A] = NoTag[A]
 
   private val prefetch: Int = math.max(prefetchN, 1)
 

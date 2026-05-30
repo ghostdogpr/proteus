@@ -65,9 +65,9 @@ trait ClientBackendUnary[Unary[_]] {
   *
   * @param Unary the type returned by the non-streaming client methods.
   * @param Streaming the type returned by the streaming client methods.
-  * @param Tag per-message type evidence required by the streaming methods (abstract; each backend chooses it).
   */
-trait ClientBackend[Unary[_], Streaming[_], Tag[_]] extends ClientBackendUnary[Unary] {
+trait ClientBackend[Unary[_], Streaming[_]] extends ClientBackendUnary[Unary] {
+  type Tag[A]
 
   /**
     * Creates a new client streaming client.

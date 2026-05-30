@@ -23,7 +23,8 @@ class OxServerBackend[Context](
   interceptor: ServerContextInterceptor[[A] =>> A, Flow, GrpcContext, Context],
   runner: InScopeRunner,
   prefetchN: Int
-) extends ServerBackend[[A] =>> A, Flow, NoTag, Context] {
+) extends ServerBackend[[A] =>> A, Flow, Context] {
+  type Tag[A] = NoTag[A]
 
   private val prefetch: Int = math.max(prefetchN, 1)
 
@@ -104,7 +105,7 @@ class OxServerBackend[Context](
       workerHandle.publish(fork)
     }
 
-  def handler[Request, Response](rpc: ServerRpc[[A] =>> A, Flow, NoTag, Context, Request, Response]): ServerCallHandler[Request, Response] =
+  def handler[Request, Response](rpc: ServerRpc[[A] =>> A, Flow, Tag, Context, Request, Response]): ServerCallHandler[Request, Response] =
     rpc match {
       case ServerRpc.Unary(rpc, logic)               =>
         new ServerCallHandler[Request, Response] {
