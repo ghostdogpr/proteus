@@ -1022,17 +1022,41 @@ object ProtobufCodec {
           val fieldId = tag >>> 3
           val field   = m.fieldMap(fieldId)
           if (field ne null) {
-            val alreadyVisited = if (m.useBitmask) (visitedBits & (1L << field.index)) != 0L else visitedArray(field.index)
-            val value          = wrapDecode(s"${field.field.name}#$fieldId") {
-              loop(field.field.codec, field, tag, alreadyVisited)
+            val codec = field.field.codec
+            codec match {
+              case p: Primitive[_] =>
+                wrapDecode(s"${field.field.name}#$fieldId") {
+                  readPrimitiveIntoRegister(p, field.field.register, registers, offset)
+                }
+              case _               =>
+                val alreadyVisited = if (m.useBitmask) (visitedBits & (1L << field.index)) != 0L else visitedArray(field.index)
+                val value          = wrapDecode(s"${field.field.name}#$fieldId") {
+                  loop(codec, field, tag, alreadyVisited)
+                }
+                if (value != null) setToRegister(registers, offset, field.field.register, value)
             }
             if (m.useBitmask) visitedBits |= (1L << field.index) else visitedArray(field.index) = true
-            if (value != null) setToRegister(registers, offset, field.field.register, value)
           } else input.skipField(tag): Unit
         }
       }
       finalize(m, registers, offset, visitedBits, visitedArray)
       m.constructor.construct(registers, offset)
+    }
+
+  private def readPrimitiveIntoRegister(
+    p: Primitive[?],
+    register: Register[?],
+    registers: Registers,
+    offset: RegisterOffset
+  )(using input: CodedInputStream): Unit =
+    p.primitiveType match {
+      case _: PrimitiveType.Int     => register.asInstanceOf[Register.Int].set(registers, offset, input.readInt32())
+      case _: PrimitiveType.Long    => register.asInstanceOf[Register.Long].set(registers, offset, input.readInt64())
+      case _: PrimitiveType.Boolean => register.asInstanceOf[Register.Boolean].set(registers, offset, input.readBool())
+      case _: PrimitiveType.String  => register.asInstanceOf[Register.Object[String]].set(registers, offset, input.readStringRequireUtf8())
+      case _: PrimitiveType.Double  => register.asInstanceOf[Register.Double].set(registers, offset, input.readDouble())
+      case _: PrimitiveType.Float   => register.asInstanceOf[Register.Float].set(registers, offset, input.readFloat())
+      case _                        => throw new ProteusException(s"Unsupported primitive type: $p")
     }
 
   private def handlePrimitive[A](p: Primitive[A])(using input: CodedInputStream): A =
