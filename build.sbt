@@ -1,5 +1,5 @@
 val scala3Version     = "3.3.7"
-val scala3NextVersion = "3.8.3"
+val scala3NextVersion = "3.8.4"
 
 val grpcVersion                 = "1.81.0"
 val scalaProtobufRuntimeVersion = "0.8.16"
@@ -242,7 +242,7 @@ lazy val commonSettings = Def.settings(
     "-deprecation",
     "-Xfatal-warnings",
     "-no-indent",
-    "-Wunused:imports,params,privates,implicits,explicits,nowarn",
+    "-Wunused:imports,params,privates,implicits,explicits",
     "-Wvalue-discard",
     "-Ykind-projector"
   ),
