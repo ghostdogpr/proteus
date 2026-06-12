@@ -196,7 +196,7 @@ case class ProtobufDeriver private (
                   case field: ExcludedField[?] => field
                   case field: SimpleField[?]   =>
                     val caseId =
-                      if (idIterator.hasNext) idIterator.next
+                      if (idIterator.hasNext) idIterator.next()
                       else {
                         id += 1
                         while (allReservedIndexes.contains(id)) id += 1
@@ -227,7 +227,7 @@ case class ProtobufDeriver private (
                   case field: ExcludedField[?] => field
                   case field: SimpleField[?]   =>
                     val caseId =
-                      if (idIterator.hasNext) idIterator.next
+                      if (idIterator.hasNext) idIterator.next()
                       else {
                         id += 1
                         while (allReservedIndexes.contains(id)) id += 1

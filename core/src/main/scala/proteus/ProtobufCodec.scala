@@ -767,7 +767,7 @@ object ProtobufCodec {
           output.writeUInt32NoTag(innerSize)
         }
         while (it.hasNext)
-          ProtobufCodec.write(element, it.next, effectiveId, registers, alwaysEncode = true, cache)
+          ProtobufCodec.write(element, it.next(), effectiveId, registers, alwaysEncode = true, cache)
       }
     }
   }
@@ -787,7 +787,7 @@ object ProtobufCodec {
       else {
         var size = 0
         while (it.hasNext) {
-          val kv    = it.next
+          val kv    = it.next()
           val tuple = deconstructor.getKeyValue(kv)
           size += element.computeSize(tuple, id, registers, cache)
         }
@@ -799,7 +799,7 @@ object ProtobufCodec {
       val it = deconstructor.deconstruct(a)
       if (!it.isEmpty) {
         while (it.hasNext) {
-          it.next: Unit
+          it.next(): Unit
           element.write(id, registers, cache)
         }
       }
