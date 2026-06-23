@@ -582,6 +582,19 @@ object ProtobufCodec {
     private[proteus] val useBuilder: Boolean                 = simpleFields.exists(_.useBuilder)
     private[proteus] val useBitmask: Boolean                 = fields.length <= 64
 
+    // -1L at 64 fields since `1L << 64` wraps to 1
+    private[proteus] val fullMask: Long = if (fields.length >= 64) -1L else (1L << fields.length) - 1L
+
+    private[proteus] val builderFieldIndices: Array[Int] =
+      if (!useBuilder || !useBitmask) Array.emptyIntArray
+      else
+        (0 until fields.length).iterator.filter { i =>
+          fields(i) match {
+            case f: SimpleField[?] => f.useBuilder
+            case _                 => false
+          }
+        }.toArray
+
     private[proteus] def computeSize(a: A, id: Int, registers: Registers, cache: WriterCache): Int =
       wrapEncode(name) {
         val offset    = cache.getOffset()
@@ -924,48 +937,65 @@ object ProtobufCodec {
       case c: RecursiveMessage[_]  => c.codec.write(id, registers, cache)
     }
 
-  private def finalize[A](m: Message[A], registers: Registers, offset: RegisterOffset, visitedBits: Long, visitedArray: Array[Boolean]): Unit = {
-    var i = 0
-    while (i < m.fields.length) {
-      val wasVisited = if (m.useBitmask) (visitedBits & (1L << i)) != 0L else visitedArray(i)
-      if (!wasVisited) {
-        // set default values for not visited fields
-        m.fields(i) match {
-          case field: SimpleField[?]   =>
-            if (field.defaultValue != null) setToRegister(registers, offset, field.register, field.defaultValue)
-            else throw new ProteusException(s"Field ${field.name} in message ${m.name} is absent and has no default value")
-          case field: OneOfField[?]    =>
-            if (field.defaultValue != null) setToRegister(registers, offset, field.register, field.defaultValue)
-            else throw new ProteusException(s"OneOf field ${field.name} in message ${m.name} is absent and has no default value")
-          case field: ExcludedField[?] => setToRegister(registers, offset, field.register, field.defaultValue)
-        }
-      } else if (m.useBuilder) {
-        // unpacked repeated fields use a builder that we need to convert to the final object
-        m.fields(i) match {
-          case field: SimpleField[_] if field.useBuilder =>
-            def loop[A](codec: ProtobufCodec[A]): A =
-              codec match {
-                case c: Repeated[_, _]         =>
-                  val v = field.register.asInstanceOf[Register.Object[_ <: AnyRef]].get(registers, offset)
-                  c.constructor.result(v.asInstanceOf[c.constructor.Builder[Any]]).asInstanceOf[A]
-                case c: RepeatedMap[_, _, _]   =>
-                  val v = field.register.asInstanceOf[Register.Object[_ <: AnyRef]].get(registers, offset)
-                  c.constructor.resultObject(v.asInstanceOf[c.constructor.ObjectBuilder[Any, Any]]).asInstanceOf[A]
-                case Transform(from, _, codec) =>
-                  val res = loop(codec)
-                  // need to transform the result to the final type
-                  if (res != null) from(res) else null.asInstanceOf[A]
-                case _                         => null.asInstanceOf[A]
-              }
-
-            val res = loop(field.codec)
-            if (res != null) setToRegister(registers, offset, field.register, res)
-          case _                                         =>
+  private def finalize[A](m: Message[A], registers: Registers, offset: RegisterOffset, visitedBits: Long, visitedArray: Array[Boolean]): Unit =
+    if (m.useBitmask) {
+      // set default values for absent fields, visiting only the missing bits
+      var missing = m.fullMask & ~visitedBits
+      while (missing != 0L) {
+        val i = java.lang.Long.numberOfTrailingZeros(missing)
+        setDefaultField(m, i, registers, offset)
+        missing &= missing - 1L
+      }
+      if (m.useBuilder) {
+        val indices = m.builderFieldIndices
+        var j       = 0
+        while (j < indices.length) {
+          val i = indices(j)
+          if ((visitedBits & (1L << i)) != 0L) convertBuilderField(m, i, registers, offset)
+          j += 1
         }
       }
-      i += 1
+    } else {
+      var i = 0
+      while (i < m.fields.length) {
+        if (!visitedArray(i)) setDefaultField(m, i, registers, offset)
+        else if (m.useBuilder) convertBuilderField(m, i, registers, offset)
+        i += 1
+      }
     }
-  }
+
+  private def setDefaultField[A](m: Message[A], i: Int, registers: Registers, offset: RegisterOffset): Unit =
+    m.fields(i) match {
+      case field: SimpleField[?]   =>
+        if (field.defaultValue != null) setToRegister(registers, offset, field.register, field.defaultValue)
+        else throw new ProteusException(s"Field ${field.name} in message ${m.name} is absent and has no default value")
+      case field: OneOfField[?]    =>
+        if (field.defaultValue != null) setToRegister(registers, offset, field.register, field.defaultValue)
+        else throw new ProteusException(s"OneOf field ${field.name} in message ${m.name} is absent and has no default value")
+      case field: ExcludedField[?] => setToRegister(registers, offset, field.register, field.defaultValue)
+    }
+
+  private def convertBuilderField[A](m: Message[A], i: Int, registers: Registers, offset: RegisterOffset): Unit =
+    m.fields(i) match {
+      case field: SimpleField[_] if field.useBuilder =>
+        def loop[A](codec: ProtobufCodec[A]): A =
+          codec match {
+            case c: Repeated[_, _]         =>
+              val v = field.register.asInstanceOf[Register.Object[_ <: AnyRef]].get(registers, offset)
+              c.constructor.result(v.asInstanceOf[c.constructor.Builder[Any]]).asInstanceOf[A]
+            case c: RepeatedMap[_, _, _]   =>
+              val v = field.register.asInstanceOf[Register.Object[_ <: AnyRef]].get(registers, offset)
+              c.constructor.resultObject(v.asInstanceOf[c.constructor.ObjectBuilder[Any, Any]]).asInstanceOf[A]
+            case Transform(from, _, codec) =>
+              val res = loop(codec)
+              if (res != null) from(res) else null.asInstanceOf[A]
+            case _                         => null.asInstanceOf[A]
+          }
+
+        val res = loop(field.codec)
+        if (res != null) setToRegister(registers, offset, field.register, res)
+      case _                                         =>
+    }
 
   private def handleMessage[A](m: Message[A], registers: Registers, offset: RegisterOffset)(using input: CodedInputStream): A =
     wrapDecode(m.name) {
