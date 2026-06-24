@@ -1,4 +1,4 @@
-val scala3Version     = "3.3.8"
+val scala3Version     = "3.8.4"
 val scala3NextVersion = "3.8.4"
 
 val grpcVersion                 = "1.82.0"
