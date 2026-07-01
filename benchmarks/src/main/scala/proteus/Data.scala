@@ -8,6 +8,7 @@ import io.scalaland.chimney.{PartialTransformer, Transformer}
 import io.scalaland.chimney.dsl.*
 import io.scalaland.chimney.partial
 import io.scalaland.chimney.protobufs.*
+import kyo.Schema as KyoSchema
 import test.test as scalapb
 import upickle.default.*
 import zio.blocks.schema.*
@@ -130,6 +131,20 @@ object Data {
         },
         dt => Time(dt.toEpochMilli)
       )
+
+  given timeKyoSchema: KyoSchema[Time]          = KyoSchema.derived
+  given enumKyoSchema: KyoSchema[Enum]          = KyoSchema.derived
+  given oneOfKyoSchema: KyoSchema[OneOfExample] = KyoSchema.derived
+
+  given dateTimeKyoSchema: KyoSchema[OffsetDateTime] =
+    KyoSchema
+      .derived[Time]
+      .transform[OffsetDateTime](wrapper => if (wrapper.currentTimeMillis == 0) DateTime.min else DateTime.ofEpochMilli(wrapper.currentTimeMillis))(
+        dt => Time(dt.toEpochMilli)
+      )
+
+  given a2KyoSchema: KyoSchema[A2] = KyoSchema.derived
+  given aKyoSchema: KyoSchema[A]   = KyoSchema.derived
 
   val proteusCodec = Schema[A].derive(deriver)
 

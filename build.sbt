@@ -8,7 +8,7 @@ val zioVersion                  = "2.1.26"
 val fs2Version                  = "3.13.0"
 val catsEffectVersion           = "3.7.0"
 val oxVersion                   = "1.0.5"
-val kyoVersion                  = "1.0.0-RC4"
+val kyoVersion                  = "1.0.0-RC5"
 val chimneyVersion              = "1.10.0"
 val circeVersion                = "0.14.16"
 val zioSchemaVersion            = "1.8.5"
@@ -187,6 +187,7 @@ lazy val json = crossProject(JSPlatform, JVMPlatform)
 lazy val benchmarks = project
   .in(file("benchmarks"))
   .settings(commonSettings)
+  .settings(nextScalaSettings) // Kyo requires Scala 3.8.x (Next)
   .settings(publish / skip := true)
   .settings(
     libraryDependencies ++= Seq(
@@ -194,12 +195,16 @@ lazy val benchmarks = project
       "io.scalaland"         %% "chimney-protobufs"   % chimneyVersion,
       "dev.zio"              %% "zio-schema-protobuf" % zioSchemaVersion,
       "com.lihaoyi"          %% "upickle"             % upickleVersion,
-      "io.bullet"            %% "borer-derivation"    % borerVersion
+      "io.bullet"            %% "borer-derivation"    % borerVersion,
+      "io.getkyo"            %% "kyo-schema"          % kyoVersion
     ),
     Compile / PB.targets := Seq(
       scalapb.gen(scala3Sources = true) -> (Compile / sourceManaged).value / "scalapb"
     ),
-    scalacOptions ++= Seq("-Wconf:msg=(discarded non-Unit):silent")
+    scalacOptions ++= Seq(
+      "-Wconf:msg=(discarded non-Unit):silent",
+      "-Wconf:msg=Implicit parameters should be provided with a `using` clause:s"
+    )
   )
   .dependsOn(core.jvm)
   .enablePlugins(JmhPlugin)

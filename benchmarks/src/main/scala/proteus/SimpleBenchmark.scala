@@ -50,4 +50,10 @@ class SimpleBenchmark {
     val encoded = Cbor.encode(simpleData).toByteArray
     bh.consume(Cbor.decode(encoded).to[A].value)
   }
+
+  @Benchmark
+  def kyo(bh: Blackhole): Unit = {
+    val encoded = _root_.kyo.Protobuf.encode(simpleData)
+    bh.consume(_root_.kyo.Protobuf.decode[A](encoded).getOrThrow)
+  }
 }
