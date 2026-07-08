@@ -118,7 +118,8 @@ class OxClientBackend(channel: Channel, prefetchN: Int) extends ClientBackend[[A
         call.halfClose()
         call.request(prefetch)
 
-        streamingResponseFlow(responseChannel, call).runForeach(emit.apply)
+        try streamingResponseFlow(responseChannel, call).runForeach(emit.apply)
+        finally call.cancel("Response stream terminated", null)
       }
   }
 
@@ -159,8 +160,6 @@ class OxClientBackend(channel: Channel, prefetchN: Int) extends ClientBackend[[A
               val original = senderError.get()
               throw if (original != null) original else ex
           }
-          val ex = senderError.get()
-          if (ex != null) throw ex
         }
       }
   }
@@ -237,7 +236,8 @@ class OxClientBackend(channel: Channel, prefetchN: Int) extends ClientBackend[[A
         call.halfClose()
         call.request(prefetch)
 
-        streamingResponseFlow(responseChannel, call).runForeach(emit.apply)
+        try streamingResponseFlow(responseChannel, call).runForeach(emit.apply)
+        finally call.cancel("Response stream terminated", null)
       }
   }
 
@@ -278,8 +278,6 @@ class OxClientBackend(channel: Channel, prefetchN: Int) extends ClientBackend[[A
               val original = senderError.get()
               throw if (original != null) original else ex
           }
-          val ex = senderError.get()
-          if (ex != null) throw ex
         }
       }
   }
