@@ -48,6 +48,14 @@ object ZioBackendSpec extends ZIOSpecDefault {
     .rpc(bidiStreamingRpc, bidiStreamingZio)
     .build(streamingService)
 
+  private val throwOnStartInterceptor = new ClientInterceptor {
+    def interceptCall[Req, Resp](method: MethodDescriptor[Req, Resp], callOptions: CallOptions, next: Channel): ClientCall[Req, Resp] =
+      new ForwardingClientCall.SimpleForwardingClientCall[Req, Resp](next.newCall(method, callOptions)) {
+        override def start(responseListener: ClientCall.Listener[Resp], headers: Metadata): Unit =
+          throw new RuntimeException("start boom")
+      }
+  }
+
   def spec = suite("ZioBackendSpec")(
     test("should discover services via gRPC reflection") {
       assertTrue(testReflection(7010, serverService))
@@ -263,6 +271,38 @@ object ZioBackendSpec extends ZIOSpecDefault {
           channel.shutdown().awaitTermination(5, TimeUnit.SECONDS)
         }.ignore)
         .provide()
+    },
+    test("client streaming should fail with StatusException, not die, when call.start throws") {
+      val port          = 7017
+      val server        = NettyServerBuilder.forPort(port).addService(streamingServerService).build().start()
+      val channel       = NettyChannelBuilder.forAddress("localhost", port).usePlaintext().intercept(throwOnStartInterceptor).build()
+      val clientBackend = ZioClientBackend(channel)
+
+      val client        = clientBackend.client(clientStreamingRpc, streamingService)
+      val requestStream = ZStream(StreamRequest(1), StreamRequest(2))
+
+      client(requestStream).exit
+        .flatMap(exit => assertTrue(exit.causeOption.exists(_.failureOption.isDefined)))
+        .ensuring(ZIO.attempt {
+          server.shutdown().awaitTermination(5, TimeUnit.SECONDS)
+          channel.shutdown().awaitTermination(5, TimeUnit.SECONDS)
+        }.ignore)
+    },
+    test("bidi streaming should fail with StatusException, not die, when call.start throws") {
+      val port          = 7018
+      val server        = NettyServerBuilder.forPort(port).addService(streamingServerService).build().start()
+      val channel       = NettyChannelBuilder.forAddress("localhost", port).usePlaintext().intercept(throwOnStartInterceptor).build()
+      val clientBackend = ZioClientBackend(channel)
+
+      val client        = clientBackend.client(bidiStreamingRpc, streamingService)
+      val requestStream = ZStream(StreamRequest(1), StreamRequest(2))
+
+      client(requestStream).runCollect.exit
+        .flatMap(exit => assertTrue(exit.causeOption.exists(_.failureOption.isDefined)))
+        .ensuring(ZIO.attempt {
+          server.shutdown().awaitTermination(5, TimeUnit.SECONDS)
+          channel.shutdown().awaitTermination(5, TimeUnit.SECONDS)
+        }.ignore)
     }
   )
 }

@@ -151,10 +151,7 @@ class ZioClientBackend(channel: Channel, runtime: Runtime[Any], prefetchN: Int)
     val listener    = new UnaryListener[Response] {
       override def onReady(): Unit = readySignal.signal()
     }
-    call.start(listener, headers)
-    call.request(1)
-
-    val sendAll = requestStream.runForeach { req =>
+    val sendAll     = requestStream.runForeach { req =>
       if (call.isReady) ZIO.succeed(call.sendMessage(req))
       else readySignal.await *> ZIO.succeed(call.sendMessage(req))
     } *> ZIO.succeed(call.halfClose())
@@ -165,15 +162,24 @@ class ZioClientBackend(channel: Channel, runtime: Runtime[Any], prefetchN: Int)
       ZIO.succeed(call.cancel("Error sending requests", e)) <* listener.promise.fail(e)
     }
 
-    // Server may respond and close before the request stream is fully drained — interrupt
-    // the sender as soon as the response arrives, to avoid pushing into a closed call.
     ZIO
-      .uninterruptibleMask { restore =>
-        send.forkDaemon.flatMap { senderFiber =>
-          restore(listener.promise.await).onExit(_ => senderFiber.interrupt)
-        }
+      .attempt {
+        call.start(listener, headers)
+        call.request(1)
       }
-      .onInterrupt(ZIO.succeed(call.cancel("Interrupted", null)))
+      .foldZIO(
+        e => ZIO.succeed(call.cancel("Failed to start client-streaming", e)) *> ZIO.fail(ClientBackend.toStatusException(e)),
+        _ =>
+          // Server may respond and close before the request stream is fully drained — interrupt
+          // the sender as soon as the response arrives, to avoid pushing into a closed call.
+          ZIO
+            .uninterruptibleMask { restore =>
+              send.forkDaemon.flatMap { senderFiber =>
+                restore(listener.promise.await).onExit(_ => senderFiber.interrupt)
+              }
+            }
+            .onInterrupt(ZIO.succeed(call.cancel("Interrupted", null)))
+      )
   }
 
   private def bidiRun[Request, Response](
@@ -188,8 +194,6 @@ class ZioClientBackend(channel: Channel, runtime: Runtime[Any], prefetchN: Int)
         val queue       = Unsafe.unsafely(Queue.unsafe.unbounded[Take[StatusException, Response]](FiberId.None))
         val readySignal = new ClientReadySignal(call)
         val listener    = new BidiListener[Response](queue, readySignal)
-        call.start(listener, headers)
-        call.request(prefetch)
 
         val sendAll = (requestStream.runForeach { req =>
           if (call.isReady) ZIO.succeed(call.sendMessage(req))
@@ -197,13 +201,22 @@ class ZioClientBackend(channel: Channel, runtime: Runtime[Any], prefetchN: Int)
         } *> ZIO.succeed(call.halfClose()))
           .catchAll(e => ZIO.succeed(call.cancel("Error sending requests", e)) *> ZIO.fail(e))
 
-        // HaltStrategy.Right: stop the sender if the server closes the response stream first.
-        ZIO.succeed(
-          ZStream
-            .fromZIO(sendAll)
-            .drain
-            .merge(streamFromQueue(call, queue), ZStream.HaltStrategy.Right)
-        )
+        ZIO
+          .attempt {
+            call.start(listener, headers)
+            call.request(prefetch)
+          }
+          .foldZIO(
+            e => ZIO.succeed(call.cancel("Failed to start bidi", e)).as(ZStream.fail(ClientBackend.toStatusException(e))),
+            _ =>
+              // HaltStrategy.Right: stop the sender if the server closes the response stream first.
+              ZIO.succeed(
+                ZStream
+                  .fromZIO(sendAll)
+                  .drain
+                  .merge(streamFromQueue(call, queue), ZStream.HaltStrategy.Right)
+              )
+          )
       }
     )
 
