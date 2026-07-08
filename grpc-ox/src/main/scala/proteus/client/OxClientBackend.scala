@@ -47,11 +47,14 @@ class OxClientBackend(channel: Channel, prefetchN: Int) extends ClientBackend[[A
         readySignal.sendOrClosed(()).discard
     }
 
+  final private class CallClosedWhileWaitingException
+    extends StatusRuntimeException(Status.CANCELLED.withDescription("Call closed while waiting for readiness"))
+
   private def awaitReady(call: ClientCall[?, ?], readySignal: OxChannel[Unit]): Unit =
     while (!call.isReady)
       readySignal.receiveOrClosed() match {
         case _: ox.channels.ChannelClosed =>
-          throw Status.CANCELLED.withDescription("Call closed while waiting for readiness").asRuntimeException()
+          throw new CallClosedWhileWaitingException
         case _                            => ()
       }
 
@@ -159,6 +162,10 @@ class OxClientBackend(channel: Channel, prefetchN: Int) extends ClientBackend[[A
             case NonFatal(ex) =>
               val original = senderError.get()
               throw if (original != null) original else ex
+          }
+          senderError.get() match {
+            case null | _: CallClosedWhileWaitingException => ()
+            case ex                                        => throw ex
           }
         }
       }
@@ -277,6 +284,10 @@ class OxClientBackend(channel: Channel, prefetchN: Int) extends ClientBackend[[A
             case NonFatal(ex) =>
               val original = senderError.get()
               throw if (original != null) original else ex
+          }
+          senderError.get() match {
+            case null | _: CallClosedWhileWaitingException => ()
+            case ex                                        => throw ex
           }
         }
       }
