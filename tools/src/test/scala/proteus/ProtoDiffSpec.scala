@@ -146,7 +146,7 @@ object ProtoDiffSpec extends ZIOSpecDefault {
         assertTrue(results.forall(identity))
       },
       test("wire-incompatible scalar type change stays breaking in Wire mode") {
-        val cases   = List(("int32", "sint32"), ("int32", "fixed32"), ("string", "int32"))
+        val cases   = List(("int32", "sint32"), ("int32", "fixed32"), ("string", "int32"), ("bytes", "string"))
         val results = cases.map { case (from, to) =>
           val old = parse(s"""syntax = "proto3"; message Foo { $from id = 1; }""")
           val nw  = parse(s"""syntax = "proto3"; message Foo { $to id = 1; }""")

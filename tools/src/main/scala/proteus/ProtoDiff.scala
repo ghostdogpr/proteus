@@ -257,14 +257,14 @@ object ProtoDiff {
     Set(Type.Int32, Type.Int64, Type.Uint32, Type.Uint64, Type.Bool),
     Set(Type.Sint32, Type.Sint64),
     Set(Type.Fixed32, Type.Sfixed32),
-    Set(Type.Fixed64, Type.Sfixed64),
-    Set(Type.String, Type.Bytes)
+    Set(Type.Fixed64, Type.Sfixed64)
   )
 
-  private def wireCompatibleScalars(a: Type, b: Type): Boolean = (a, b) match {
+  private def wireCompatibleScalars(oldType: Type, newType: Type): Boolean = (oldType, newType) match {
     case (Type.ListType(x), Type.ListType(y))         => wireCompatibleScalars(x, y)
     case (Type.MapType(k1, v1), Type.MapType(k2, v2)) => wireCompatibleScalars(k1, k2) && wireCompatibleScalars(v1, v2)
-    case _                                            => wireCompatibleScalarGroups.exists(group => group.contains(a) && group.contains(b))
+    case (Type.String, Type.Bytes)                    => true
+    case _                                            => wireCompatibleScalarGroups.exists(group => group.contains(oldType) && group.contains(newType))
   }
 
   private def resolveTypeRefChanges(changes: List[Change], oldRegistry: Map[String, TypeEntry], newRegistry: Map[String, TypeEntry]): List[Change] =
