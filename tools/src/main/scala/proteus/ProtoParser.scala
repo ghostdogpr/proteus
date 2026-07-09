@@ -36,10 +36,12 @@ object ProtoParser {
     */
   def parse(input: String): Either[String, CompilationUnit] =
     fastparse.parse(input, compilationUnit(_)) match {
-      case Parsed.Success(value, _)        => Right(value)
-      case Parsed.Failure(_, index, extra) =>
-        val trace = extra.trace()
-        Left(s"Parse error at index $index: ${trace.longMsg}")
+      case Parsed.Success(value, _) => Right(value)
+      case f: Parsed.Failure        =>
+        val detail =
+          try f.trace().longMsg
+          catch { case _: Throwable => f.label }
+        Left(s"Parse error at index ${f.index}: $detail")
     }
 
   private val Proto3MinFieldNumber: Long          = 1L
@@ -87,15 +89,15 @@ object ProtoParser {
   private def semi[$: P]: P[Unit]               = P(ws ~ ";")
   private def emptyStatement[$: P]: P[Unit]     = P(";")
 
-  private def fitsUnsignedLong(s: String, radix: Int): Boolean =
-    try { java.lang.Long.parseUnsignedLong(s, radix); true }
+  private def fitsSignedLong(s: String, radix: Int): Boolean =
+    try { java.lang.Long.parseLong(s, radix); true }
     catch { case _: NumberFormatException => false }
 
   private def intLit[$: P]: P[Long] = P(
     ("-".!.? ~ (
-      ("0" ~ CharIn("xX") ~ CharsWhileIn("0-9a-fA-F").!).filter(fitsUnsignedLong(_, 16)).map(java.lang.Long.parseUnsignedLong(_, 16)) |
-        ("0" ~ CharsWhileIn("0-7")).!.filter(fitsUnsignedLong(_, 8)).map(java.lang.Long.parseUnsignedLong(_, 8)) |
-        CharsWhileIn("0-9").!.filter(fitsUnsignedLong(_, 10)).map(java.lang.Long.parseUnsignedLong(_, 10))
+      ("0" ~ CharIn("xX") ~ CharsWhileIn("0-9a-fA-F").!).filter(fitsSignedLong(_, 16)).map(java.lang.Long.parseLong(_, 16)) |
+        ("0" ~ CharsWhileIn("0-7")).!.filter(fitsSignedLong(_, 8)).map(java.lang.Long.parseLong(_, 8)) |
+        CharsWhileIn("0-9").!.filter(fitsSignedLong(_, 10)).map(java.lang.Long.parseLong(_, 10))
     )).map {
       case (Some(_), n) => -n
       case (_, n)       => n
@@ -459,7 +461,7 @@ object ProtoParser {
 
   private def compilationUnit[$: P]: P[CompilationUnit] = P(
     ws ~ syntaxStatement.?.map(_ => ()) ~ (padding ~ topLevelElement).rep ~ ws ~ End
-  ).map { elements =>
+  ).filter(_.count { case Some(Left(_)) => true; case _ => false } <= 1).map { elements =>
     var pkg       = Option.empty[String]
     val imports   = List.newBuilder[Statement]
     val options   = List.newBuilder[TopLevelOption]

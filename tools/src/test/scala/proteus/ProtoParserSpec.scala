@@ -1587,19 +1587,35 @@ service Greeter {
       }
     ),
     suite("Audit regressions")(
-      test("uint64 max integer literal in an option does not throw") {
+      test("integer literal outside signed Int64 range is rejected, not thrown or truncated") {
         val input  = """syntax = "proto3";
                        |option (x) = 18446744073709551615;
                        |""".stripMargin
         val result = ProtoParser.parse(input)
-        assertTrue(result.isRight)
+        assertTrue(result.isLeft)
       },
-      test("hexadecimal uint64 max integer literal in an option does not throw") {
+      test("hexadecimal integer literal outside signed Int64 range is rejected, not thrown or truncated") {
         val input  = """syntax = "proto3";
                        |option (x) = 0xFFFFFFFFFFFFFFFF;
                        |""".stripMargin
         val result = ProtoParser.parse(input)
-        assertTrue(result.isRight)
+        assertTrue(result.isLeft)
+      },
+      test("signed Int64 max integer literal preserves its exact value") {
+        val input  = """syntax = "proto3";
+                       |option (x) = 9223372036854775807;
+                       |""".stripMargin
+        val result = ProtoParser.parse(input)
+        assertTrue(result.toOption.flatMap(_.options.headOption).map(_.value) == Some(OptionVal.IntLit(9223372036854775807L)))
+      },
+      test("duplicate package declarations are rejected") {
+        val input  = """syntax = "proto3";
+                       |package a;
+                       |package b;
+                       |message M {}
+                       |""".stripMargin
+        val result = ProtoParser.parse(input)
+        assertTrue(result.isLeft)
       },
       test("leading-dot float literal is accepted") {
         val input  = """syntax = "proto3";
