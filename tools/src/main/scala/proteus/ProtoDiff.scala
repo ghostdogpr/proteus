@@ -261,6 +261,7 @@ object ProtoDiff {
   )
 
   private def wireCompatibleScalars(oldType: Type, newType: Type): Boolean = (oldType, newType) match {
+    case (a, b) if a == b                             => true
     case (Type.ListType(x), Type.ListType(y))         => wireCompatibleScalars(x, y)
     case (Type.MapType(k1, v1), Type.MapType(k2, v2)) => wireCompatibleScalars(k1, k2) && wireCompatibleScalars(v1, v2)
     case (Type.String, Type.Bytes)                    => true

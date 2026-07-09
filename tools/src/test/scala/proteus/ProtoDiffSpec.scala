@@ -154,6 +154,20 @@ object ProtoDiffSpec extends ZIOSpecDefault {
         }
         assertTrue(results.forall(identity))
       },
+      test("wire-compatible map key/value widening is not breaking in Wire mode") {
+        val cases   = List(
+          ("map<string, int32>", "map<string, int64>"),
+          ("map<int32, string>", "map<int64, string>")
+        )
+        val results = cases.map { case (from, to) =>
+          val old     = parse(s"""syntax = "proto3"; message Foo { $from counts = 1; }""")
+          val nw      = parse(s"""syntax = "proto3"; message Foo { $to counts = 1; }""")
+          val changes = ProtoDiff.diff(old, nw)
+          changes.nonEmpty &&
+            changes.forall(c => ProtoDiff.severity(c, CompatMode.Wire) == Severity.Info)
+        }
+        assertTrue(results.forall(identity))
+      },
       test("field optionality changed") {
         val old = parse("""syntax = "proto3"; message Foo { string name = 1; }""")
         val nw  = parse("""syntax = "proto3"; message Foo { optional string name = 1; }""")
