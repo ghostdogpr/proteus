@@ -459,6 +459,16 @@ object ProtoDiffSpec extends ZIOSpecDefault {
         val old = parse("""syntax = "proto3"; message Foo { reserved 2 to 4; }""")
         val nw  = parse("""syntax = "proto3"; message Foo { reserved 2, 3, 4; reserved "foo"; }""")
         assertTrue(ProtoDiff.diff(old, nw) == List(ReservedAdded(List("Foo"), Reserved.Name("foo"))))
+      },
+      test("extending a reserved range while reformatting reports only the added number") {
+        val old = parse("""syntax = "proto3"; message Foo { reserved 2 to 4; }""")
+        val nw  = parse("""syntax = "proto3"; message Foo { reserved 2, 3, 4, 5; }""")
+        assertTrue(ProtoDiff.diff(old, nw) == List(ReservedAdded(List("Foo"), Reserved.Number(5))))
+      },
+      test("dropping one number from a reserved range reports only that number") {
+        val old = parse("""syntax = "proto3"; message Foo { reserved 2 to 4; }""")
+        val nw  = parse("""syntax = "proto3"; message Foo { reserved 2, 4; }""")
+        assertTrue(ProtoDiff.diff(old, nw) == List(ReservedRemoved(List("Foo"), Reserved.Number(3))))
       }
     ),
     suite("Option changes")(
