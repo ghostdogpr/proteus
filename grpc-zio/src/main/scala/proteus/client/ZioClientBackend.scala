@@ -158,8 +158,9 @@ class ZioClientBackend(channel: Channel, runtime: Runtime[Any], prefetchN: Int)
 
     // Sender surfaces failures via the response promise so promise.await can return them
     // even if the server hasn't closed; on success the server completes the promise via onClose.
-    val send: UIO[Unit] = sendAll.catchAllCause { cause =>
-      ZIO.succeed(call.cancel("Error sending requests", cause.squash)) <* listener.promise.failCause(cause)
+    val send: IO[StatusException, Unit] = sendAll.catchAllCause { cause =>
+      if (cause.isInterruptedOnly) ZIO.refailCause(cause)
+      else ZIO.succeed(call.cancel("Error sending requests", cause.squash)) <* listener.promise.failCause(cause)
     }
 
     ZIO
