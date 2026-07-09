@@ -90,7 +90,7 @@ enum Change {
       case EnumRemoved(_, name)                                  => s"enum '$name' removed"
       case EnumRenamed(_, oldName, newName)                      => s"enum renamed from '$oldName' to '$newName'"
       case EnumValueAdded(_, name, _)                            => s"enum value '$name' added"
-      case EnumValueRemoved(_, name, _, reserved)                => s"enum value '$name' removed${if (reserved) " (number reserved)" else ""}"
+      case EnumValueRemoved(_, name, _, reserved)                => s"enum value '$name' removed${if (reserved) " (number retained)" else ""}"
       case EnumValueNumberChanged(_, name, oldNum, newNum)       => s"enum value '$name' number changed from $oldNum to $newNum"
       case EnumValueRenamed(_, _, oldName, newName)              => s"enum value '$oldName' renamed to '$newName'"
       case ReservedAdded(_, reserved)                            => s"reserved ${Renderer.renderReservedValue(reserved)} added"

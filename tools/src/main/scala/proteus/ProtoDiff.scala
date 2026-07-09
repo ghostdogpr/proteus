@@ -604,8 +604,10 @@ object ProtoDiff {
     val rem3New  = rem2New.filterNot(v => numKeys.contains(v.intValue))
 
     // Pass 4: unmatched
-    val removed = rem3Old.map(v => EnumValueRemoved(path, v.name, v.intValue, isNumberReserved(v.intValue, newReserved)))
-    val added   = rem3New.map(v => EnumValueAdded(path, v.name, v.intValue))
+    val newNumbers = newValues.map(_.intValue).toSet
+    val removed    =
+      rem3Old.map(v => EnumValueRemoved(path, v.name, v.intValue, isNumberReserved(v.intValue, newReserved) || newNumbers.contains(v.intValue)))
+    val added      = rem3New.map(v => EnumValueAdded(path, v.name, v.intValue))
 
     exactDiffs ++ nameDiffs ++ numDiffs ++ removed ++ added
   }
@@ -630,12 +632,34 @@ object ProtoDiff {
     (changes, oldItems.filterNot(renamedOld.contains), newItems.filterNot(renamedNew.contains))
   }
 
+  private def reservedNumberIntervals(res: List[Reserved]): List[(Int, Int)] = {
+    val ranges = res
+      .collect {
+        case Reserved.Number(n)   => (n, n)
+        case Reserved.Range(s, e) => (s, e)
+      }
+      .sortBy(_._1)
+    ranges
+      .foldLeft(List.empty[(Int, Int)]) { case (acc, (s, e)) =>
+        acc match {
+          case (ps, pe) :: tail if s.toLong <= pe.toLong + 1 => (ps, math.max(pe, e)) :: tail
+          case _                                             => (s, e) :: acc
+        }
+      }
+      .reverse
+  }
+
   private def diffReserved(oldRes: List[Reserved], newRes: List[Reserved], path: List[String]): List[Change] = {
-    val oldSet  = oldRes.toSet
-    val newSet  = newRes.toSet
-    val removed = (oldSet -- newSet).toList.map(r => ReservedRemoved(path, r))
-    val added   = (newSet -- oldSet).toList.map(r => ReservedAdded(path, r))
-    removed ++ added
+    val sameNumbers = reservedNumberIntervals(oldRes) == reservedNumberIntervals(newRes)
+    val sameNames   = oldRes.collect { case Reserved.Name(n) => n }.toSet == newRes.collect { case Reserved.Name(n) => n }.toSet
+    if (sameNumbers && sameNames) Nil
+    else {
+      val oldSet  = oldRes.toSet
+      val newSet  = newRes.toSet
+      val removed = (oldSet -- newSet).toList.map(r => ReservedRemoved(path, r))
+      val added   = (newSet -- oldSet).toList.map(r => ReservedAdded(path, r))
+      removed ++ added
+    }
   }
 
   private def diffServices(oldSvcs: List[Service], newSvcs: List[Service], path: List[String]): List[Change] = {

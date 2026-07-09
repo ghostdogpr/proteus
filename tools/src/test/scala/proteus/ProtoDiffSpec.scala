@@ -333,6 +333,15 @@ object ProtoDiffSpec extends ZIOSpecDefault {
         val old = parse("""syntax = "proto3"; enum Status { UNKNOWN = 0; ACTIVE = 1; }""")
         val nw  = parse("""syntax = "proto3"; enum Status { UNKNOWN = 0; ENABLED = 1; }""")
         assertTrue(ProtoDiff.diff(old, nw) == List(EnumValueRenamed(List("Status"), 1, "ACTIVE", "ENABLED")))
+      },
+      test("removing an enum alias whose number is still used is wire-compatible") {
+        val old     = parse("""syntax = "proto3"; enum E { option allow_alias = true; A = 0; B = 1; C = 1; }""")
+        val nw      = parse("""syntax = "proto3"; enum E { option allow_alias = true; A = 0; B = 1; }""")
+        val changes = ProtoDiff.diff(old, nw)
+        assertTrue(
+          changes == List(EnumValueRemoved(List("E"), "C", 1, numberReserved = true)),
+          changes.forall(c => ProtoDiff.severity(c, CompatMode.Wire) == Severity.Info)
+        )
       }
     ),
     suite("Nested messages")(
@@ -440,6 +449,11 @@ object ProtoDiffSpec extends ZIOSpecDefault {
         val old = parse("""syntax = "proto3"; message Foo { string name = 1; reserved 2; }""")
         val nw  = parse("""syntax = "proto3"; message Foo { string name = 1; }""")
         assertTrue(ProtoDiff.diff(old, nw) == List(ReservedRemoved(List("Foo"), Reserved.Number(2))))
+      },
+      test("reformatting a reserved range as individual numbers is not a change") {
+        val old = parse("""syntax = "proto3"; message Foo { reserved 2 to 4; }""")
+        val nw  = parse("""syntax = "proto3"; message Foo { reserved 2, 3, 4; }""")
+        assertTrue(ProtoDiff.diff(old, nw) == Nil)
       }
     ),
     suite("Option changes")(
