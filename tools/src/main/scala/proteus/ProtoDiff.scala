@@ -47,7 +47,7 @@ object ProtoDiff {
       case c: FieldRemoved            => (if (c.numberReserved) Info else Error, Error)
       case _: FieldNumberChanged      => (Error, Info)
       case _: FieldRenamed            => (Info, Error)
-      case _: FieldTypeChanged        => (Error, Error)
+      case c: FieldTypeChanged        => if (wireCompatibleScalars(c.oldType, c.newType)) (Info, Error) else (Error, Error)
       case _: FieldTypeRefRenamed     => (Info, Error)
       case _: FieldOptionalityChanged => (Warning, Warning)
       case _: FieldOrderChanged       => (Info, Warning)
@@ -249,7 +249,7 @@ object ProtoDiff {
         case (Type.ListType(v1), Type.ListType(v2))       => areWireEquivalent(v1, v2, oldRegistry, newRegistry)
         case (Type.MapType(k1, v1), Type.MapType(k2, v2)) =>
           areWireEquivalent(k1, k2, oldRegistry, newRegistry) && areWireEquivalent(v1, v2, oldRegistry, newRegistry)
-        case (a, b)                                       => wireCompatibleScalars(a, b)
+        case _                                            => false
       }
   }
 
@@ -261,8 +261,11 @@ object ProtoDiff {
     Set(Type.String, Type.Bytes)
   )
 
-  private def wireCompatibleScalars(a: Type, b: Type): Boolean =
-    wireCompatibleScalarGroups.exists(group => group.contains(a) && group.contains(b))
+  private def wireCompatibleScalars(a: Type, b: Type): Boolean = (a, b) match {
+    case (Type.ListType(x), Type.ListType(y))         => wireCompatibleScalars(x, y)
+    case (Type.MapType(k1, v1), Type.MapType(k2, v2)) => wireCompatibleScalars(k1, k2) && wireCompatibleScalars(v1, v2)
+    case _                                            => wireCompatibleScalarGroups.exists(group => group.contains(a) && group.contains(b))
+  }
 
   private def resolveTypeRefChanges(changes: List[Change], oldRegistry: Map[String, TypeEntry], newRegistry: Map[String, TypeEntry]): List[Change] =
     changes.map {
