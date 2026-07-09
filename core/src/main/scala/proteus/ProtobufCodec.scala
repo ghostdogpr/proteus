@@ -1351,6 +1351,27 @@ object ProtobufCodec {
     paths: Map[String, String]
   ): List[ProtoIR.TopLevelDef] = {
 
+    val allPaths = paths.values.toSet
+
+    // Proto3 resolves an unqualified name innermost-scope-first: from `scope` outward to the root,
+    // the first declared type whose path ends in `simple` wins. A bare name is only safe when that
+    // resolution lands on `target`; otherwise a same-named type nested in a closer scope shadows it.
+    def resolvesToTarget(scope: String, simple: String, target: String): Boolean = {
+      var c    = scope
+      var done = false
+      var ok   = false
+      while (!done) {
+        val cand = if (c.isEmpty) simple else s"$c.$simple"
+        if (allPaths.contains(cand)) { ok = cand == target; done = true }
+        else if (c.isEmpty) done = true
+        else {
+          val d = c.lastIndexOf('.')
+          c = if (d < 0) "" else c.substring(0, d)
+        }
+      }
+      ok
+    }
+
     def qualify(name: String, refTypeId: Option[String], scope: String): String =
       refTypeId.flatMap(paths.get) match {
         case Some(path) =>
@@ -1361,7 +1382,7 @@ object ProtobufCodec {
             val pl      = parent.length
             val inScope = scope == parent ||
               (scope.length > pl && scope.charAt(pl) == '.' && scope.startsWith(parent))
-            if (inScope) name else path
+            if (inScope && resolvesToTarget(scope, name, path)) name else path
           }
         case None       => name
       }

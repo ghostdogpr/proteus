@@ -315,6 +315,24 @@ message RenamedMidB {
 
         assertTrue(rendered == expected)
       },
+      test("a bare nested-type ref is qualified when a sibling nested type shadows the simple name") {
+        case class ShadowInner(a: Int) derives Schema
+        case class ShadowSibling(b: Int) derives Schema
+        case class ShadowDeep(ref: ShadowInner, own: ShadowSibling) derives Schema
+        case class ShadowOuter(inner: ShadowInner, deep: ShadowDeep) derives Schema
+
+        val codec    = Schema[ShadowOuter].derive(
+          deriver
+            .modifier[ShadowInner](nestedIn[ShadowOuter], rename("Inner"))
+            .modifier[ShadowDeep](nestedIn[ShadowOuter], rename("Deep"))
+            .modifier[ShadowSibling](nestedIn[ShadowDeep], rename("Inner"))
+        )
+        val rendered = renderCodec(codec)
+
+        // `ShadowDeep` (scope Outer.Deep) references the outer `Outer.Inner`, but has its own nested
+        // `Outer.Deep.Inner`. A bare `Inner` would resolve to the sibling; the ref must be qualified.
+        assertTrue(rendered.contains("Outer.Inner ref = 1;"))
+      },
       test("proteus nestedIn modifier reaches through List") {
         case class DeepInnerC(value: String) derives Schema
         case class DeepMidB(c: List[DeepInnerC]) derives Schema
