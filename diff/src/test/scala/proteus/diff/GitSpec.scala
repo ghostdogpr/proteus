@@ -72,6 +72,16 @@ object GitSpec extends ZIOSpecDefault {
             Git.extractProtos("definitely-not-a-ref-12345", Some(dir)).isLeft
           }
           assertTrue(isLeft)
+        },
+        test("extractProtos rejects a ref that looks like a git option") {
+          val (fileWritten, isLeft) = withRepo { dir =>
+            writeFile(dir.resolve("a.proto"), """syntax = "proto3"; message Foo {}""")
+            commit(dir, "initial")
+            val evil   = dir.resolve("evil.tar")
+            val result = Git.extractProtos(s"--output=${evil.toString}", Some(dir))
+            (Files.exists(evil), result.isLeft)
+          }
+          assertTrue(isLeft, !fileWritten)
         }
       )
 }

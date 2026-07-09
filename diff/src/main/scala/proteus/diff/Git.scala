@@ -12,7 +12,11 @@ object Git {
     * Extracts all files at the given ref into a temp dir via a `git archive | tar -x` pipeline.
     * Much faster than invoking `git show` per file (one subprocess pair vs N+1).
     */
-  def extractProtos(ref: String, cwd: Option[Path] = None): Either[String, Path] = {
+  def extractProtos(ref: String, cwd: Option[Path] = None): Either[String, Path] =
+    if (ref.startsWith("-")) Left(s"invalid git ref: $ref")
+    else extractProtosUnchecked(ref, cwd)
+
+  private def extractProtosUnchecked(ref: String, cwd: Option[Path]): Either[String, Path] = {
     val tmp = Files.createTempDirectory("proteus-diff-git-")
     sys.addShutdownHook(deleteRecursively(tmp))
 
