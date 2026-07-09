@@ -454,6 +454,11 @@ object ProtoDiffSpec extends ZIOSpecDefault {
         val old = parse("""syntax = "proto3"; message Foo { reserved 2 to 4; }""")
         val nw  = parse("""syntax = "proto3"; message Foo { reserved 2, 3, 4; }""")
         assertTrue(ProtoDiff.diff(old, nw) == Nil)
+      },
+      test("a reserved-name change alongside a range reformat only reports the name change") {
+        val old = parse("""syntax = "proto3"; message Foo { reserved 2 to 4; }""")
+        val nw  = parse("""syntax = "proto3"; message Foo { reserved 2, 3, 4; reserved "foo"; }""")
+        assertTrue(ProtoDiff.diff(old, nw) == List(ReservedAdded(List("Foo"), Reserved.Name("foo"))))
       }
     ),
     suite("Option changes")(

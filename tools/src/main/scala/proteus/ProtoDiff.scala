@@ -650,16 +650,20 @@ object ProtoDiff {
   }
 
   private def diffReserved(oldRes: List[Reserved], newRes: List[Reserved], path: List[String]): List[Change] = {
-    val sameNumbers = reservedNumberIntervals(oldRes) == reservedNumberIntervals(newRes)
-    val sameNames   = oldRes.collect { case Reserved.Name(n) => n }.toSet == newRes.collect { case Reserved.Name(n) => n }.toSet
-    if (sameNumbers && sameNames) Nil
-    else {
-      val oldSet  = oldRes.toSet
-      val newSet  = newRes.toSet
-      val removed = (oldSet -- newSet).toList.map(r => ReservedRemoved(path, r))
-      val added   = (newSet -- oldSet).toList.map(r => ReservedAdded(path, r))
-      removed ++ added
-    }
+    val numberChanges =
+      if (reservedNumberIntervals(oldRes) == reservedNumberIntervals(newRes)) Nil
+      else {
+        val oldNums = oldRes.filter { case _: Reserved.Name => false; case _ => true }.toSet
+        val newNums = newRes.filter { case _: Reserved.Name => false; case _ => true }.toSet
+        (oldNums -- newNums).toList.map(r => ReservedRemoved(path, r)) ++
+          (newNums -- oldNums).toList.map(r => ReservedAdded(path, r))
+      }
+    val oldNames      = oldRes.collect { case r: Reserved.Name => r }.toSet
+    val newNames      = newRes.collect { case r: Reserved.Name => r }.toSet
+    val nameChanges   =
+      (oldNames -- newNames).toList.map(r => ReservedRemoved(path, r)) ++
+        (newNames -- oldNames).toList.map(r => ReservedAdded(path, r))
+    numberChanges ++ nameChanges
   }
 
   private def diffServices(oldSvcs: List[Service], newSvcs: List[Service], path: List[String]): List[Change] = {
