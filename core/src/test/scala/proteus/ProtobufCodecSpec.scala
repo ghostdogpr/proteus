@@ -75,6 +75,25 @@ object ProtobufCodecSpec extends ZIOSpecDefault {
         val decoded  = codec.decode(encoded)
 
         assert(decoded)(equalTo(original))
+      },
+      test("primitive field with a non-zero default round-trips its zero value") {
+        case class WithDefault(count: Int = 5, label: String = "x") derives Schema
+        val codec = Schema[WithDefault].derive(deriver)
+
+        val original = WithDefault(0, "")
+        val decoded  = codec.decode(codec.encode(original))
+
+        assert(decoded)(equalTo(original))
+      },
+      test("negative-zero double and float fields preserve their sign bit") {
+        case class Zeros(d: Double, f: Float) derives Schema
+        val codec = Schema[Zeros].derive(deriver)
+
+        val original = Zeros(-0.0, -0.0f)
+        val decoded  = codec.decode(codec.encode(original))
+
+        assert(java.lang.Double.doubleToRawLongBits(decoded.d))(equalTo(java.lang.Double.doubleToRawLongBits(-0.0))) &&
+          assert(java.lang.Float.floatToRawIntBits(decoded.f))(equalTo(java.lang.Float.floatToRawIntBits(-0.0f)))
       }
     ),
     suite("Enum Tests")(

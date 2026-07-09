@@ -271,7 +271,7 @@ case class ProtobufDeriver private (
                 getComment(field.modifiers)
               )
             case instance                                                                                                                   =>
-              val fieldId = getReservedIndex(field.modifiers) match {
+              val fieldId      = getReservedIndex(field.modifiers) match {
                 case Some(reservedIndex) => reservedIndex
                 case None                =>
                   getReservedFromIndex(field.modifiers) match {
@@ -284,12 +284,16 @@ case class ProtobufDeriver private (
                       id
                   }
               }
+              val fieldDefault = instance match {
+                case _: ProtobufCodec.Primitive[?] => getDefaultValue(using instance)
+                case _                             => field.value.getDefaultValue.getOrElse(getDefaultValue(using instance))
+              }
               builder += SimpleField(
                 name,
                 fieldId,
                 instance,
                 register,
-                field.value.getDefaultValue.getOrElse(getDefaultValue(using instance)),
+                fieldDefault,
                 getComment(field.modifiers),
                 isDeprecated(field.modifiers)
               )

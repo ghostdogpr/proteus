@@ -365,12 +365,12 @@ object ProtobufCodec {
           else CodedOutputStream.computeStringSize(id, value)
         case _: PrimitiveType.Double  =>
           val value = register.asInstanceOf[Register.Double].get(registers, offset)
-          if (value == 0d && !alwaysEncode) 0
+          if (value == 0d && java.lang.Double.doubleToRawLongBits(value) == 0L && !alwaysEncode) 0
           else if (id == -1) CodedOutputStream.computeDoubleSizeNoTag(value)
           else CodedOutputStream.computeDoubleSize(id, value)
         case _: PrimitiveType.Float   =>
           val value = register.asInstanceOf[Register.Float].get(registers, offset)
-          if (value == 0f && !alwaysEncode) 0
+          if (value == 0f && java.lang.Float.floatToRawIntBits(value) == 0 && !alwaysEncode) 0
           else if (id == -1) CodedOutputStream.computeFloatSizeNoTag(value)
           else CodedOutputStream.computeFloatSize(id, value)
         case _                        => throw new ProteusException(s"Unsupported primitive type: $primitiveType")
@@ -400,12 +400,12 @@ object ProtobufCodec {
           else CodedOutputStream.computeStringSize(id, value)
         case _: PrimitiveType.Double  =>
           val value: Double = a
-          if (value == 0d && !alwaysEncode) 0
+          if (value == 0d && java.lang.Double.doubleToRawLongBits(value) == 0L && !alwaysEncode) 0
           else if (id == -1) CodedOutputStream.computeDoubleSizeNoTag(value)
           else CodedOutputStream.computeDoubleSize(id, value)
         case _: PrimitiveType.Float   =>
           val value: Float = a
-          if (value == 0f && !alwaysEncode) 0
+          if (value == 0f && java.lang.Float.floatToRawIntBits(value) == 0 && !alwaysEncode) 0
           else if (id == -1) CodedOutputStream.computeFloatSizeNoTag(value)
           else CodedOutputStream.computeFloatSize(id, value)
         case _                        => throw new ProteusException(s"Unsupported primitive type: $primitiveType")
@@ -437,12 +437,12 @@ object ProtobufCodec {
           }
         case _: PrimitiveType.Double  =>
           val value = register.asInstanceOf[Register.Double].get(registers, offset)
-          if (value != 0d || alwaysEncode) {
+          if (value != 0d || java.lang.Double.doubleToRawLongBits(value) != 0L || alwaysEncode) {
             if (id == -1) output.writeDoubleNoTag(value) else output.writeDouble(id, value)
           }
         case _: PrimitiveType.Float   =>
           val value = register.asInstanceOf[Register.Float].get(registers, offset)
-          if (value != 0f || alwaysEncode) {
+          if (value != 0f || java.lang.Float.floatToRawIntBits(value) != 0 || alwaysEncode) {
             if (id == -1) output.writeFloatNoTag(value) else output.writeFloat(id, value)
           }
         case _                        => throw new ProteusException(s"Unsupported primitive type: $primitiveType")
@@ -472,12 +472,12 @@ object ProtobufCodec {
           }
         case _: PrimitiveType.Double  =>
           val value: Double = a
-          if (value != 0d || alwaysEncode) {
+          if (value != 0d || java.lang.Double.doubleToRawLongBits(value) != 0L || alwaysEncode) {
             if (id == -1) output.writeDoubleNoTag(value) else output.writeDouble(id, value)
           }
         case _: PrimitiveType.Float   =>
           val value: Float = a
-          if (value != 0f || alwaysEncode) {
+          if (value != 0f || java.lang.Float.floatToRawIntBits(value) != 0 || alwaysEncode) {
             if (id == -1) output.writeFloatNoTag(value) else output.writeFloat(id, value)
           }
         case _                        => throw new ProteusException(s"Unsupported primitive type: $primitiveType")
