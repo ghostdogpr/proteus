@@ -75,7 +75,7 @@ object Main {
 
   private val buildVersion: String =
     Option(getClass.getResourceAsStream("/proteus-version.txt"))
-      .map(is => new String(is.readAllBytes()).trim)
+      .map(is => scala.util.Using.resource(is)(s => new String(s.readAllBytes()).trim))
       .getOrElse("dev")
 
   // ── mainargs typeclass instances ──────────────────────────────────────
