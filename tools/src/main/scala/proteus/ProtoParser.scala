@@ -87,11 +87,15 @@ object ProtoParser {
   private def semi[$: P]: P[Unit]               = P(ws ~ ";")
   private def emptyStatement[$: P]: P[Unit]     = P(";")
 
+  private def fitsUnsignedLong(s: String, radix: Int): Boolean =
+    try { java.lang.Long.parseUnsignedLong(s, radix); true }
+    catch { case _: NumberFormatException => false }
+
   private def intLit[$: P]: P[Long] = P(
     ("-".!.? ~ (
-      ("0" ~ CharIn("xX") ~ CharsWhileIn("0-9a-fA-F").!).map(s => java.lang.Long.parseLong(s, 16)) |
-        ("0" ~ CharsWhileIn("0-7")).!.map(s => java.lang.Long.parseLong(s, 8)) |
-        CharsWhileIn("0-9").!.map(_.toLong)
+      ("0" ~ CharIn("xX") ~ CharsWhileIn("0-9a-fA-F").!).filter(fitsUnsignedLong(_, 16)).map(java.lang.Long.parseUnsignedLong(_, 16)) |
+        ("0" ~ CharsWhileIn("0-7")).!.filter(fitsUnsignedLong(_, 8)).map(java.lang.Long.parseUnsignedLong(_, 8)) |
+        CharsWhileIn("0-9").!.filter(fitsUnsignedLong(_, 10)).map(java.lang.Long.parseUnsignedLong(_, 10))
     )).map {
       case (Some(_), n) => -n
       case (_, n)       => n
@@ -111,9 +115,10 @@ object ProtoParser {
 
   private def floatLit[$: P]: P[Double] = P(
     CharIn("+\\-").!.? ~ (
-      "inf".!.map(_ => Double.PositiveInfinity) |
-        "nan".!.map(_ => Double.NaN) |
+      ("inf" ~ !identChar).map(_ => Double.PositiveInfinity) |
+        ("nan" ~ !identChar).map(_ => Double.NaN) |
         (CharsWhileIn("0-9") ~ "." ~ CharsWhileIn("0-9", 0) ~ (CharIn("eE") ~ CharIn("+\\-").? ~ CharsWhileIn("0-9")).?).!.map(_.toDouble) |
+        ("." ~ CharsWhileIn("0-9") ~ (CharIn("eE") ~ CharIn("+\\-").? ~ CharsWhileIn("0-9")).?).!.map(_.toDouble) |
         (CharsWhileIn("0-9") ~ CharIn("eE") ~ CharIn("+\\-").? ~ CharsWhileIn("0-9")).!.map(_.toDouble)
     )
   ).map {
@@ -408,7 +413,7 @@ object ProtoParser {
   }
 
   private def serviceDef[$: P]: P[Service] = P(
-    commentBlock ~ ws ~ "service" ~ ws ~ ident ~ ws ~ "{" ~ serviceBody ~ padding ~ "}"
+    commentBlock ~ ws ~ "service" ~ ws ~ ident ~ ws ~ "{" ~ serviceBody ~ ws ~ "}"
   ).map { case (comment, name, (options, rpcs)) =>
     Service(name, rpcs, comment, options)
   }
@@ -443,25 +448,28 @@ object ProtoParser {
     commentBlock ~ ws ~ "extend" ~ ws ~ (".".? ~ fullIdent).! ~ ws ~ "{" ~ messageBody ~ ws ~ "}"
   ).map(_ => ())
 
-  private def topLevelElement[$: P]: P[Option[Either[Either[Statement.ImportStatement, TopLevelOption], TopLevelDef]]] = P(
+  private def topLevelElement[$: P]: P[Option[Either[String, Either[Either[Statement.ImportStatement, TopLevelOption], TopLevelDef]]]] = P(
     emptyStatement.map(_ => None) |
       extendDef.map(_ => None) |
-      importStatement.map(i => Some(Left(Left(i)))) |
-      topLevelOption.map(o => Some(Left(Right(o)))) |
-      topLevelDef.map(d => Some(Right(d)))
+      packageStatement.map(p => Some(Left(p))) |
+      importStatement.map(i => Some(Right(Left(Left(i))))) |
+      topLevelOption.map(o => Some(Right(Left(Right(o))))) |
+      topLevelDef.map(d => Some(Right(Right(d))))
   )
 
   private def compilationUnit[$: P]: P[CompilationUnit] = P(
-    ws ~ syntaxStatement.?.map(_ => ()) ~ padding ~ packageStatement.? ~ (padding ~ topLevelElement).rep ~ ws ~ End
-  ).map { case (pkg, elements) =>
+    ws ~ syntaxStatement.?.map(_ => ()) ~ (padding ~ topLevelElement).rep ~ ws ~ End
+  ).map { elements =>
+    var pkg       = Option.empty[String]
     val imports   = List.newBuilder[Statement]
     val options   = List.newBuilder[TopLevelOption]
     val topLevels = List.newBuilder[Statement]
     elements.foreach {
-      case Some(Left(Left(i)))  => imports += i
-      case Some(Left(Right(o))) => options += o
-      case Some(Right(tld))     => topLevels += Statement.TopLevelStatement(tld)
-      case None                 => ()
+      case Some(Left(p))               => if (pkg.isEmpty) pkg = Some(p)
+      case Some(Right(Left(Left(i))))  => imports += i
+      case Some(Right(Left(Right(o)))) => options += o
+      case Some(Right(Right(tld)))     => topLevels += Statement.TopLevelStatement(tld)
+      case None                        => ()
     }
     CompilationUnit(pkg, imports.result() ++ topLevels.result(), options.result())
   }

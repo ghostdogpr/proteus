@@ -1585,6 +1585,56 @@ service Greeter {
 """
         assertRoundTrip(input)
       }
+    ),
+    suite("Audit regressions")(
+      test("uint64 max integer literal in an option does not throw") {
+        val input  = """syntax = "proto3";
+                       |option (x) = 18446744073709551615;
+                       |""".stripMargin
+        val result = ProtoParser.parse(input)
+        assertTrue(result.isRight)
+      },
+      test("hexadecimal uint64 max integer literal in an option does not throw") {
+        val input  = """syntax = "proto3";
+                       |option (x) = 0xFFFFFFFFFFFFFFFF;
+                       |""".stripMargin
+        val result = ProtoParser.parse(input)
+        assertTrue(result.isRight)
+      },
+      test("leading-dot float literal is accepted") {
+        val input  = """syntax = "proto3";
+                       |option (x) = .5;
+                       |""".stripMargin
+        val result = ProtoParser.parse(input)
+        assertTrue(result.isRight)
+      },
+      test("identifier option value starting with inf is not mis-parsed as infinity") {
+        val input  = """syntax = "proto3";
+                       |option (x) = infer;
+                       |""".stripMargin
+        val result = ProtoParser.parse(input)
+        assertTrue(result.isRight)
+      },
+      test("comment before a service's closing brace parses") {
+        val input  = """syntax = "proto3";
+                       |message A {}
+                       |message B {}
+                       |service S {
+                       |  rpc Foo(A) returns (B); // trailing comment
+                       |}
+                       |""".stripMargin
+        val result = ProtoParser.parse(input)
+        assertTrue(result.isRight)
+      },
+      test("package may follow an import") {
+        val input  = """syntax = "proto3";
+                       |import "a.proto";
+                       |package foo;
+                       |message M {}
+                       |""".stripMargin
+        val result = ProtoParser.parse(input)
+        assertTrue(result.map(_.packageName) == Right(Some("foo")))
+      }
     )
   )
 
