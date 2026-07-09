@@ -73,8 +73,8 @@ implicit def jsonWriterCodec[A](using codec: ProtobufCodec[A], registry: Registr
                       case _: PrimitiveType.Long    => Json.fromLong(b)
                       case _: PrimitiveType.Boolean => Json.fromBoolean(b)
                       case _: PrimitiveType.String  => Json.fromString(b)
-                      case _: PrimitiveType.Double  => Json.fromDoubleOrNull(b)
-                      case _: PrimitiveType.Float   => Json.fromFloatOrNull(b)
+                      case _: PrimitiveType.Double  => encodeDouble(b)
+                      case _: PrimitiveType.Float   => encodeFloat(b)
                       case _                        => throw new ProteusException(s"Unsupported primitive type: ${c.primitiveType}")
                     }
                   case c: Enum[_]              => Json.fromString(c.namesByValue(b))
@@ -136,3 +136,13 @@ implicit def jsonWriterCodec[A](using codec: ProtobufCodec[A], registry: Registr
         loop(a, codec, RegisterOffset.Zero)
       }
   }
+
+private def encodeDouble(value: Double): Json =
+  if (value.isNaN) Json.fromString("NaN")
+  else if (value.isInfinity) Json.fromString(if (value > 0) "Infinity" else "-Infinity")
+  else Json.fromDoubleOrNull(value)
+
+private def encodeFloat(value: Float): Json =
+  if (value.isNaN) Json.fromString("NaN")
+  else if (value.isInfinity) Json.fromString(if (value > 0) "Infinity" else "-Infinity")
+  else Json.fromFloatOrNull(value)

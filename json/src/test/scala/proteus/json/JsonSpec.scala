@@ -58,6 +58,22 @@ object JsonSpec extends ZIOSpecDefault {
         val result   = instance.asJson.noSpaces
         assertTrue(result == """{"value":2.5}""")
       },
+      test("toJson serializes non-finite Double as canonical strings") {
+        case class DoubleMessage(value: Double) derives ProtobufCodec
+        assertTrue(
+          DoubleMessage(Double.NaN).asJson.noSpaces == """{"value":"NaN"}""",
+          DoubleMessage(Double.PositiveInfinity).asJson.noSpaces == """{"value":"Infinity"}""",
+          DoubleMessage(Double.NegativeInfinity).asJson.noSpaces == """{"value":"-Infinity"}"""
+        )
+      },
+      test("toJson serializes non-finite Float as canonical strings") {
+        case class FloatMessage(value: Float) derives ProtobufCodec
+        assertTrue(
+          FloatMessage(Float.NaN).asJson.noSpaces == """{"value":"NaN"}""",
+          FloatMessage(Float.PositiveInfinity).asJson.noSpaces == """{"value":"Infinity"}""",
+          FloatMessage(Float.NegativeInfinity).asJson.noSpaces == """{"value":"-Infinity"}"""
+        )
+      },
       test("toJson handles String with special characters") {
         case class StringMessage(value: String) derives ProtobufCodec
         val instance = StringMessage("hello\nworld\"test")
