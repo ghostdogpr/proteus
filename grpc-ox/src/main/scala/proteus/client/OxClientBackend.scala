@@ -161,7 +161,7 @@ class OxClientBackend(channel: Channel, prefetchN: Int) extends ClientBackend[[A
           catch {
             case NonFatal(ex) =>
               val original = senderError.get()
-              throw if (original != null) original else ex
+              throw if (original != null && !original.isInstanceOf[CallClosedWhileWaitingException]) original else ex
           }
           senderError.get() match {
             case null | _: CallClosedWhileWaitingException => ()
@@ -283,7 +283,7 @@ class OxClientBackend(channel: Channel, prefetchN: Int) extends ClientBackend[[A
           catch {
             case NonFatal(ex) =>
               val original = senderError.get()
-              throw if (original != null) original else ex
+              throw if (original != null && !original.isInstanceOf[CallClosedWhileWaitingException]) original else ex
           }
           senderError.get() match {
             case null | _: CallClosedWhileWaitingException => ()
