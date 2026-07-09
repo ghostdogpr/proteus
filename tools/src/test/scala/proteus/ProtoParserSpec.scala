@@ -1608,6 +1608,20 @@ service Greeter {
         val result = ProtoParser.parse(input)
         assertTrue(result.toOption.flatMap(_.options.headOption).map(_.value) == Some(OptionVal.IntLit(9223372036854775807L)))
       },
+      test("signed Int64 min integer literal preserves its exact value") {
+        val input  = """syntax = "proto3";
+                       |option (x) = -9223372036854775808;
+                       |""".stripMargin
+        val result = ProtoParser.parse(input)
+        assertTrue(result.toOption.flatMap(_.options.headOption).map(_.value) == Some(OptionVal.IntLit(-9223372036854775808L)))
+      },
+      test("hexadecimal signed Int64 min integer literal preserves its exact value") {
+        val input  = """syntax = "proto3";
+                       |option (x) = -0x8000000000000000;
+                       |""".stripMargin
+        val result = ProtoParser.parse(input)
+        assertTrue(result.toOption.flatMap(_.options.headOption).map(_.value) == Some(OptionVal.IntLit(-9223372036854775808L)))
+      },
       test("duplicate package declarations are rejected") {
         val input  = """syntax = "proto3";
                        |package a;

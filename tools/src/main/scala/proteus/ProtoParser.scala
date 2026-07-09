@@ -89,20 +89,21 @@ object ProtoParser {
   private def semi[$: P]: P[Unit]               = P(ws ~ ";")
   private def emptyStatement[$: P]: P[Unit]     = P(";")
 
-  private def fitsSignedLong(s: String, radix: Int): Boolean =
-    try { java.lang.Long.parseLong(s, radix); true }
-    catch { case _: NumberFormatException => false }
+  private def toLongLiteral(negative: Boolean, digits: String, radix: Int): Option[Long] = {
+    val magnitude = BigInt(digits, radix)
+    val value     = if (negative) -magnitude else magnitude
+    if (value >= BigInt(Long.MinValue) && value <= BigInt(Long.MaxValue)) Some(value.toLong) else None
+  }
 
   private def intLit[$: P]: P[Long] = P(
-    ("-".!.? ~ (
-      ("0" ~ CharIn("xX") ~ CharsWhileIn("0-9a-fA-F").!).filter(fitsSignedLong(_, 16)).map(java.lang.Long.parseLong(_, 16)) |
-        ("0" ~ CharsWhileIn("0-7")).!.filter(fitsSignedLong(_, 8)).map(java.lang.Long.parseLong(_, 8)) |
-        CharsWhileIn("0-9").!.filter(fitsSignedLong(_, 10)).map(java.lang.Long.parseLong(_, 10))
-    )).map {
-      case (Some(_), n) => -n
-      case (_, n)       => n
-    }
-  )
+    "-".!.? ~ (
+      ("0" ~ CharIn("xX") ~ CharsWhileIn("0-9a-fA-F").!).map(s => (s, 16)) |
+        ("0" ~ CharsWhileIn("0-7")).!.map(s => (s, 8)) |
+        CharsWhileIn("0-9").!.map(s => (s, 10))
+    )
+  ).map { case (sign, (digits, radix)) => toLongLiteral(sign.isDefined, digits, radix) }
+    .filter(_.isDefined)
+    .map(_.get)
 
   private def int32Lit[$: P]: P[Int] =
     intLit.filter(n => n >= Int32MinValue && n <= Int32MaxValue).map(_.toInt)
