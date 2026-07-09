@@ -2,7 +2,7 @@ package proteus.diff
 
 import mainargs.{arg, main, ParserForMethods, TokensReader}
 
-import proteus.{CompatMode, ProtoDiff, Severity, SeverityOverrides}
+import proteus.{Change, CompatMode, ProtoDiff, Severity, SeverityOverrides}
 
 enum OutputFormat { case Text, Json, Markdown }
 
@@ -33,22 +33,33 @@ object Main {
 
     val overrides = SeverityOverrides.parse(`override`).fold(fail, identity)
 
-    val oldSrc            = ProtoFiles.resolve(old).fold(fail, identity)
-    val newSrc            = ProtoFiles.resolve(`new`).fold(fail, identity)
-    val (changes, byFile) = (oldSrc, newSrc) match {
+    val oldSrc                 = ProtoFiles.resolve(old).fold(fail, identity)
+    val newSrc                 = ProtoFiles.resolve(`new`).fold(fail, identity)
+    val (changes, byFile)      = (oldSrc, newSrc) match {
       case (Resolved.Single(_, o), Resolved.Single(_, n)) => (ProtoDiff.diff(o, n), false)
       case _                                              => (ProtoDiff.diffFiles(oldSrc.asFiles, newSrc.asFiles), true)
     }
-    val filtered          = changes.filter(c => ProtoDiff.severity(c, mode, overrides).level >= severity.level)
+    val (filtered, shouldFail) = evaluate(changes, mode, overrides, severity, failOn)
 
-    val output     = format match {
+    val output = format match {
       case OutputFormat.Json     => Report.formatJson(filtered, mode, overrides)
       case OutputFormat.Markdown => Report.formatMarkdown(filtered, mode, byFile, overrides)
       case OutputFormat.Text     => Report.format(filtered, mode, byFile, overrides, useColor)
     }
     print(output)
-    val shouldFail = filtered.exists(c => ProtoDiff.severity(c, mode, overrides).level >= failOn.level)
     sys.exit(if (shouldFail) 1 else 0)
+  }
+
+  private[diff] def evaluate(
+    changes: List[Change],
+    mode: CompatMode,
+    overrides: SeverityOverrides,
+    display: Severity,
+    failOn: Severity
+  ): (List[Change], Boolean) = {
+    val filtered   = changes.filter(c => ProtoDiff.severity(c, mode, overrides).level >= display.level)
+    val shouldFail = changes.exists(c => ProtoDiff.severity(c, mode, overrides).level >= failOn.level)
+    (filtered, shouldFail)
   }
 
   private def fail(message: String): Nothing = {
