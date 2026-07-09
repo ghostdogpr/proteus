@@ -1585,6 +1585,86 @@ service Greeter {
 """
         assertRoundTrip(input)
       }
+    ),
+    suite("Audit regressions")(
+      test("integer literal outside signed Int64 range is rejected, not thrown or truncated") {
+        val input  = """syntax = "proto3";
+                       |option (x) = 18446744073709551615;
+                       |""".stripMargin
+        val result = ProtoParser.parse(input)
+        assertTrue(result.isLeft)
+      },
+      test("hexadecimal integer literal outside signed Int64 range is rejected, not thrown or truncated") {
+        val input  = """syntax = "proto3";
+                       |option (x) = 0xFFFFFFFFFFFFFFFF;
+                       |""".stripMargin
+        val result = ProtoParser.parse(input)
+        assertTrue(result.isLeft)
+      },
+      test("signed Int64 max integer literal preserves its exact value") {
+        val input  = """syntax = "proto3";
+                       |option (x) = 9223372036854775807;
+                       |""".stripMargin
+        val result = ProtoParser.parse(input)
+        assertTrue(result.toOption.flatMap(_.options.headOption).map(_.value) == Some(OptionVal.IntLit(9223372036854775807L)))
+      },
+      test("signed Int64 min integer literal preserves its exact value") {
+        val input  = """syntax = "proto3";
+                       |option (x) = -9223372036854775808;
+                       |""".stripMargin
+        val result = ProtoParser.parse(input)
+        assertTrue(result.toOption.flatMap(_.options.headOption).map(_.value) == Some(OptionVal.IntLit(-9223372036854775808L)))
+      },
+      test("hexadecimal signed Int64 min integer literal preserves its exact value") {
+        val input  = """syntax = "proto3";
+                       |option (x) = -0x8000000000000000;
+                       |""".stripMargin
+        val result = ProtoParser.parse(input)
+        assertTrue(result.toOption.flatMap(_.options.headOption).map(_.value) == Some(OptionVal.IntLit(-9223372036854775808L)))
+      },
+      test("duplicate package declarations are rejected") {
+        val input  = """syntax = "proto3";
+                       |package a;
+                       |package b;
+                       |message M {}
+                       |""".stripMargin
+        val result = ProtoParser.parse(input)
+        assertTrue(result.isLeft)
+      },
+      test("leading-dot float literal is accepted") {
+        val input  = """syntax = "proto3";
+                       |option (x) = .5;
+                       |""".stripMargin
+        val result = ProtoParser.parse(input)
+        assertTrue(result.isRight)
+      },
+      test("identifier option value starting with inf is not mis-parsed as infinity") {
+        val input  = """syntax = "proto3";
+                       |option (x) = infer;
+                       |""".stripMargin
+        val result = ProtoParser.parse(input)
+        assertTrue(result.isRight)
+      },
+      test("comment before a service's closing brace parses") {
+        val input  = """syntax = "proto3";
+                       |message A {}
+                       |message B {}
+                       |service S {
+                       |  rpc Foo(A) returns (B); // trailing comment
+                       |}
+                       |""".stripMargin
+        val result = ProtoParser.parse(input)
+        assertTrue(result.isRight)
+      },
+      test("package may follow an import") {
+        val input  = """syntax = "proto3";
+                       |import "a.proto";
+                       |package foo;
+                       |message M {}
+                       |""".stripMargin
+        val result = ProtoParser.parse(input)
+        assertTrue(result.map(_.packageName) == Right(Some("foo")))
+      }
     )
   )
 
