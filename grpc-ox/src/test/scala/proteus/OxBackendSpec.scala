@@ -1,8 +1,8 @@
 package proteus
 
-import java.util.concurrent.TimeUnit
+import java.util.concurrent.{CompletableFuture, TimeUnit}
 
-import io.grpc.Metadata
+import io.grpc.{CallOptions, ClientCall, Metadata, Status}
 import io.grpc.netty.{NettyChannelBuilder, NettyServerBuilder}
 import ox.{inScopeRunner, supervised}
 import ox.flow.Flow
@@ -164,6 +164,83 @@ object OxBackendSpec extends ZIOSpecDefault {
           val responses     = responseFlow.runToList()
 
           assertTrue(responses == List(StreamResponse(20), StreamResponse(40), StreamResponse(60)))
+        } finally {
+          server.shutdown().awaitTermination(5, TimeUnit.SECONDS): Unit
+          channel.shutdown().awaitTermination(5, TimeUnit.SECONDS): Unit
+        }
+      }
+    },
+    test("server streaming closes the call when the client half-closes without a request") {
+      supervised {
+        val backend                = OxServerBackend(inScopeRunner())
+        val serverStreamingService = Service("ServerStreamingService").rpc(serverStreamingRpc)
+        val streamingServerService = ServerService(using backend)
+          .rpc(serverStreamingRpc, serverStreamingOx)
+          .build(serverStreamingService)
+
+        val port    = 8006
+        val server  = NettyServerBuilder.forPort(port).addService(streamingServerService).build().start()
+        val channel = NettyChannelBuilder.forAddress("localhost", port).usePlaintext().build()
+
+        try {
+          val md     = serverStreamingRpc.toMethodDescriptor(serverStreamingService)
+          val call   = channel.newCall(md, CallOptions.DEFAULT)
+          val closed = new CompletableFuture[Status]()
+          call.start(
+            new ClientCall.Listener[StreamResponse] {
+              override def onClose(status: Status, trailers: Metadata): Unit = closed.complete(status): Unit
+            },
+            new Metadata()
+          )
+          call.request(1)
+          call.halfClose() // no request message sent
+
+          val status =
+            try Some(closed.get(5, TimeUnit.SECONDS))
+            catch { case _: java.util.concurrent.TimeoutException => None }
+
+          assertTrue(status.exists(_.getCode == Status.Code.INVALID_ARGUMENT))
+        } finally {
+          server.shutdown().awaitTermination(5, TimeUnit.SECONDS): Unit
+          channel.shutdown().awaitTermination(5, TimeUnit.SECONDS): Unit
+        }
+      }
+    },
+    test("client streaming error path preserves handler response metadata") {
+      supervised {
+        val key                    = Metadata.Key.of("err-key", Metadata.ASCII_STRING_MARSHALLER)
+        val backend                = OxServerBackend(inScopeRunner())
+        val clientStreamingService = Service("ClientStreamingService").rpc(clientStreamingRpc)
+        val streamingServerService = ServerService(using backend)
+          .rpcWithContext(
+            clientStreamingRpc,
+            (_: Flow[StreamRequest], ctx: GrpcContext) => {
+              ctx.responseMetadata.put(key, "err-val")
+              throw new RuntimeException("boom")
+            }
+          )
+          .build(clientStreamingService)
+
+        val port    = 8007
+        val server  = NettyServerBuilder.forPort(port).addService(streamingServerService).build().start()
+        val channel = NettyChannelBuilder.forAddress("localhost", port).usePlaintext().build()
+
+        try {
+          val md        = clientStreamingRpc.toMethodDescriptor(clientStreamingService)
+          val call      = channel.newCall(md, CallOptions.DEFAULT)
+          val trailersF = new CompletableFuture[Metadata]()
+          call.start(
+            new ClientCall.Listener[StreamResponse] {
+              override def onClose(status: Status, trailers: Metadata): Unit = trailersF.complete(trailers): Unit
+            },
+            new Metadata()
+          )
+          call.request(1)
+          call.sendMessage(StreamRequest(1))
+          call.halfClose()
+
+          val trailers = trailersF.get(5, TimeUnit.SECONDS)
+          assertTrue(trailers.get(key) == "err-val")
         } finally {
           server.shutdown().awaitTermination(5, TimeUnit.SECONDS): Unit
           channel.shutdown().awaitTermination(5, TimeUnit.SECONDS): Unit

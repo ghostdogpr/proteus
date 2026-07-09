@@ -92,14 +92,15 @@ class OxServerBackend[Context](
 
   private def forkHandler[Request, Response](
     call: ServerCall[Request, Response],
-    workerHandle: WorkerHandle
+    workerHandle: WorkerHandle,
+    responseMetadata: Metadata
   )(body: => Unit): Unit =
     runner.async {
       val fork = forkCancellable {
         try body
         catch {
           case _: InterruptedException => ()
-          case NonFatal(ex)            => ServerBackend.closeCallWithError(call, ex)
+          case NonFatal(ex)            => ServerBackend.closeCallWithError(call, ex, responseMetadata)
         }
       }
       workerHandle.publish(fork)
@@ -134,11 +135,11 @@ class OxServerBackend[Context](
             val workerHandle   = new WorkerHandle
             call.request(prefetch)
 
-            forkHandler(call, workerHandle) {
+            val responseMetadata = new Metadata()
+            forkHandler(call, workerHandle, responseMetadata) {
               val requestFlow = Flow.fromSource(requestChannel).tap(_ => call.request(1))
 
-              val responseMetadata = new Metadata()
-              val response         =
+              val response =
                 interceptor.clientStreaming[Request, Response](req => ctx => logic(req, ctx))(using rpc.requestCodec, rpc.responseCodec)(
                   requestFlow
                 )(GrpcContext.fromCall(call, headers, responseMetadata))
@@ -157,16 +158,24 @@ class OxServerBackend[Context](
             call.request(1)
 
             new ServerCall.Listener[Request] {
-              override def onMessage(message: Request): Unit =
-                forkHandler(call, workerHandle) {
-                  val responseMetadata = new Metadata()
-                  val responseFlow     =
+              private var received = 0
+
+              override def onMessage(message: Request): Unit = {
+                received += 1
+                val responseMetadata = new Metadata()
+                forkHandler(call, workerHandle, responseMetadata) {
+                  val responseFlow =
                     interceptor.serverStreaming(ctx => logic(message, ctx))(using rpc.requestCodec, rpc.responseCodec)(message)(
                       GrpcContext.fromCall(call, headers, responseMetadata)
                     )
                   sendResponseFlow(call, responseFlow, readySignal)
                   call.close(Status.OK, responseMetadata)
                 }
+              }
+
+              override def onHalfClose(): Unit =
+                if (received == 0)
+                  call.close(Status.INVALID_ARGUMENT.withDescription("Half-closed without a request"), new Metadata())
 
               override def onCancel(): Unit = {
                 readySignal.doneOrClosed().discard
@@ -186,11 +195,11 @@ class OxServerBackend[Context](
             val workerHandle   = new WorkerHandle
             call.request(prefetch)
 
-            forkHandler(call, workerHandle) {
+            val responseMetadata = new Metadata()
+            forkHandler(call, workerHandle, responseMetadata) {
               val requestFlow = Flow.fromSource(requestChannel).tap(_ => call.request(1))
 
-              val responseMetadata = new Metadata()
-              val responseFlow     =
+              val responseFlow =
                 interceptor.bidiStreaming[Request, Response](req => ctx => logic(req, ctx))(using rpc.requestCodec, rpc.responseCodec)(
                   requestFlow
                 )(GrpcContext.fromCall(call, headers, responseMetadata))
