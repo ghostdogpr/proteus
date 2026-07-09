@@ -1664,6 +1664,51 @@ service Greeter {
                        |""".stripMargin
         val result = ProtoParser.parse(input)
         assertTrue(result.map(_.packageName) == Right(Some("foo")))
+      },
+      test("enum reserved accepts negative numbers") {
+        val input  = """syntax = "proto3";
+                       |enum E {
+                       |    UNKNOWN = 0;
+                       |    reserved -3 to -1;
+                       |}
+                       |""".stripMargin
+        val result = ProtoParser.parse(input)
+        assertTrue(
+          result == Right(
+            CompilationUnit(
+              None,
+              List(
+                Statement.TopLevelStatement(
+                  TopLevelDef.EnumDef(Enum("E", List(EnumValue("UNKNOWN", 0)), reserved = List(Reserved.Range(-3, -1))))
+                )
+              ),
+              options = List.empty
+            )
+          )
+        )
+      },
+      test("enum reserved accepts the int32 range and 'to max'") {
+        val input  = """syntax = "proto3";
+                       |enum E {
+                       |    UNKNOWN = 0;
+                       |    reserved 19000, 100 to max;
+                       |}
+                       |""".stripMargin
+        val result = ProtoParser.parse(input)
+        assertTrue(
+          result.toOption
+            .flatMap(_.statements.collectFirst { case Statement.TopLevelStatement(TopLevelDef.EnumDef(e)) => e.reserved })
+            .contains(List(Reserved.Number(19000), Reserved.Range(100, Int.MaxValue)))
+        )
+      },
+      test("message reserved still rejects non-positive field numbers") {
+        val input  = """syntax = "proto3";
+                       |message M {
+                       |    reserved 0;
+                       |}
+                       |""".stripMargin
+        val result = ProtoParser.parse(input)
+        assertTrue(result.isLeft)
       }
     )
   )

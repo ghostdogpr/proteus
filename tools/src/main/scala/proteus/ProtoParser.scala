@@ -308,6 +308,24 @@ object ProtoParser {
     commentBlock ~ ws ~ "reserved" ~ ws ~ (reservedNames | reservedNumbers) ~ semi
   ).map { case (_, res) => res }
 
+  private def enumReservedRange[$: P]: P[Reserved] = P(
+    int32Lit ~ (ws ~ "to" ~ ws ~ (keyword("max").map(_ => Int.MaxValue) | int32Lit)).?
+  ).map {
+    case (start, Some(end)) => Reserved.Range(start, end)
+    case (n, None)          => Reserved.Number(n)
+  }.filter {
+    case Reserved.Range(start, end) => start <= end
+    case _                          => true
+  }
+
+  private def enumReservedNumbers[$: P]: P[List[Reserved]] = P(
+    enumReservedRange.rep(1, sep = ws ~ "," ~ ws)
+  ).map(_.toList)
+
+  private def enumReserved[$: P]: P[List[Reserved]] = P(
+    commentBlock ~ ws ~ "reserved" ~ ws ~ (reservedNames | enumReservedNumbers) ~ semi
+  ).map { case (_, res) => res }
+
   private def enumField[$: P]: P[EnumValue] = P(
     commentBlock ~ ws ~ ident ~ ws ~ "=" ~ ws ~ int32Lit ~ ws ~ inlineOptions ~ semi ~ inlineComment.?
   ).map { case (preComment, name, value, opts, inlineComment) =>
@@ -321,7 +339,7 @@ object ProtoParser {
     (padding ~ (
       emptyStatement.map(_ => None: EnumBodyElement) |
         optionStatement.map(o => Some(Left(Left(o))): EnumBodyElement) |
-        reserved.map(r => Some(Left(Right(r))): EnumBodyElement) |
+        enumReserved.map(r => Some(Left(Right(r))): EnumBodyElement) |
         enumField.map(v => Some(Right(v)): EnumBodyElement)
     )).rep
   ).map { elements =>
