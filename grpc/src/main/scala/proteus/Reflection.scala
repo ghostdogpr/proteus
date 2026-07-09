@@ -32,7 +32,7 @@ object MessageRequest {
 
 sealed trait MessageResponse
 object MessageResponse {
-  case class FileDescriptorResponse(fileDescriptorProto: Array[Byte])                      extends MessageResponse
+  case class FileDescriptorResponse(fileDescriptorProto: List[Array[Byte]])                extends MessageResponse
   case class AllExtensionNumbersResponse(baseTypeName: String, extensionNumber: List[Int]) extends MessageResponse
   case class ListServicesResponse(service: List[ServiceResponse])                          extends MessageResponse
   case class ErrorResponse(errorCode: Int, errorMessage: String)                           extends MessageResponse
