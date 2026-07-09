@@ -249,9 +249,20 @@ object ProtoDiff {
         case (Type.ListType(v1), Type.ListType(v2))       => areWireEquivalent(v1, v2, oldRegistry, newRegistry)
         case (Type.MapType(k1, v1), Type.MapType(k2, v2)) =>
           areWireEquivalent(k1, k2, oldRegistry, newRegistry) && areWireEquivalent(v1, v2, oldRegistry, newRegistry)
-        case _                                            => false
+        case (a, b)                                       => wireCompatibleScalars(a, b)
       }
   }
+
+  private val wireCompatibleScalarGroups: List[Set[Type]] = List(
+    Set(Type.Int32, Type.Int64, Type.Uint32, Type.Uint64, Type.Bool),
+    Set(Type.Sint32, Type.Sint64),
+    Set(Type.Fixed32, Type.Sfixed32),
+    Set(Type.Fixed64, Type.Sfixed64),
+    Set(Type.String, Type.Bytes)
+  )
+
+  private def wireCompatibleScalars(a: Type, b: Type): Boolean =
+    wireCompatibleScalarGroups.exists(group => group.contains(a) && group.contains(b))
 
   private def resolveTypeRefChanges(changes: List[Change], oldRegistry: Map[String, TypeEntry], newRegistry: Map[String, TypeEntry]): List[Change] =
     changes.map {

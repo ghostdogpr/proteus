@@ -126,6 +126,34 @@ object ProtoDiffSpec extends ZIOSpecDefault {
         val nw  = parse("""syntax = "proto3"; message Foo { int32 name = 1; }""")
         assertTrue(ProtoDiff.diff(old, nw) == List(FieldTypeChanged(List("Foo"), "name", 1, Type.String, Type.Int32)))
       },
+      test("wire-compatible scalar type change is not breaking in Wire mode") {
+        val cases   = List(
+          ("int32", "int64"),
+          ("uint32", "int32"),
+          ("string", "bytes"),
+          ("sint32", "sint64"),
+          ("fixed32", "sfixed32"),
+          ("fixed64", "sfixed64")
+        )
+        val results = cases.map { case (from, to) =>
+          val old     = parse(s"""syntax = "proto3"; message Foo { $from id = 1; }""")
+          val nw      = parse(s"""syntax = "proto3"; message Foo { $to id = 1; }""")
+          val changes = ProtoDiff.diff(old, nw)
+          changes.nonEmpty &&
+            changes.forall(c => ProtoDiff.severity(c, CompatMode.Wire) == Severity.Info) &&
+            changes.forall(c => ProtoDiff.severity(c, CompatMode.Source) == Severity.Error)
+        }
+        assertTrue(results.forall(identity))
+      },
+      test("wire-incompatible scalar type change stays breaking in Wire mode") {
+        val cases   = List(("int32", "sint32"), ("int32", "fixed32"), ("string", "int32"))
+        val results = cases.map { case (from, to) =>
+          val old = parse(s"""syntax = "proto3"; message Foo { $from id = 1; }""")
+          val nw  = parse(s"""syntax = "proto3"; message Foo { $to id = 1; }""")
+          ProtoDiff.diff(old, nw).exists(c => ProtoDiff.severity(c, CompatMode.Wire) == Severity.Error)
+        }
+        assertTrue(results.forall(identity))
+      },
       test("field optionality changed") {
         val old = parse("""syntax = "proto3"; message Foo { string name = 1; }""")
         val nw  = parse("""syntax = "proto3"; message Foo { optional string name = 1; }""")
