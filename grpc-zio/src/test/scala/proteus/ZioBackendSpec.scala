@@ -288,6 +288,23 @@ object ZioBackendSpec extends ZIOSpecDefault {
           channel.shutdown().awaitTermination(5, TimeUnit.SECONDS)
         }.ignore)
     },
+    test("client streaming should not hang when the request stream dies with a defect") {
+      val port          = 7019
+      val server        = NettyServerBuilder.forPort(port).addService(streamingServerService).build().start()
+      val channel       = NettyChannelBuilder.forAddress("localhost", port).usePlaintext().build()
+      val clientBackend = ZioClientBackend(channel)
+
+      val client        = clientBackend.client(clientStreamingRpc, streamingService)
+      val requestStream = ZStream(StreamRequest(1)).map[StreamRequest](_ => throw new RuntimeException("stream boom"))
+
+      client(requestStream).exit
+        .timeout(Duration.fromSeconds(10))
+        .flatMap(result => assertTrue(result.exists(_.isFailure)))
+        .ensuring(ZIO.attempt {
+          server.shutdown().awaitTermination(5, TimeUnit.SECONDS)
+          channel.shutdown().awaitTermination(5, TimeUnit.SECONDS)
+        }.ignore)
+    } @@ TestAspect.withLiveClock,
     test("bidi streaming should fail with StatusException, not die, when call.start throws") {
       val port          = 7018
       val server        = NettyServerBuilder.forPort(port).addService(streamingServerService).build().start()
