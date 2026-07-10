@@ -132,16 +132,18 @@ class Fs2ClientBackend[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F],
     request: Request
   ): Stream[F, Response] =
     Stream
-      .eval(F.delay {
-        val call  = channel.newCall(descriptor, options)
-        val queue = dispatcher.unsafeRunSync(Queue.unbounded[F, Either[StatusException, Option[Response]]])
-        val l     = new StreamingListener[Response](queue)
-        call.start(l, headers)
-        call.request(prefetch)
-        call.sendMessage(request)
-        call.halfClose()
-        (call, queue)
-      })
+      .eval(
+        F.delay {
+          val call  = channel.newCall(descriptor, options)
+          val queue = dispatcher.unsafeRunSync(Queue.unbounded[F, Either[StatusException, Option[Response]]])
+          val l     = new StreamingListener[Response](queue)
+          call.start(l, headers)
+          call.request(prefetch)
+          call.sendMessage(request)
+          call.halfClose()
+          (call, queue)
+        }
+      )
       .flatMap { case (call, queue) => streamFromQueue(call, queue) }
 
   private def clientStreamingRun[Request, Response](
@@ -197,15 +199,17 @@ class Fs2ClientBackend[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F],
     requestStream: Stream[F, Request]
   ): Stream[F, Response] =
     Stream
-      .eval(F.delay {
-        val call        = channel.newCall(descriptor, options)
-        val queue       = dispatcher.unsafeRunSync(Queue.unbounded[F, Either[StatusException, Option[Response]]])
-        val readySignal = new ClientReadySignal(call)
-        val l           = new BidiListener[Response](queue, readySignal)
-        call.start(l, headers)
-        call.request(prefetch)
-        (call, queue, readySignal)
-      })
+      .eval(
+        F.delay {
+          val call        = channel.newCall(descriptor, options)
+          val queue       = dispatcher.unsafeRunSync(Queue.unbounded[F, Either[StatusException, Option[Response]]])
+          val readySignal = new ClientReadySignal(call)
+          val l           = new BidiListener[Response](queue, readySignal)
+          call.start(l, headers)
+          call.request(prefetch)
+          (call, queue, readySignal)
+        }
+      )
       .flatMap { case (call, queue, readySignal) =>
         val sendAll: F[Unit] =
           requestStream
