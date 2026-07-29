@@ -13,7 +13,7 @@ val chimneyVersion              = "1.11.0"
 val circeVersion                = "0.14.16"
 val zioSchemaVersion            = "1.8.5"
 val upickleVersion              = "4.4.3"
-val borerVersion                = "1.16.2"
+val borerVersion                = "1.17.0"
 val fastparseVersion            = "3.1.1"
 val mainargsVersion             = "0.7.8"
 
