@@ -8,7 +8,7 @@ val zioVersion                  = "2.1.26"
 val fs2Version                  = "3.13.0"
 val catsEffectVersion           = "3.7.0"
 val oxVersion                   = "1.0.6"
-val kyoVersion                  = "1.0.0-RC5"
+val kyoVersion                  = "1.0.0-RC6"
 val chimneyVersion              = "1.11.0"
 val circeVersion                = "0.14.16"
 val zioSchemaVersion            = "1.8.5"
@@ -196,7 +196,7 @@ lazy val benchmarks = project
       "dev.zio"              %% "zio-schema-protobuf" % zioSchemaVersion,
       "com.lihaoyi"          %% "upickle"             % upickleVersion,
       "io.bullet"            %% "borer-derivation"    % borerVersion,
-      "io.getkyo"            %% "kyo-schema"          % kyoVersion
+      "io.getkyo"            %% "kyo-schema-protobuf" % kyoVersion
     ),
     Compile / PB.targets := Seq(
       scalapb.gen(scala3Sources = true) -> (Compile / sourceManaged).value / "scalapb"
