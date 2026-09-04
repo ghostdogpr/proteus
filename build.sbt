@@ -1,5 +1,5 @@
 val scala3Version     = "3.3.8"
-val scala3NextVersion = "3.8.4"
+val scala3NextVersion = "3.9.0"
 
 val grpcVersion                 = "1.84.0"
 val scalaProtobufRuntimeVersion = "0.8.16"
