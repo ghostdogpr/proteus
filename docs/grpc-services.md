@@ -12,7 +12,7 @@ In order to use it, you will need to add the following dependency to your `build
 "com.github.ghostdogpr" %% "proteus-grpc-zio" % "@VERSION@" // zio backend
 "com.github.ghostdogpr" %% "proteus-grpc-fs2" % "@VERSION@" // fs2 backend
 "com.github.ghostdogpr" %% "proteus-grpc-ox"  % "@VERSION@" // ox backend (requires JDK 21+)
-"com.github.ghostdogpr" %% "proteus-grpc-kyo" % "@VERSION@" // kyo backend (requires Scala 3.8.3+)
+"com.github.ghostdogpr" %% "proteus-grpc-kyo" % "@VERSION@" // kyo backend
 ```
 
 ## Defining services

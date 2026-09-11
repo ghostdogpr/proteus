@@ -1,5 +1,4 @@
-val scala3Version     = "3.3.8"
-val scala3NextVersion = "3.9.0"
+val scala3Version = "3.9.0"
 
 val grpcVersion                 = "1.84.0"
 val scalaProtobufRuntimeVersion = "0.8.16"
@@ -167,7 +166,6 @@ lazy val kyoGrpc = project
   .in(file("grpc-kyo"))
   .settings(name := "proteus-grpc-kyo")
   .settings(commonSettings)
-  .settings(nextScalaSettings) // Kyo requires Scala 3.8.x (Next)
   .settings(
     libraryDependencies ++= Seq(
       "io.getkyo" %% "kyo-core" % kyoVersion
@@ -187,7 +185,6 @@ lazy val json = crossProject(JSPlatform, JVMPlatform)
 lazy val benchmarks = project
   .in(file("benchmarks"))
   .settings(commonSettings)
-  .settings(nextScalaSettings) // Kyo requires Scala 3.8.x (Next)
   .settings(publish / skip := true)
   .settings(
     libraryDependencies ++= Seq(
@@ -216,7 +213,6 @@ lazy val examples = project
   .settings(name := "proteus-examples")
   .settings(commonSettings)
   .settings(publish / skip := true)
-  .settings(nextScalaSettings) // depends on grpc-kyo (3.8.x)
   .settings(
     libraryDependencies ++=
       Seq(
@@ -233,23 +229,14 @@ lazy val examples = project
   )
   .dependsOn(zioGrpc, fs2Grpc, oxGrpc, kyoGrpc)
 
-lazy val nextScalaSettings = Def.settings(
-  scalaVersion := scala3NextVersion,
-  scalacOptions ~= (_.map {
-    case "-Xfatal-warnings" => "-Werror"
-    case "-Ykind-projector" => "-Xkind-projector"
-    case o                  => o
-  })
-)
-
 lazy val commonSettings = Def.settings(
   scalacOptions ++= Seq(
     "-deprecation",
-    "-Xfatal-warnings",
+    "-Werror",
     "-no-indent",
     "-Wunused:imports,params,privates,implicits,explicits",
     "-Wvalue-discard",
-    "-Ykind-projector"
+    "-Xkind-projector"
   ),
   Test / fork := true
 )
