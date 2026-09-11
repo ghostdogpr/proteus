@@ -981,10 +981,10 @@ object ProtobufCodec {
         def loop[A](codec: ProtobufCodec[A]): A =
           codec match {
             case c: Repeated[_, _]         =>
-              val v = field.register.asInstanceOf[Register.Object[_ <: AnyRef]].get(registers, offset)
+              val v = field.register.asInstanceOf[Register.Object[? <: AnyRef]].get(registers, offset)
               c.constructor.result(v.asInstanceOf[c.constructor.Builder[Any]]).asInstanceOf[A]
             case c: RepeatedMap[_, _, _]   =>
-              val v = field.register.asInstanceOf[Register.Object[_ <: AnyRef]].get(registers, offset)
+              val v = field.register.asInstanceOf[Register.Object[? <: AnyRef]].get(registers, offset)
               c.constructor.resultObject(v.asInstanceOf[c.constructor.ObjectBuilder[Any, Any]]).asInstanceOf[A]
             case Transform(from, _, codec) =>
               val res = loop(codec)
@@ -1004,7 +1004,7 @@ object ProtobufCodec {
       val nextOffset                   = offset + m.constructor.usedRegisters
 
       def handleRepeated[C[_], E](r: Repeated[C, E], field: IndexedField, tag: Int, packed: Boolean, alreadyVisited: Boolean): C[E] = {
-        val register = field.field.register.asInstanceOf[Register.Object[_ <: AnyRef]]
+        val register = field.field.register.asInstanceOf[Register.Object[? <: AnyRef]]
         val builder  =
           if (!alreadyVisited) {
             val builder = r.constructor.newBuilder[E]()(using r.elementClassTag)
@@ -1017,7 +1017,7 @@ object ProtobufCodec {
       }
 
       def handleRepeatedMap[M[_, _], K, V](r: RepeatedMap[M, K, V], field: IndexedField, alreadyVisited: Boolean): M[K, V] = {
-        val register = field.field.register.asInstanceOf[Register.Object[_ <: AnyRef]]
+        val register = field.field.register.asInstanceOf[Register.Object[? <: AnyRef]]
         val builder  =
           if (!alreadyVisited) {
             val builder = r.constructor.newObjectBuilder[K, V]()

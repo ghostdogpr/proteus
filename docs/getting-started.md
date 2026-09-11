@@ -6,7 +6,7 @@ It is designed to be **code-first**, meaning that it is able to generate Protobu
 
 It also provides a **declarative way to define gRPC services** in Scala, a bit like [tapir](https://tapir.softwaremill.com/en/latest/) does for HTTP services. You can define messages, RPCs, and services in Scala, then generate clients and servers for them, using a variety of backends (direct style, Future, ZIO, fs2, Ox, Kyo).
 
-It is available for Scala 3.3.x LTS and later versions. The core module is available for both Scala JVM and Scala.js.
+It is available for Scala 3.9.x LTS and later versions. The core module is available for both Scala JVM and Scala.js.
 
 ::: warning Why not use code generation?
 Let's address the elephant in the room: why not use code generation like everyone else? Check the [FAQ](/faq#why-not-use-code-generation) for a detailed answer.

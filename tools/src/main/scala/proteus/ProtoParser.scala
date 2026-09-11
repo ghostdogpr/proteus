@@ -35,7 +35,7 @@ object ProtoParser {
     *         or a [[Left]] containing an error message with the failure location on failure.
     */
   def parse(input: String): Either[String, CompilationUnit] =
-    fastparse.parse(input, compilationUnit(_)) match {
+    fastparse.parse(input, compilationUnit(using _)) match {
       case Parsed.Success(value, _) => Right(value)
       case f: Parsed.Failure        =>
         val detail =

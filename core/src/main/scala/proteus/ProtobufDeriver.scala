@@ -508,7 +508,7 @@ case class ProtobufDeriver private (
     examples: Seq[C[A]]
   )(implicit F: HasBinding[F], D: HasInstance[F]): Lazy[ProtobufCodec[C[A]]] =
     D.instance(element.metadata).map { instance =>
-      val isByteArray = binding.constructor.empty(element.typeId.classTag) match {
+      val isByteArray = binding.constructor.empty(using element.typeId.classTag) match {
         case _: Array[Byte] => true
         case _              => false
       }
@@ -727,7 +727,7 @@ case class ProtobufDeriver private (
       case ProtobufCodec.RepeatedMap(_, constructor, _, _)                       =>
         constructor.emptyObject.asInstanceOf[A]
       case ProtobufCodec.Repeated(_, constructor, _, _, elementClassTag)         =>
-        constructor.empty(elementClassTag)
+        constructor.empty(using elementClassTag)
       case ProtobufCodec.Transform(from, _, codec)                               =>
         try from(getDefaultValue(using codec))
         catch { case _: Exception => null.asInstanceOf[A] }
@@ -800,7 +800,7 @@ case class ProtobufDeriver private (
           val seqF       = seq.asInstanceOf[Reflect.Sequence[F, ?, ?]]
           val seqBinding = seqF.binding.asInstanceOf[Binding.Seq[?, Any]]
           val classTag   = seqF.element.typeId.classTag
-          seqBinding.constructor.empty(classTag).asInstanceOf[A]
+          seqBinding.constructor.empty(using classTag).asInstanceOf[A]
         case map: Reflect.Map[_, _, _, _]                                               =>
           val mapF       = map.asInstanceOf[Reflect.Map[F, ?, ?, ?]]
           val mapBinding = mapF.binding.asInstanceOf[Binding.Map[?, Any, Any]]
