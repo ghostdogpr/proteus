@@ -31,7 +31,7 @@ class RouteGuideServer(port: Int, routeNotes: AtomicRef[Map[Point, List[RouteNot
                                     }
       (pointCount, distance, _) = res
       endTime                  <- Clock.now
-      elapsedTime               = (endTime - startTime).toSeconds.toInt
+      elapsedTime               = endTime.minusOrZero(startTime).toSeconds.toInt
     } yield RouteSummary(pointCount, 0, distance, elapsedTime)
 
   def routeChat(notes: Stream[RouteNote, Async & Abort[StatusException]]): Stream[RouteNote, Async & Abort[StatusException]] =
