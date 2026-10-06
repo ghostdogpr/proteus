@@ -2,7 +2,7 @@ val scala3Version = "3.9.0"
 
 val grpcVersion                 = "1.84.0"
 val scalaProtobufRuntimeVersion = "0.8.16"
-val zioBlocksSchemaVersion      = "0.0.55"
+val zioBlocksSchemaVersion      = "0.0.56"
 val zioVersion                  = "2.1.26"
 val fs2Version                  = "3.14.0"
 val catsEffectVersion           = "3.7.1"
