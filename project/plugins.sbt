@@ -7,4 +7,4 @@ addSbtPlugin("com.github.sbt"     % "sbt-ci-release"           % "1.12.1")
 addSbtPlugin("com.github.sbt"     % "sbt-native-packager"      % "1.12.0")
 addSbtPlugin("org.scalameta"      % "sbt-native-image"         % "0.5.0")
 
-libraryDependencies += "com.thesamet.scalapb" %% "compilerplugin" % "0.11.20"
+libraryDependencies += "com.thesamet.scalapb" %% "compilerplugin" % "0.11.21"
