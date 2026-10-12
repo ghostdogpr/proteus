@@ -33,8 +33,7 @@ object Main {
 
     val overrides = SeverityOverrides.parse(`override`).fold(fail, identity)
 
-    val oldSrc                 = ProtoFiles.resolve(old).fold(fail, identity)
-    val newSrc                 = ProtoFiles.resolve(`new`).fold(fail, identity)
+    val (oldSrc, newSrc)       = ProtoFiles.resolvePair(old, `new`).fold(fail, identity)
     val (changes, byFile)      = (oldSrc, newSrc) match {
       case (Resolved.Single(_, o), Resolved.Single(_, n)) => (ProtoDiff.diff(o, n), false)
       case _                                              => (ProtoDiff.diffFiles(oldSrc.asFiles, newSrc.asFiles), true)

@@ -52,6 +52,14 @@ object GitSpec extends ZIOSpecDefault {
     if (!gitAvailable) suite("GitSpec")(test("skipped — git not on PATH")(assertCompletes))
     else
       suite("GitSpec")(
+        test("resolvePair reads a ref from the directory on the other side") {
+          val keys = withRepo { dir =>
+            writeFile(dir.resolve("proto/a.proto"), """syntax = "proto3"; message Foo {}""")
+            commit(dir, "init")
+            ProtoFiles.resolvePair("HEAD", dir.resolve("proto").toString).map((o, n) => (o.asFiles.keySet, n.asFiles.keySet))
+          }
+          assertTrue(keys == Right((Set("a.proto"), Set("a.proto"))))
+        },
         test("extractProtos extracts the tree at a ref") {
           val (hasA, hasB, isRight) = withRepo { dir =>
             writeFile(dir.resolve("a.proto"), """syntax = "proto3"; message Foo {}""")

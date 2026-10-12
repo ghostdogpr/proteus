@@ -58,6 +58,8 @@ Mix git refs and filesystem paths freely. Passing `.` or any directory path for 
 
 Resolution rule: if the argument exists as a file or directory, it's treated as a filesystem path. Otherwise, proteus-diff tries to resolve it as a git ref with `git rev-parse`. If neither works, you get an error.
 
+A git ref is read from the directory given as the other argument, so `proteus-diff HEAD ./proto` compares `proto/` at `HEAD` with its current state. When the other argument is also a ref, both are read from the current directory.
+
 ::: tip
 If a file or directory happens to share a name with a ref (e.g. a folder named `main`), the filesystem wins by default. Use the `git:` prefix to force git mode:
 
