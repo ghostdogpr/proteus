@@ -26,6 +26,7 @@ object GitSpec extends ZIOSpecDefault {
     run(dir, "git", "config", "user.email", "test@example.com"): Unit
     run(dir, "git", "config", "user.name", "Test"): Unit
     run(dir, "git", "config", "commit.gpgsign", "false"): Unit
+    run(dir, "git", "config", "maintenance.auto", "false"): Unit
   }
 
   private def commit(dir: Path, message: String): Unit = {
