@@ -23,3 +23,4 @@ project/project/metals.sbt
 docs/.vitepress/cache
 .claude
 project/project/project/metals.sbt
+build.sbt.semanticdb
