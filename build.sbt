@@ -1,4 +1,5 @@
 val scala3Version = "3.9.0"
+val scalaVersions = Seq(scala3Version)
 
 val grpcVersion                 = "1.84.2"
 val scalaProtobufRuntimeVersion = "0.9.0"
@@ -28,53 +29,53 @@ inThisBuild(
   )
 )
 
-name := "proteus"
-
-addCommandAlias("fmt", "all scalafmtSbt scalafmt test:scalafmt")
-addCommandAlias("check", "all scalafmtSbtCheck scalafmtCheck test:scalafmtCheck")
+addCommandAlias("fmt", "all scalafmtSbt scalafmt Test/scalafmt")
+addCommandAlias("check", "all scalafmtSbtCheck scalafmtCheck Test/scalafmtCheck")
 
 lazy val root = project
   .in(file("."))
-  .settings(publish / skip := true)
-  .aggregate(core.jvm, core.js, tools.jvm, tools.js, diff, grpc, zioGrpc, fs2Grpc, oxGrpc, kyoGrpc, json.jvm, json.js, benchmarks, examples)
+  .settings(name := "proteus", publish / skip := true)
+  .aggregate(core.projectRefs ++ tools.projectRefs ++ json.projectRefs *)
+  .aggregate(diff, grpc, zioGrpc, fs2Grpc, oxGrpc, kyoGrpc, benchmarks, examples)
 
-lazy val core = crossProject(JSPlatform, JVMPlatform)
-  .crossType(CrossType.Pure)
-  .in(file("core"))
+lazy val core = (projectMatrix in file("core"))
   .settings(name := "proteus-core")
   .settings(commonSettings)
   .settings(
     libraryDependencies ++=
       Seq(
-        "dev.zio" %%% "zio-blocks-schema" % zioBlocksSchemaVersion,
-        "dev.zio" %%% "zio-test"          % zioVersion % Test,
-        "dev.zio" %%% "zio-test-sbt"      % zioVersion % Test
+        "dev.zio" %% "zio-blocks-schema" % zioBlocksSchemaVersion,
+        "dev.zio" %% "zio-test"          % zioVersion % Test,
+        "dev.zio" %% "zio-test-sbt"      % zioVersion % Test
       )
   )
-  .jvmSettings(
-    libraryDependencies ++= Seq("io.grpc" % "grpc-protobuf" % grpcVersion)
-  )
-  .jsSettings(
-    dependencyOverrides += "org.scala-lang" %%% "scala3-library" % scalaVersion.value,
-    libraryDependencies ++= Seq("com.thesamet.scalapb" %%% "protobuf-runtime-scala" % scalaProtobufRuntimeVersion),
-    Test / fork                              := false
+  .jvmPlatform(scalaVersions, Seq(libraryDependencies += "io.grpc" % "grpc-protobuf" % grpcVersion))
+  .jsPlatform(
+    scalaVersions,
+    Seq(
+      dependencyOverrides += "org.scala-lang"       %% "scala3-library"         % scalaVersion.value,
+      libraryDependencies += "com.thesamet.scalapb" %% "protobuf-runtime-scala" % scalaProtobufRuntimeVersion,
+      Test / fork                                   := false
+    )
   )
 
-lazy val tools = crossProject(JSPlatform, JVMPlatform)
-  .crossType(CrossType.Pure)
-  .in(file("tools"))
+lazy val tools = (projectMatrix in file("tools"))
   .settings(name := "proteus-tools")
   .settings(commonSettings)
   .settings(
     libraryDependencies ++=
       Seq(
-        "com.lihaoyi" %%% "fastparse"    % fastparseVersion,
-        "dev.zio"     %%% "zio-test"     % zioVersion % Test,
-        "dev.zio"     %%% "zio-test-sbt" % zioVersion % Test
+        "com.lihaoyi" %% "fastparse"    % fastparseVersion,
+        "dev.zio"     %% "zio-test"     % zioVersion % Test,
+        "dev.zio"     %% "zio-test-sbt" % zioVersion % Test
       )
   )
   .dependsOn(core % "compile->compile;test->test")
-  .jsSettings(Test / fork := false)
+  .jvmPlatform(scalaVersions)
+  .jsPlatform(scalaVersions, Seq(Test / fork := false))
+
+lazy val coreJVM  = core.jvm(scala3Version)
+lazy val toolsJVM = tools.jvm(scala3Version)
 
 lazy val diff = project
   .in(file("diff"))
@@ -91,6 +92,7 @@ lazy val diff = project
   .enablePlugins(JavaAppPackaging, NativeImagePlugin)
   .settings(
     Compile / mainClass  := Some("proteus.diff.Main"),
+    Test / exportJars    := false,
     executableScriptName := "proteus-diff",
     nativeImageVersion   := "25.0.1",
     nativeImageJvm       := "graalvm-community",
@@ -111,7 +113,7 @@ lazy val diff = project
       Seq(file)
     }
   )
-  .dependsOn(tools.jvm)
+  .dependsOn(toolsJVM)
 
 lazy val grpc = project
   .in(file("grpc"))
@@ -125,7 +127,7 @@ lazy val grpc = project
         "io.grpc" % "grpc-services" % grpcVersion % Test
       )
   )
-  .dependsOn(core.jvm % "compile->compile;test->test")
+  .dependsOn(coreJVM % "compile->compile;test->test")
 
 lazy val zioGrpc = project
   .in(file("grpc-zio"))
@@ -173,14 +175,13 @@ lazy val kyoGrpc = project
   )
   .dependsOn(grpc % "compile->compile;test->test")
 
-lazy val json = crossProject(JSPlatform, JVMPlatform)
-  .crossType(CrossType.Pure)
-  .in(file("json"))
+lazy val json = (projectMatrix in file("json"))
   .settings(name := "proteus-json")
   .settings(commonSettings)
-  .settings(libraryDependencies ++= Seq("io.circe" %%% "circe-core" % circeVersion))
+  .settings(libraryDependencies ++= Seq("io.circe" %% "circe-core" % circeVersion))
   .dependsOn(core % "compile->compile;test->test")
-  .jsSettings(Test / fork := false)
+  .jvmPlatform(scalaVersions)
+  .jsPlatform(scalaVersions, Seq(Test / fork := false))
 
 lazy val benchmarks = project
   .in(file("benchmarks"))
@@ -203,7 +204,7 @@ lazy val benchmarks = project
       "-Wconf:msg=Implicit parameters should be provided with a `using` clause:s"
     )
   )
-  .dependsOn(core.jvm)
+  .dependsOn(coreJVM)
   .enablePlugins(JmhPlugin)
 
 lazy val generateProtos = taskKey[Unit]("Generate proto files")
@@ -225,7 +226,7 @@ lazy val examples = project
       scalapb.gen(scala3Sources = true) -> (Compile / sourceManaged).value / "scalapb"
     ),
     scalacOptions ++= Seq("-Wconf:msg=(discarded non-Unit):silent"),
-    generateProtos       := (Compile / runMain).toTask(" proteus.examples.greeter.ProtoGen").value
+    generateProtos       := Def.uncached((Compile / runMain).toTask(" proteus.examples.greeter.ProtoGen").value)
   )
   .dependsOn(zioGrpc, fs2Grpc, oxGrpc, kyoGrpc)
 
