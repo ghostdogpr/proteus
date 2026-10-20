@@ -1,7 +1,7 @@
 val scala3Version = "3.9.0"
 val scalaVersions = Seq(scala3Version)
 
-val grpcVersion                 = "1.85.0"
+val grpcVersion                 = "1.85.1"
 val scalaProtobufRuntimeVersion = "0.9.0"
 val zioBlocksSchemaVersion      = "0.0.56"
 val zioVersion                  = "2.1.27"
