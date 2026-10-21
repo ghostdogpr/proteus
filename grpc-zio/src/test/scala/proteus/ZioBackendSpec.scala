@@ -320,6 +320,52 @@ object ZioBackendSpec extends ZIOSpecDefault {
           server.shutdown().awaitTermination(5, TimeUnit.SECONDS)
           channel.shutdown().awaitTermination(5, TimeUnit.SECONDS)
         }.ignore)
+    },
+    test("call options should be evaluated when the effect runs, not when it is built") {
+      val port          = 7022
+      val server        = NettyServerBuilder.forPort(port).addService(serverService).addService(streamingServerService).build().start()
+      val channel       = NettyChannelBuilder.forAddress("localhost", port).usePlaintext().build()
+      val clientBackend = ZioClientBackend(channel)
+
+      val withDeadline: CallOptions => CallOptions = _.withDeadlineAfter(500, TimeUnit.MILLISECONDS)
+      val unaryCall                                = clientBackend.client(complexRpc, testService, withDeadline)(sampleRequest)
+      val streamingCall                            = clientBackend.client(serverStreamingRpc, streamingService, withDeadline)(StreamRequest(3))
+
+      (ZIO.sleep(1.second) *> unaryCall.zip(streamingCall.runCollect))
+        .flatMap { case (response, responses) =>
+          assertTrue(response.processedName == "TEST-SERVICE", responses.map(_.result) == Chunk(1, 2, 3))
+        }
+        .ensuring(ZIO.attempt {
+          server.shutdown().awaitTermination(5, TimeUnit.SECONDS)
+          channel.shutdown().awaitTermination(5, TimeUnit.SECONDS)
+        }.ignore)
+    } @@ TestAspect.withLiveClock,
+    test("request metadata should not be shared or mutated across runs") {
+      val port          = 7023
+      val server        = NettyServerBuilder.forPort(port).addService(serverService).addService(metadataServerService).build().start()
+      val channel       = NettyChannelBuilder.forAddress("localhost", port).usePlaintext().build()
+      val clientBackend = ZioClientBackend(channel)
+
+      val requestMetadata = new Metadata()
+      requestMetadata.put(Metadata.Key.of("client-id", Metadata.ASCII_STRING_MARSHALLER), "zio-client-789")
+
+      val unaryClient    = clientBackend.client(complexRpc, testService)
+      val metadataClient = clientBackend.clientWithMetadata(metadataRpc, metadataService)
+      val unaryCall      = unaryClient(sampleRequest)
+      val metadataCall   = metadataClient(MetadataRequest("hello"), requestMetadata)
+
+      (ZIO.collectAllPar(List.fill(50)(unaryCall)) <*> metadataCall.repeatN(2))
+        .flatMap { case (responses, (response, _)) =>
+          assertTrue(
+            responses.forall(_.processedName == "TEST-SERVICE"),
+            response.clientId == "zio-client-789",
+            requestMetadata.keys.size == 1
+          )
+        }
+        .ensuring(ZIO.attempt {
+          server.shutdown().awaitTermination(5, TimeUnit.SECONDS)
+          channel.shutdown().awaitTermination(5, TimeUnit.SECONDS)
+        }.ignore)
     }
   )
 }

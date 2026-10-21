@@ -86,15 +86,15 @@ class ZioClientBackend(channel: Channel, runtime: Runtime[Any], prefetchN: Int)
 
   private def unaryRun[Request, Response](
     descriptor: MethodDescriptor[Request, Response],
-    options: CallOptions,
+    options: CallOptions => CallOptions,
     headers: Metadata,
     request: Request
   ): IO[StatusException, (Response, Metadata, Metadata)] = ZIO.suspendSucceed {
-    val call     = channel.newCall(descriptor, options)
+    val call     = channel.newCall(descriptor, options(CallOptions.DEFAULT))
     val listener = new UnaryListener[Response]
     ZIO
       .attempt {
-        call.start(listener, headers)
+        call.start(listener, ClientBackend.copyMetadata(headers))
         call.request(1)
         call.sendMessage(request)
         call.halfClose()
@@ -117,18 +117,18 @@ class ZioClientBackend(channel: Channel, runtime: Runtime[Any], prefetchN: Int)
 
   private def serverStreamingRun[Request, Response](
     descriptor: MethodDescriptor[Request, Response],
-    options: CallOptions,
+    options: CallOptions => CallOptions,
     headers: Metadata,
     request: Request
   ): ZStream[Any, StatusException, Response] =
     ZStream.unwrap(
       ZIO.suspendSucceed {
-        val call     = channel.newCall(descriptor, options)
+        val call     = channel.newCall(descriptor, options(CallOptions.DEFAULT))
         val queue    = Unsafe.unsafely(Queue.unsafe.unbounded[Take[StatusException, Response]](FiberId.None))
         val listener = new StreamingListener[Response](queue)
         ZIO
           .attempt {
-            call.start(listener, headers)
+            call.start(listener, ClientBackend.copyMetadata(headers))
             call.request(prefetch)
             call.sendMessage(request)
             call.halfClose()
@@ -142,11 +142,11 @@ class ZioClientBackend(channel: Channel, runtime: Runtime[Any], prefetchN: Int)
 
   private def clientStreamingRun[Request, Response](
     descriptor: MethodDescriptor[Request, Response],
-    options: CallOptions,
+    options: CallOptions => CallOptions,
     headers: Metadata,
     requestStream: ZStream[Any, StatusException, Request]
   ): IO[StatusException, (Response, Metadata, Metadata)] = ZIO.suspendSucceed {
-    val call        = channel.newCall(descriptor, options)
+    val call        = channel.newCall(descriptor, options(CallOptions.DEFAULT))
     val readySignal = new ClientReadySignal(call)
     val listener    = new UnaryListener[Response] {
       override def onReady(): Unit = readySignal.signal()
@@ -165,7 +165,7 @@ class ZioClientBackend(channel: Channel, runtime: Runtime[Any], prefetchN: Int)
 
     ZIO
       .attempt {
-        call.start(listener, headers)
+        call.start(listener, ClientBackend.copyMetadata(headers))
         call.request(1)
       }
       .foldZIO(
@@ -185,13 +185,13 @@ class ZioClientBackend(channel: Channel, runtime: Runtime[Any], prefetchN: Int)
 
   private def bidiRun[Request, Response](
     descriptor: MethodDescriptor[Request, Response],
-    options: CallOptions,
+    options: CallOptions => CallOptions,
     headers: Metadata,
     requestStream: ZStream[Any, StatusException, Request]
   ): ZStream[Any, StatusException, Response] =
     ZStream.unwrap(
       ZIO.suspendSucceed {
-        val call        = channel.newCall(descriptor, options)
+        val call        = channel.newCall(descriptor, options(CallOptions.DEFAULT))
         val queue       = Unsafe.unsafely(Queue.unsafe.unbounded[Take[StatusException, Response]](FiberId.None))
         val readySignal = new ClientReadySignal(call)
         val listener    = new BidiListener[Response](queue, readySignal)
@@ -204,7 +204,7 @@ class ZioClientBackend(channel: Channel, runtime: Runtime[Any], prefetchN: Int)
 
         ZIO
           .attempt {
-            call.start(listener, headers)
+            call.start(listener, ClientBackend.copyMetadata(headers))
             call.request(prefetch)
           }
           .foldZIO(
@@ -227,7 +227,7 @@ class ZioClientBackend(channel: Channel, runtime: Runtime[Any], prefetchN: Int)
     options: CallOptions => CallOptions
   )(using HasRpc[Rpcs, rpc.type]): Request => IO[StatusException, Response] = {
     val descriptor = rpc.toMethodDescriptor(service)
-    req => unaryRun(descriptor, options(CallOptions.DEFAULT), new Metadata(), req).map(_._1)
+    req => unaryRun(descriptor, options, new Metadata(), req).map(_._1)
   }
 
   def client[Rpcs, Request, Response](
@@ -236,7 +236,7 @@ class ZioClientBackend(channel: Channel, runtime: Runtime[Any], prefetchN: Int)
     options: CallOptions => CallOptions
   )(using HasRpc[Rpcs, rpc.type], NoTag[Request]): ZStream[Any, StatusException, Request] => IO[StatusException, Response] = {
     val descriptor = rpc.toMethodDescriptor(service)
-    reqs => clientStreamingRun(descriptor, options(CallOptions.DEFAULT), new Metadata(), reqs).map(_._1)
+    reqs => clientStreamingRun(descriptor, options, new Metadata(), reqs).map(_._1)
   }
 
   def client[Rpcs, Request, Response](
@@ -245,7 +245,7 @@ class ZioClientBackend(channel: Channel, runtime: Runtime[Any], prefetchN: Int)
     options: CallOptions => CallOptions
   )(using HasRpc[Rpcs, rpc.type], NoTag[Response]): Request => ZStream[Any, StatusException, Response] = {
     val descriptor = rpc.toMethodDescriptor(service)
-    req => serverStreamingRun(descriptor, options(CallOptions.DEFAULT), new Metadata(), req)
+    req => serverStreamingRun(descriptor, options, new Metadata(), req)
   }
 
   def client[Rpcs, Request, Response](
@@ -258,7 +258,7 @@ class ZioClientBackend(channel: Channel, runtime: Runtime[Any], prefetchN: Int)
     NoTag[Response]
   ): ZStream[Any, StatusException, Request] => ZStream[Any, StatusException, Response] = {
     val descriptor = rpc.toMethodDescriptor(service)
-    reqs => bidiRun(descriptor, options(CallOptions.DEFAULT), new Metadata(), reqs)
+    reqs => bidiRun(descriptor, options, new Metadata(), reqs)
   }
 
   def clientWithMetadata[Rpcs, Request, Response](
@@ -268,7 +268,7 @@ class ZioClientBackend(channel: Channel, runtime: Runtime[Any], prefetchN: Int)
   )(using HasRpc[Rpcs, rpc.type]): (Request, Metadata) => IO[StatusException, (Response, Metadata)] = {
     val descriptor = rpc.toMethodDescriptor(service)
     (req, md) =>
-      unaryRun(descriptor, options(CallOptions.DEFAULT), md, req).map { case (resp, headers, trailers) =>
+      unaryRun(descriptor, options, md, req).map { case (resp, headers, trailers) =>
         (resp, ClientBackend.mergeMetadata(headers, trailers))
       }
   }
@@ -280,7 +280,7 @@ class ZioClientBackend(channel: Channel, runtime: Runtime[Any], prefetchN: Int)
   )(using HasRpc[Rpcs, rpc.type], NoTag[Request]): (ZStream[Any, StatusException, Request], Metadata) => IO[StatusException, (Response, Metadata)] = {
     val descriptor = rpc.toMethodDescriptor(service)
     (reqs, md) =>
-      clientStreamingRun(descriptor, options(CallOptions.DEFAULT), md, reqs).map { case (resp, headers, trailers) =>
+      clientStreamingRun(descriptor, options, md, reqs).map { case (resp, headers, trailers) =>
         (resp, ClientBackend.mergeMetadata(headers, trailers))
       }
   }
@@ -291,7 +291,7 @@ class ZioClientBackend(channel: Channel, runtime: Runtime[Any], prefetchN: Int)
     options: CallOptions => CallOptions
   )(using HasRpc[Rpcs, rpc.type], NoTag[Response]): (Request, Metadata) => ZStream[Any, StatusException, Response] = {
     val descriptor = rpc.toMethodDescriptor(service)
-    (req, md) => serverStreamingRun(descriptor, options(CallOptions.DEFAULT), md, req)
+    (req, md) => serverStreamingRun(descriptor, options, md, req)
   }
 
   def clientWithMetadata[Rpcs, Request, Response](
@@ -304,7 +304,7 @@ class ZioClientBackend(channel: Channel, runtime: Runtime[Any], prefetchN: Int)
     NoTag[Response]
   ): (ZStream[Any, StatusException, Request], Metadata) => ZStream[Any, StatusException, Response] = {
     val descriptor = rpc.toMethodDescriptor(service)
-    (reqs, md) => bidiRun(descriptor, options(CallOptions.DEFAULT), md, reqs)
+    (reqs, md) => bidiRun(descriptor, options, md, reqs)
   }
 }
 

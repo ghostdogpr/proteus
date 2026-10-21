@@ -231,4 +231,13 @@ object ClientBackend {
     if (trailers != null) combined.merge(trailers)
     combined
   }
+
+  /**
+    * Returns a fresh copy of request headers, so that each call gets its own `Metadata` (gRPC mutates the headers passed to `ClientCall.start`).
+    */
+  def copyMetadata(headers: Metadata): Metadata = {
+    val copy = new Metadata()
+    copy.merge(headers)
+    copy
+  }
 }

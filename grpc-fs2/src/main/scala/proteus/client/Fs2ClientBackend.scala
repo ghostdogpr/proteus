@@ -92,14 +92,14 @@ class Fs2ClientBackend[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F],
 
   private def unaryRun[Request, Response](
     descriptor: MethodDescriptor[Request, Response],
-    options: CallOptions,
+    options: CallOptions => CallOptions,
     headers: Metadata,
     request: Request
   ): F[(Response, Metadata, Metadata)] = F.defer {
-    val call     = channel.newCall(descriptor, options)
+    val call     = channel.newCall(descriptor, options(CallOptions.DEFAULT))
     val listener = new UnaryListener[Response]
     F.delay {
-      call.start(listener, headers)
+      call.start(listener, ClientBackend.copyMetadata(headers))
       call.request(1)
       call.sendMessage(request)
       call.halfClose()
@@ -127,16 +127,16 @@ class Fs2ClientBackend[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F],
 
   private def serverStreamingRun[Request, Response](
     descriptor: MethodDescriptor[Request, Response],
-    options: CallOptions,
+    options: CallOptions => CallOptions,
     headers: Metadata,
     request: Request
   ): Stream[F, Response] =
     Stream
       .eval(F.delay {
-        val call  = channel.newCall(descriptor, options)
+        val call  = channel.newCall(descriptor, options(CallOptions.DEFAULT))
         val queue = dispatcher.unsafeRunSync(Queue.unbounded[F, Either[StatusException, Option[Response]]])
         val l     = new StreamingListener[Response](queue)
-        call.start(l, headers)
+        call.start(l, ClientBackend.copyMetadata(headers))
         call.request(prefetch)
         call.sendMessage(request)
         call.halfClose()
@@ -146,16 +146,16 @@ class Fs2ClientBackend[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F],
 
   private def clientStreamingRun[Request, Response](
     descriptor: MethodDescriptor[Request, Response],
-    options: CallOptions,
+    options: CallOptions => CallOptions,
     headers: Metadata,
     requestStream: Stream[F, Request]
   ): F[(Response, Metadata, Metadata)] = F.defer {
-    val call        = channel.newCall(descriptor, options)
+    val call        = channel.newCall(descriptor, options(CallOptions.DEFAULT))
     val readySignal = new ClientReadySignal(call)
     val listener    = new UnaryListener[Response] {
       override def onReady(): Unit = readySignal.signal()
     }
-    call.start(listener, headers)
+    call.start(listener, ClientBackend.copyMetadata(headers))
     call.request(1)
 
     val sendAll: F[Unit] =
@@ -192,17 +192,17 @@ class Fs2ClientBackend[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F],
 
   private def bidiRun[Request, Response](
     descriptor: MethodDescriptor[Request, Response],
-    options: CallOptions,
+    options: CallOptions => CallOptions,
     headers: Metadata,
     requestStream: Stream[F, Request]
   ): Stream[F, Response] =
     Stream
       .eval(F.delay {
-        val call        = channel.newCall(descriptor, options)
+        val call        = channel.newCall(descriptor, options(CallOptions.DEFAULT))
         val queue       = dispatcher.unsafeRunSync(Queue.unbounded[F, Either[StatusException, Option[Response]]])
         val readySignal = new ClientReadySignal(call)
         val l           = new BidiListener[Response](queue, readySignal)
-        call.start(l, headers)
+        call.start(l, ClientBackend.copyMetadata(headers))
         call.request(prefetch)
         (call, queue, readySignal)
       })
@@ -231,7 +231,7 @@ class Fs2ClientBackend[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F],
     options: CallOptions => CallOptions
   )(using HasRpc[Rpcs, rpc.type]): Request => F[Response] = {
     val descriptor = rpc.toMethodDescriptor(service)
-    req => unaryRun(descriptor, options(CallOptions.DEFAULT), new Metadata(), req).map(_._1)
+    req => unaryRun(descriptor, options, new Metadata(), req).map(_._1)
   }
 
   def client[Rpcs, Request, Response](
@@ -240,7 +240,7 @@ class Fs2ClientBackend[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F],
     options: CallOptions => CallOptions
   )(using HasRpc[Rpcs, rpc.type], NoTag[Request]): Stream[F, Request] => F[Response] = {
     val descriptor = rpc.toMethodDescriptor(service)
-    reqs => clientStreamingRun(descriptor, options(CallOptions.DEFAULT), new Metadata(), reqs).map(_._1)
+    reqs => clientStreamingRun(descriptor, options, new Metadata(), reqs).map(_._1)
   }
 
   def client[Rpcs, Request, Response](
@@ -249,7 +249,7 @@ class Fs2ClientBackend[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F],
     options: CallOptions => CallOptions
   )(using HasRpc[Rpcs, rpc.type], NoTag[Response]): Request => Stream[F, Response] = {
     val descriptor = rpc.toMethodDescriptor(service)
-    req => serverStreamingRun(descriptor, options(CallOptions.DEFAULT), new Metadata(), req)
+    req => serverStreamingRun(descriptor, options, new Metadata(), req)
   }
 
   def client[Rpcs, Request, Response](
@@ -258,7 +258,7 @@ class Fs2ClientBackend[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F],
     options: CallOptions => CallOptions
   )(using HasRpc[Rpcs, rpc.type], NoTag[Request], NoTag[Response]): Stream[F, Request] => Stream[F, Response] = {
     val descriptor = rpc.toMethodDescriptor(service)
-    reqs => bidiRun(descriptor, options(CallOptions.DEFAULT), new Metadata(), reqs)
+    reqs => bidiRun(descriptor, options, new Metadata(), reqs)
   }
 
   def clientWithMetadata[Rpcs, Request, Response](
@@ -268,7 +268,7 @@ class Fs2ClientBackend[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F],
   )(using HasRpc[Rpcs, rpc.type]): (Request, Metadata) => F[(Response, Metadata)] = {
     val descriptor = rpc.toMethodDescriptor(service)
     (req, md) =>
-      unaryRun(descriptor, options(CallOptions.DEFAULT), md, req).map { case (resp, headers, trailers) =>
+      unaryRun(descriptor, options, md, req).map { case (resp, headers, trailers) =>
         (resp, ClientBackend.mergeMetadata(headers, trailers))
       }
   }
@@ -280,7 +280,7 @@ class Fs2ClientBackend[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F],
   )(using HasRpc[Rpcs, rpc.type], NoTag[Request]): (Stream[F, Request], Metadata) => F[(Response, Metadata)] = {
     val descriptor = rpc.toMethodDescriptor(service)
     (reqs, md) =>
-      clientStreamingRun(descriptor, options(CallOptions.DEFAULT), md, reqs).map { case (resp, headers, trailers) =>
+      clientStreamingRun(descriptor, options, md, reqs).map { case (resp, headers, trailers) =>
         (resp, ClientBackend.mergeMetadata(headers, trailers))
       }
   }
@@ -291,7 +291,7 @@ class Fs2ClientBackend[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F],
     options: CallOptions => CallOptions
   )(using HasRpc[Rpcs, rpc.type], NoTag[Response]): (Request, Metadata) => Stream[F, Response] = {
     val descriptor = rpc.toMethodDescriptor(service)
-    (req, md) => serverStreamingRun(descriptor, options(CallOptions.DEFAULT), md, req)
+    (req, md) => serverStreamingRun(descriptor, options, md, req)
   }
 
   def clientWithMetadata[Rpcs, Request, Response](
@@ -300,7 +300,7 @@ class Fs2ClientBackend[F[_]: Async](channel: Channel, dispatcher: Dispatcher[F],
     options: CallOptions => CallOptions
   )(using HasRpc[Rpcs, rpc.type], NoTag[Request], NoTag[Response]): (Stream[F, Request], Metadata) => Stream[F, Response] = {
     val descriptor = rpc.toMethodDescriptor(service)
-    (reqs, md) => bidiRun(descriptor, options(CallOptions.DEFAULT), md, reqs)
+    (reqs, md) => bidiRun(descriptor, options, md, reqs)
   }
 }
 
