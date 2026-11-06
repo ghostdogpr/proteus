@@ -42,6 +42,26 @@ message SimpleMessage {
 
         assertTrue(rendered == expected)
       },
+      test("field names with acronyms and digits are split at word boundaries") {
+        case class Links(userID: Int, URL: String, s3URLPath: String, sha256Hash: String, address2Line: String, already_snake: Int) derives Schema
+
+        val rendered = renderCodec(Schema[Links].derive(deriver))
+        val expected = """syntax = "proto3";
+
+package test;
+
+message Links {
+    int32 user_id = 1;
+    string url = 2;
+    string s3_url_path = 3;
+    string sha256_hash = 4;
+    string address2_line = 5;
+    int32 already_snake = 6;
+}
+"""
+
+        assertTrue(rendered == expected)
+      },
       test("enum renders correctly") {
         enum Status derives Schema { case Active, Inactive, Pending }
         case class StatusMessage(status: Status) derives Schema
@@ -1631,6 +1651,95 @@ enum IOUtils {
 
         assertTrue(rendered == expected)
       },
+      test("enum members already in upper case are kept as is") {
+        enum PlaybackOrder derives Schema { case LINEAR, SHUFFLE, SMART_SHUFFLE }
+        case class Playback(order: PlaybackOrder) derives Schema
+
+        val standardRendered   = renderCodec(Schema[Playback].derive(deriver))
+        val autoPrefixRendered = renderCodec(Schema[Playback].derive(deriverWithAutoPrefixEnums))
+
+        val expectedStandard = """syntax = "proto3";
+
+package test;
+
+message Playback {
+    PlaybackOrder order = 1;
+}
+
+enum PlaybackOrder {
+    LINEAR = 0;
+    SHUFFLE = 1;
+    SMART_SHUFFLE = 2;
+}
+"""
+
+        val expectedAutoPrefix = """syntax = "proto3";
+
+package test;
+
+message Playback {
+    PlaybackOrder order = 1;
+}
+
+enum PlaybackOrder {
+    PLAYBACK_ORDER_LINEAR = 0;
+    PLAYBACK_ORDER_SHUFFLE = 1;
+    PLAYBACK_ORDER_SMART_SHUFFLE = 2;
+}
+"""
+
+        assertTrue(standardRendered == expectedStandard) &&
+          assertTrue(autoPrefixRendered == expectedAutoPrefix)
+      },
+      test("case object enum members already in upper case are kept as is") {
+        sealed trait Result derives Schema
+        object Result {
+          case object OK    extends Result
+          case object ERROR extends Result
+        }
+        case class Response(result: Result) derives Schema
+
+        val rendered = renderCodec(Schema[Response].derive(deriver))
+        val expected = """syntax = "proto3";
+
+package test;
+
+message Response {
+    Result result = 1;
+}
+
+enum Result {
+    OK = 0;
+    ERROR = 1;
+}
+"""
+
+        assertTrue(rendered == expected)
+      },
+      test("enum members with acronyms and digits are split at word boundaries") {
+        enum Failure derives Schema { case HTTPError, TimedOutIO, Http2Reset, A1, Mixed_Case }
+        case class FailureMessage(failure: Failure) derives Schema
+
+        val rendered = renderCodec(Schema[FailureMessage].derive(deriver))
+        val expected = """syntax = "proto3";
+
+package test;
+
+message FailureMessage {
+    Failure failure = 1;
+}
+
+enum Failure {
+    HTTP_ERROR = 0;
+    TIMED_OUT_IO = 1;
+    HTTP2_RESET = 2;
+    A1 = 3;
+    MIXED_CASE = 4;
+}
+"""
+
+        assertTrue(rendered == expected)
+      },
       test("proteus enum suffix modifier adds suffix to enum members") {
         enum Priority derives Schema { case Low, Medium, High }
         case class PriorityMessage(priority: Priority) derives Schema
@@ -2093,7 +2202,7 @@ enum Status {
           .modifier[Cookie]("seq", deprecated)
           .modifier[Cookie]("grade", comment("comment"))
           .customizeEnums { e =>
-            val prefix = proteus.internal.typeNameToUpperSnakeCase(e.name) + "_"
+            val prefix = proteus.internal.toUpperSnakeCase(e.name) + "_"
             e.copy(
               options = e.options :+ OptionValue.identifier(OptionName.Extension("spec.type"), "FIELD_TYPE_STRING"),
               values = e.values.map(v => v.copy(options = v.options :+ OptionValue.stringLit(specValue, v.name.stripPrefix(prefix))))

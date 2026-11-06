@@ -331,6 +331,13 @@ object JsonSpec extends ZIOSpecDefault {
 
         assertTrue(result == """{"userId":123,"fullName":"Alice"}""")
       },
+      test("toJson uses the proto field name for field names with acronyms") {
+        case class Link(userID: Int, URL: String, releaseDate: String) derives Schema, ProtobufCodec
+        val instance = Link(1, "a", "b")
+        val result   = instance.asJson.noSpaces
+
+        assertTrue(result == """{"userId":1,"url":"a","releaseDate":"b"}""")
+      },
       test("toJson respects excluded modifier") {
         case class User(id: Int, name: String, secret: String) derives Schema, ProtobufCodec
         given ProtobufDeriver = ProtobufDeriver.modifier[User]("secret", excluded)

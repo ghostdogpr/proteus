@@ -24,6 +24,17 @@ object FileDescriptorSpec extends ZIOSpecDefault {
         assertTrue(fd.findMessageTypeByName("Resp") != null) &&
         assertTrue(fd.findServiceByName("Svc") != null)
     },
+    test("service file and field names treat an acronym as one word") {
+      case class Req(userID: Int) derives Schema, ProtobufCodec
+      case class Resp(ok: Boolean) derives Schema, ProtobufCodec
+
+      val fd    = Service("test.pkg", "HTTPGateway").rpc(Rpc.unary[Req, Resp]("Do")).fileDescriptor
+      val field = fd.findMessageTypeByName("Req").getFields.get(0)
+
+      assertTrue(fd.getName == "test/pkg/http_gateway.proto") &&
+        assertTrue(field.getName == "user_id") &&
+        assertTrue(field.getJsonName == "userId")
+    },
     test("nestedIn: child lives under its parent and refs resolve to the nested FQN") {
       case class Inner(v: String) derives Schema
       case class Parent(inner: Inner) derives Schema

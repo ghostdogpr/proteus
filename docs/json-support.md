@@ -26,7 +26,7 @@ println(json)
 ```
 
 ::: tip
-Field names are automatically converted to camelCase in the JSON output (e.g., `release_date` becomes `releaseDate`). Null values are filtered out.
+Field names are automatically converted to camelCase in the JSON output (e.g., `release_date` becomes `releaseDate`). The conversion starts from the proto field name, so a Scala field `userID` is rendered as `user_id` and appears as `userId` in JSON. Null values are filtered out.
 :::
 
 ## Registry

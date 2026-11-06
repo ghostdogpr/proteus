@@ -666,12 +666,12 @@ case class ProtobufDeriver private (
   private def getEnumPrefix(modifiers: Seq[Modifier], flags: Set[DerivationFlag], typeId: TypeId[?]): String =
     modifiers
       .collectFirst { case Modifier.config(`enumPrefixModifier`, prefix) => prefix }
-      .getOrElse(if (flags.contains(DerivationFlag.AutoPrefixEnums)) typeNameToUpperSnakeCase(getTypeName(typeId, modifiers)) else "")
+      .getOrElse(if (flags.contains(DerivationFlag.AutoPrefixEnums)) toUpperSnakeCase(getTypeName(typeId, modifiers)) else "")
 
   private def getEnumSuffix(modifiers: Seq[Modifier], flags: Set[DerivationFlag], typeId: TypeId[?]): String =
     modifiers
       .collectFirst { case Modifier.config(`enumSuffixModifier`, suffix) => suffix }
-      .getOrElse(if (flags.contains(DerivationFlag.AutoSuffixEnums)) typeNameToUpperSnakeCase(getTypeName(typeId, modifiers)) else "")
+      .getOrElse(if (flags.contains(DerivationFlag.AutoSuffixEnums)) toUpperSnakeCase(getTypeName(typeId, modifiers)) else "")
 
   private def getComment(modifiers: Seq[Modifier]): Option[String] =
     modifiers.collectFirst { case Modifier.config(`commentModifier`, value) => value }
