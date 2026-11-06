@@ -1,5 +1,7 @@
 package proteus
 
+import java.nio.file.Files
+
 import zio.blocks.schema.Schema
 import zio.test.*
 
@@ -601,6 +603,18 @@ message SharedMessage {
 """
 
         assertTrue(rendered == expected)
+      },
+      test("should import a dependency from the file it is written to") {
+        val folder  = Files.createTempDirectory("proteus-render-spec")
+        val dep     = Dependency("CommonTypes", "test.package", "protos/shared").add[SharedMessage]
+        val parent  = Dependency("Parent").add[RequestWithShared].dependsOn(dep)
+        val svc     = Service("test.package", "ServiceWithShared").rpc(sharedRpc).dependsOn(dep)
+        val import_ = "import \"protos/shared/common_types.proto\";"
+        dep.renderToFile(options, folder.toString)
+
+        assertTrue(Files.exists(folder.resolve("protos/shared/common_types.proto"))) &&
+          assertTrue(svc.render(options).contains(import_)) &&
+          assertTrue(parent.render(options).contains(import_))
       },
       test("should render dependency with enum types") {
         val enumDep  = Dependency("enums").add[Priority]

@@ -151,7 +151,7 @@ extension (dependency: Dependency) {
       val sharedFileBuilder         =
         FileDescriptorProto
           .newBuilder()
-          .setName(s"${dependency.path.fold("")(_ + "/")}${dependency.dependencyName}.proto")
+          .setName(dependency.filePath)
           .setPackage(dependency.packageName.getOrElse(""))
       val dependencyFileDescriptors = dependency.filteredDependencies.flatMap(_.fileDescriptor)
       dependencyFileDescriptors.foreach(fd => sharedFileBuilder.addDependency(fd.getName))

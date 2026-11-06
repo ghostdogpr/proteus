@@ -29,8 +29,11 @@ final case class Dependency(
     allDependencies.foldLeft(ProtobufCodec.fqnsByTypeId(types, pkgPrefix))(_ ++ _.topLevelFqns)
   }
 
+  private[proteus] lazy val filePath: String =
+    s"${path.fold("")(_ + "/")}${internal.toSnakeCase(dependencyName)}.proto"
+
   private[proteus] lazy val toImportStatement: ProtoIR.Statement.ImportStatement =
-    ProtoIR.Statement.ImportStatement(s"${path.fold("")(_ + "/")}$dependencyName.proto")
+    ProtoIR.Statement.ImportStatement(filePath)
 
   private lazy val subDepPaths: Map[String, String] =
     filteredDependencies.toList.flatMap(dep => ProtobufCodec.nestedInPaths(dep.types.toList)).toMap
@@ -96,8 +99,7 @@ final case class Dependency(
     */
   def renderToFile(options: List[ProtoIR.TopLevelOption], folder: String): Unit = {
     val rendered = render(options)
-    val fileName = s"${internal.toSnakeCase(dependencyName)}.proto"
-    val fullPath = path.fold(Path.of(folder, fileName))(Path.of(folder, _, fileName))
+    val fullPath = Path.of(folder, filePath)
     Files.createDirectories(fullPath.getParent)
     Files.write(fullPath, rendered.getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING): Unit
   }
