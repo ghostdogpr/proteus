@@ -288,6 +288,16 @@ object FileDescriptorSpec extends ZIOSpecDefault {
 
       val parent = depFd(fd, "entities").findMessageTypeByName("Parent")
       assertTrue(parent.getNestedTypes.asScala.count(_.getName == "Inner") == 1)
+    },
+    test("dependency descriptor is named after the file the dependency is written to") {
+      case class Shared(v: String) derives Schema, ProtobufCodec
+      case class Req(shared: Shared) derives Schema, ProtobufCodec
+      case class Resp(ok: Boolean) derives Schema, ProtobufCodec
+
+      val dep = Dependency("CommonTypes", "test.pkg", "protos/shared").add[Shared]
+      val fd  = Service("test.pkg", "Svc").rpc(Rpc.unary[Req, Resp]("Do")).dependsOn(dep).fileDescriptor
+
+      assertTrue(fd.getDependencies.asScala.map(_.getName).toList == List("protos/shared/common_types.proto"))
     }
   )
 }
