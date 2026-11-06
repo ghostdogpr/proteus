@@ -36,7 +36,7 @@ private[proteus] def toSnakeCase(s: String): String =
   s.split("(?=[A-Z])").map(_.toLowerCase).mkString("_")
 
 private[proteus] def toUpperSnakeCase(s: String): String =
-  s.split("(?=[A-Z])").map(_.toUpperCase).mkString("_")
+  s.replaceAll("([a-z0-9])([A-Z])", "$1_$2").replaceAll("([A-Z])([A-Z][a-z])", "$1_$2").toUpperCase
 
 private[proteus] def toCamelCase(s: String): String =
   s.split("_").toList match {
@@ -49,9 +49,6 @@ private[proteus] def toUpperCamelCase(s: String): String =
     case Nil   => ""
     case parts => parts.map(_.capitalize).mkString
   }
-
-private[proteus] def typeNameToUpperSnakeCase(s: String): String =
-  s.replaceAll("([a-z0-9])([A-Z])", "$1_$2").replaceAll("([A-Z])([A-Z][a-z])", "$1_$2").toUpperCase
 
 private[proteus] def encodeNestedIn(fullName: String): String      =
   s"$nestedInModifierPrefix$fullName"
