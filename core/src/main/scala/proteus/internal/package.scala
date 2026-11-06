@@ -32,11 +32,14 @@ private[proteus] def setToRegister[A](registers: Registers, offset: RegisterOffs
     case Register.Unit           => Register.Unit.set(registers, offset, value)
   }
 
+private def separateWords(s: String): String =
+  s.replaceAll("([a-z0-9])([A-Z])", "$1_$2").replaceAll("([A-Z])([A-Z][a-z])", "$1_$2")
+
 private[proteus] def toSnakeCase(s: String): String =
-  s.split("(?=[A-Z])").map(_.toLowerCase).mkString("_")
+  separateWords(s).toLowerCase
 
 private[proteus] def toUpperSnakeCase(s: String): String =
-  s.replaceAll("([a-z0-9])([A-Z])", "$1_$2").replaceAll("([A-Z])([A-Z][a-z])", "$1_$2").toUpperCase
+  separateWords(s).toUpperCase
 
 private[proteus] def toCamelCase(s: String): String =
   s.split("_").toList match {

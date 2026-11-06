@@ -42,6 +42,26 @@ message SimpleMessage {
 
         assertTrue(rendered == expected)
       },
+      test("field names with acronyms and digits are split at word boundaries") {
+        case class Links(userID: Int, URL: String, s3URLPath: String, sha256Hash: String, address2Line: String, already_snake: Int) derives Schema
+
+        val rendered = renderCodec(Schema[Links].derive(deriver))
+        val expected = """syntax = "proto3";
+
+package test;
+
+message Links {
+    int32 user_id = 1;
+    string url = 2;
+    string s3_url_path = 3;
+    string sha256_hash = 4;
+    string address2_line = 5;
+    int32 already_snake = 6;
+}
+"""
+
+        assertTrue(rendered == expected)
+      },
       test("enum renders correctly") {
         enum Status derives Schema { case Active, Inactive, Pending }
         case class StatusMessage(status: Status) derives Schema

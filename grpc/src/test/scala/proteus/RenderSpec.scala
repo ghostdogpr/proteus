@@ -1,5 +1,7 @@
 package proteus
 
+import java.nio.file.Files
+
 import zio.blocks.schema.Schema
 import zio.test.*
 
@@ -998,6 +1000,12 @@ message Address {
           }
 
         assertTrue(error == "")
+      },
+      test("should keep runs of capitals together in the dependency file name") {
+        val folder = Files.createTempDirectory("proteus-render-spec")
+        Dependency("HTTPTypes").add[SharedMessage].renderToFile(options, folder.toString)
+
+        assertTrue(Files.exists(folder.resolve("http_types.proto")))
       }
     )
   )
