@@ -1001,7 +1001,7 @@ message Address {
 
         assertTrue(error == "")
       },
-      test("should keep runs of capitals together in the dependency file name") {
+      test("should treat an acronym as one word in the dependency file name") {
         val folder = Files.createTempDirectory("proteus-render-spec")
         Dependency("HTTPTypes").add[SharedMessage].renderToFile(options, folder.toString)
 

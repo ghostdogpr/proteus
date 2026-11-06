@@ -24,7 +24,7 @@ object FileDescriptorSpec extends ZIOSpecDefault {
         assertTrue(fd.findMessageTypeByName("Resp") != null) &&
         assertTrue(fd.findServiceByName("Svc") != null)
     },
-    test("service file and field names keep runs of capitals together") {
+    test("service file and field names treat an acronym as one word") {
       case class Req(userID: Int) derives Schema, ProtobufCodec
       case class Resp(ok: Boolean) derives Schema, ProtobufCodec
 
