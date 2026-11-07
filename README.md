@@ -15,8 +15,6 @@ Proteus also ships **[proteus-diff](https://ghostdogpr.github.io/proteus/proteus
 
 ### Consult the [Documentation](https://ghostdogpr.github.io/proteus/) to learn how to use Proteus.
 
-### Part of the [ghostdogpr stack](https://ghostdogpr.github.io/).
-
 ### Watch the talk: [Proteus: Protobuf goes Scala-first](https://youtu.be/zTq9gdImhpk)
 
 [![Proteus: Protobuf goes Scala-first](https://img.youtube.com/vi/zTq9gdImhpk/maxresdefault.jpg)](https://youtu.be/zTq9gdImhpk)

@@ -17,7 +17,6 @@ export default defineConfig({
       { text: 'Guides', link: '/migrating-to-proteus' },
       { text: 'FAQ', link: '/faq' },
       { text: 'About', link: '/about' },
-      { text: 'ghostdogpr stack', link: 'https://ghostdogpr.github.io/' },
     ],
 
     logo: '/proteus.svg',
