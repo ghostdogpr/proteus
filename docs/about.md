@@ -8,4 +8,6 @@
 - **[PureLogic](https://github.com/ghostdogpr/purelogic)** — A direct-style, pure domain logic library for Scala
 - **[Sage](https://github.com/ghostdogpr/sage)** — A modern and fast Redis/Valkey client for Scala
 
+See them all on the [ghostdogpr stack](https://ghostdogpr.github.io/) page.
+
 If you find Proteus useful, consider [sponsoring me on GitHub](https://github.com/sponsors/ghostdogpr) to support continued development.

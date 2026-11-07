@@ -1,3 +1,20 @@
 :root {
     --vp-home-hero-name-color: #CB4239;
 }
+
+.stack-badge {
+    display: inline-block;
+    margin-bottom: 16px;
+    padding: 4px 12px;
+    border-radius: 999px;
+    background: var(--vp-c-default-soft);
+    color: var(--vp-c-text-2);
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 20px;
+    transition: color 0.25s;
+}
+
+.stack-badge:hover {
+    color: var(--vp-c-brand-1);
+}
