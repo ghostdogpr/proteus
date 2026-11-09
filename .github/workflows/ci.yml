@@ -20,6 +20,11 @@ jobs:
           fetch-depth: 0
       - name: Cache scala dependencies
         uses: coursier/cache-action@v8
+      - name: Cache Coursier binary
+        uses: actions/cache@v6
+        with:
+          path: /opt/hostedtoolcache/cs
+          key: coursier-binary-${{ runner.os }}-${{ runner.arch }}-setup-action-v3
       - name: Setup Scala and Java
         uses: coursier/setup-action@v3
         with:
@@ -39,6 +44,11 @@ jobs:
           fetch-depth: 0
       - name: Cache scala dependencies
         uses: coursier/cache-action@v8
+      - name: Cache Coursier binary
+        uses: actions/cache@v6
+        with:
+          path: /opt/hostedtoolcache/cs
+          key: coursier-binary-${{ runner.os }}-${{ runner.arch }}-setup-action-v3
       - name: Setup Scala and Java
         uses: coursier/setup-action@v3
         with:
@@ -58,6 +68,11 @@ jobs:
           fetch-depth: 0
       - name: Cache scala dependencies
         uses: coursier/cache-action@v8
+      - name: Cache Coursier binary
+        uses: actions/cache@v6
+        with:
+          path: /opt/hostedtoolcache/cs
+          key: coursier-binary-${{ runner.os }}-${{ runner.arch }}-setup-action-v3
       - name: Setup Scala and Java
         uses: coursier/setup-action@v3
         with:
