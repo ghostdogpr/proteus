@@ -18,13 +18,13 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
+      - name: Cache scala dependencies
+        uses: coursier/cache-action@v8
       - name: Setup Scala and Java
         uses: coursier/setup-action@v3
         with:
           jvm: temurin:25
           apps: sbt
-      - name: Cache scala dependencies
-        uses: coursier/cache-action@v8
       - name: Lint code
         run: sbt check
 
@@ -37,13 +37,13 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
+      - name: Cache scala dependencies
+        uses: coursier/cache-action@v8
       - name: Setup Scala and Java
         uses: coursier/setup-action@v3
         with:
           jvm: temurin:25
           apps: sbt
-      - name: Cache scala dependencies
-        uses: coursier/cache-action@v8
       - name: Run tests
         run: sbt test
 
@@ -56,13 +56,13 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
+      - name: Cache scala dependencies
+        uses: coursier/cache-action@v8
       - name: Setup Scala and Java
         uses: coursier/setup-action@v3
         with:
           jvm: temurin:25
           apps: sbt
-      - name: Cache scala dependencies
-        uses: coursier/cache-action@v8
       - name: Release artifacts
         run: sbt ci-release
         env:
