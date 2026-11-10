@@ -1,7 +1,7 @@
 package proteus
 package client
 
-import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
 
 import io.grpc.*
 import zio.*
@@ -84,6 +84,21 @@ class ZioClientBackend(channel: Channel, runtime: Runtime[Any], prefetchN: Int)
     override def onReady(): Unit = readySignal.signal()
   }
 
+  // grpc-java throws on sendMessage/halfClose after cancel
+  final private class CancellableCall(call: ClientCall[?, ?]) {
+    private val cancelled = new AtomicBoolean(false)
+
+    def cancel(message: String, cause: Throwable): Unit = {
+      cancelled.set(true)
+      call.cancel(message, cause)
+    }
+
+    def unlessCancelled(f: => Unit): Unit =
+      if (!cancelled.get())
+        try f
+        catch { case _: IllegalStateException if cancelled.get() => () }
+  }
+
   private def unaryRun[Request, Response](
     descriptor: MethodDescriptor[Request, Response],
     options: CallOptions => CallOptions,
@@ -107,13 +122,14 @@ class ZioClientBackend(channel: Channel, runtime: Runtime[Any], prefetchN: Int)
 
   private def streamFromQueue[Response](
     call: ClientCall[?, Response],
-    queue: Queue[Take[StatusException, Response]]
+    queue: Queue[Take[StatusException, Response]],
+    cancel: (String, Throwable) => Unit
   ): ZStream[Any, StatusException, Response] =
     ZStream
       .fromQueue(queue, prefetch)
       .flattenTake
       .tapChunks(chunk => ZIO.succeed(if (chunk.nonEmpty) call.request(chunk.size)))
-      .ensuring(ZIO.succeed(call.cancel("Stream ended", null)))
+      .ensuring(ZIO.succeed(cancel("Stream ended", null)))
 
   private def serverStreamingRun[Request, Response](
     descriptor: MethodDescriptor[Request, Response],
@@ -135,7 +151,7 @@ class ZioClientBackend(channel: Channel, runtime: Runtime[Any], prefetchN: Int)
           }
           .foldZIO(
             e => ZIO.succeed(call.cancel("Failed to start server-streaming", e)).as(ZStream.fail(ClientBackend.toStatusException(e))),
-            _ => ZIO.succeed(streamFromQueue(call, queue))
+            _ => ZIO.succeed(streamFromQueue(call, queue, call.cancel))
           )
       }
     )
@@ -175,7 +191,7 @@ class ZioClientBackend(channel: Channel, runtime: Runtime[Any], prefetchN: Int)
           // the sender as soon as the response arrives, to avoid pushing into a closed call.
           ZIO
             .uninterruptibleMask { restore =>
-              send.forkDaemon.flatMap { senderFiber =>
+              restore(send).forkDaemon.flatMap { senderFiber =>
                 restore(listener.promise.await).onExit(_ => senderFiber.interrupt)
               }
             }
@@ -195,12 +211,13 @@ class ZioClientBackend(channel: Channel, runtime: Runtime[Any], prefetchN: Int)
         val queue       = Unsafe.unsafely(Queue.unsafe.unbounded[Take[StatusException, Response]](FiberId.None))
         val readySignal = new ClientReadySignal(call)
         val listener    = new BidiListener[Response](queue, readySignal)
+        val cancellable = new CancellableCall(call)
 
         val sendAll = (requestStream.runForeach { req =>
-          if (call.isReady) ZIO.succeed(call.sendMessage(req))
-          else readySignal.await *> ZIO.succeed(call.sendMessage(req))
-        } *> ZIO.succeed(call.halfClose()))
-          .catchAll(e => ZIO.succeed(call.cancel("Error sending requests", e)) *> ZIO.fail(e))
+          if (call.isReady) ZIO.succeed(cancellable.unlessCancelled(call.sendMessage(req)))
+          else readySignal.await *> ZIO.succeed(cancellable.unlessCancelled(call.sendMessage(req)))
+        } *> ZIO.succeed(cancellable.unlessCancelled(call.halfClose())))
+          .catchAll(e => ZIO.succeed(cancellable.cancel("Error sending requests", e)) *> ZIO.fail(e))
 
         ZIO
           .attempt {
@@ -215,7 +232,7 @@ class ZioClientBackend(channel: Channel, runtime: Runtime[Any], prefetchN: Int)
                 ZStream
                   .fromZIO(sendAll)
                   .drain
-                  .merge(streamFromQueue(call, queue), ZStream.HaltStrategy.Right)
+                  .merge(streamFromQueue(call, queue, cancellable.cancel), ZStream.HaltStrategy.Right)
               )
           )
       }
