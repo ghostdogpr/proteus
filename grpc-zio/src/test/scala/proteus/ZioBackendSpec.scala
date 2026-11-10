@@ -48,6 +48,12 @@ object ZioBackendSpec extends ZIOSpecDefault {
     .rpc(bidiStreamingRpc, bidiStreamingZio)
     .build(streamingService)
 
+  val firstMessageServerService = ServerService(using ZioServerBackend)
+    .rpc(clientStreamingRpc, (stream: ZStream[Any, StatusException, StreamRequest]) => stream.runHead.map(h => StreamResponse(h.fold(0)(_.value))))
+    .rpc(serverStreamingRpc, serverStreamingZio)
+    .rpc(bidiStreamingRpc, bidiStreamingZio)
+    .build(streamingService)
+
   private val throwOnStartInterceptor = new ClientInterceptor {
     def interceptCall[Req, Resp](method: MethodDescriptor[Req, Resp], callOptions: CallOptions, next: Channel): ClientCall[Req, Resp] =
       new ForwardingClientCall.SimpleForwardingClientCall[Req, Resp](next.newCall(method, callOptions)) {
@@ -300,6 +306,41 @@ object ZioBackendSpec extends ZIOSpecDefault {
       client(requestStream).exit
         .timeout(Duration.fromSeconds(10))
         .flatMap(result => assertTrue(result.exists(_.isFailure)))
+        .ensuring(ZIO.attempt {
+          server.shutdown().awaitTermination(5, TimeUnit.SECONDS)
+          channel.shutdown().awaitTermination(5, TimeUnit.SECONDS)
+        }.ignore)
+    } @@ TestAspect.withLiveClock,
+    test("client streaming should return when the server replies before the request stream ends") {
+      val port          = 7024
+      val server        = NettyServerBuilder.forPort(port).addService(firstMessageServerService).build().start()
+      val channel       = NettyChannelBuilder.forAddress("localhost", port).usePlaintext().build()
+      val clientBackend = ZioClientBackend(channel)
+
+      val client        = clientBackend.client(clientStreamingRpc, streamingService)
+      val requestStream = ZStream.succeed(StreamRequest(5)) ++ ZStream.never
+
+      client(requestStream).disconnect
+        .timeout(Duration.fromSeconds(10))
+        .flatMap(result => assertTrue(result.map(_.result) == Some(5)))
+        .ensuring(ZIO.attempt {
+          server.shutdown().awaitTermination(5, TimeUnit.SECONDS)
+          channel.shutdown().awaitTermination(5, TimeUnit.SECONDS)
+        }.ignore)
+    } @@ TestAspect.withLiveClock,
+    test("client streaming should be interruptible while the request stream is pending") {
+      val port          = 7025
+      val server        = NettyServerBuilder.forPort(port).addService(streamingServerService).build().start()
+      val channel       = NettyChannelBuilder.forAddress("localhost", port).usePlaintext().build()
+      val clientBackend = ZioClientBackend(channel)
+
+      val client = clientBackend.client(clientStreamingRpc, streamingService)
+
+      client(ZStream.never)
+        .timeout(Duration.fromMillis(500))
+        .disconnect
+        .timeout(Duration.fromSeconds(10))
+        .flatMap(result => assertTrue(result == Some(None)))
         .ensuring(ZIO.attempt {
           server.shutdown().awaitTermination(5, TimeUnit.SECONDS)
           channel.shutdown().awaitTermination(5, TimeUnit.SECONDS)
