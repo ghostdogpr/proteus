@@ -31,6 +31,11 @@ inThisBuild(
 
 addCommandAlias("fmt", "all scalafmtSbt scalafmt Test/scalafmt")
 addCommandAlias("check", "all scalafmtSbtCheck scalafmtCheck Test/scalafmtCheck")
+addCommandAlias(
+  "mima",
+  "all core/mimaReportBinaryIssues tools/mimaReportBinaryIssues json/mimaReportBinaryIssues grpc/mimaReportBinaryIssues " +
+    "zioGrpc/mimaReportBinaryIssues fs2Grpc/mimaReportBinaryIssues oxGrpc/mimaReportBinaryIssues kyoGrpc/mimaReportBinaryIssues"
+)
 
 lazy val root = project
   .in(file("."))
@@ -49,7 +54,7 @@ lazy val core = (projectMatrix in file("core"))
         "dev.zio" %% "zio-test-sbt"      % zioVersion % Test
       )
   )
-  .jvmPlatform(scalaVersions, Seq(libraryDependencies += "io.grpc" % "grpc-protobuf" % grpcVersion))
+  .jvmPlatform(scalaVersions, Seq(libraryDependencies += "io.grpc" % "grpc-protobuf" % grpcVersion) ++ mimaSettings)
   .jsPlatform(
     scalaVersions,
     Seq(
@@ -71,7 +76,7 @@ lazy val tools = (projectMatrix in file("tools"))
       )
   )
   .dependsOn(core % "compile->compile;test->test")
-  .jvmPlatform(scalaVersions)
+  .jvmPlatform(scalaVersions, mimaSettings)
   .jsPlatform(scalaVersions, Seq(Test / fork := false))
 
 lazy val coreJVM  = core.jvm(scala3Version)
@@ -119,6 +124,7 @@ lazy val grpc = project
   .in(file("grpc"))
   .settings(name := "proteus-grpc")
   .settings(commonSettings)
+  .settings(mimaSettings)
   .settings(
     libraryDependencies ++=
       Seq(
@@ -133,6 +139,7 @@ lazy val zioGrpc = project
   .in(file("grpc-zio"))
   .settings(name := "proteus-grpc-zio")
   .settings(commonSettings)
+  .settings(mimaSettings)
   .settings(
     libraryDependencies ++= Seq(
       "dev.zio" %% "zio-streams" % zioVersion
@@ -144,6 +151,7 @@ lazy val fs2Grpc = project
   .in(file("grpc-fs2"))
   .settings(name := "proteus-grpc-fs2")
   .settings(commonSettings)
+  .settings(mimaSettings)
   .settings(
     libraryDependencies ++= Seq(
       "co.fs2"        %% "fs2-core"    % fs2Version,
@@ -156,6 +164,7 @@ lazy val oxGrpc = project
   .in(file("grpc-ox"))
   .settings(name := "proteus-grpc-ox")
   .settings(commonSettings)
+  .settings(mimaSettings)
   .settings(
     libraryDependencies ++=
       Seq(
@@ -168,6 +177,7 @@ lazy val kyoGrpc = project
   .in(file("grpc-kyo"))
   .settings(name := "proteus-grpc-kyo")
   .settings(commonSettings)
+  .settings(mimaSettings)
   .settings(
     libraryDependencies ++= Seq(
       "io.getkyo" %% "kyo-core" % kyoVersion
@@ -180,7 +190,7 @@ lazy val json = (projectMatrix in file("json"))
   .settings(commonSettings)
   .settings(libraryDependencies ++= Seq("io.circe" %% "circe-core" % circeVersion))
   .dependsOn(core % "compile->compile;test->test")
-  .jvmPlatform(scalaVersions)
+  .jvmPlatform(scalaVersions, mimaSettings)
   .jsPlatform(scalaVersions, Seq(Test / fork := false))
 
 lazy val benchmarks = project
@@ -239,5 +249,12 @@ lazy val commonSettings = Def.settings(
     "-Wvalue-discard",
     "-Xkind-projector"
   ),
+  // Scala.js output does not run on a JVM, so the JDK release target only applies to JVM builds.
+  scalacOptions ++= (if (platform.value == Platform.jvm) Seq("-release", "17") else Nil),
   Test / fork := true
+)
+
+// The JS rows share the same sources, so checking the JVM artifacts is enough.
+lazy val mimaSettings = Def.settings(
+  mimaPreviousArtifacts := previousStableVersion.value.map(organization.value %% moduleName.value % _).toSet
 )
