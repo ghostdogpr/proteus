@@ -11,8 +11,6 @@ on:
 jobs:
   lint:
     runs-on: ubuntu-24.04
-    strategy:
-      fail-fast: false
     steps:
       - name: Checkout current branch
         uses: actions/checkout@v6
@@ -32,8 +30,6 @@ jobs:
 
   test:
     runs-on: ubuntu-24.04
-    strategy:
-      fail-fast: false
     steps:
       - name: Checkout current branch
         uses: actions/checkout@v6
