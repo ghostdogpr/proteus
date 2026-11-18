@@ -12,57 +12,24 @@ jobs:
   lint:
     runs-on: ubuntu-24.04
     steps:
-      - name: Checkout current branch
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-      - name: Cache scala dependencies
-        uses: coursier/cache-action@v8
-      - name: Setup Java
-        uses: actions/setup-java@v6
-        with:
-          distribution: temurin
-          java-version: 25
-      - name: Setup sbt
-        uses: sbt/setup-sbt@v1
+      - name: Setup
+        uses: ghostdogpr/.github/actions/setup@v1
       - name: Lint code
         run: sbt --server check
 
   test:
     runs-on: ubuntu-24.04
     steps:
-      - name: Checkout current branch
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-      - name: Cache scala dependencies
-        uses: coursier/cache-action@v8
-      - name: Setup Java
-        uses: actions/setup-java@v6
-        with:
-          distribution: temurin
-          java-version: 25
-      - name: Setup sbt
-        uses: sbt/setup-sbt@v1
+      - name: Setup
+        uses: ghostdogpr/.github/actions/setup@v1
       - name: Run tests
         run: sbt --server test
 
   mima:
     runs-on: ubuntu-24.04
     steps:
-      - name: Checkout current branch
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-      - name: Cache scala dependencies
-        uses: coursier/cache-action@v8
-      - name: Setup Java
-        uses: actions/setup-java@v6
-        with:
-          distribution: temurin
-          java-version: 25
-      - name: Setup sbt
-        uses: sbt/setup-sbt@v1
+      - name: Setup
+        uses: ghostdogpr/.github/actions/setup@v1
       - name: Check binary compatibility
         run: sbt --server mima
 
@@ -71,19 +38,8 @@ jobs:
     needs: [lint, test, mima]
     if: github.event_name != 'pull_request'
     steps:
-      - name: Checkout current branch
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-      - name: Cache scala dependencies
-        uses: coursier/cache-action@v8
-      - name: Setup Java
-        uses: actions/setup-java@v6
-        with:
-          distribution: temurin
-          java-version: 25
-      - name: Setup sbt
-        uses: sbt/setup-sbt@v1
+      - name: Setup
+        uses: ghostdogpr/.github/actions/setup@v1
       - name: Release artifacts
         run: sbt --server ci-release
         env:
