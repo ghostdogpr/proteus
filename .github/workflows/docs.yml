@@ -22,57 +22,5 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-      - name: Resolve version
-        id: version
-        run: |
-          if [ "$GITHUB_EVENT_NAME" = "release" ]; then
-            VERSION="${GITHUB_REF_NAME#v}"
-          else
-            # the latest release, including pre-releases (gh release view only returns full releases)
-            VERSION=$(gh release list --exclude-drafts --limit 1 --json tagName -q '.[0].tagName' | sed 's/^v//')
-          fi
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-        env:
-          GH_TOKEN: ${{ github.token }}
-      - name: Substitute version placeholder
-        run: find docs -name '*.md' -not -path '*/node_modules/*' -exec sed -i "s/@VERSION@/$VERSION/g" {} +
-        env:
-          VERSION: ${{ steps.version.outputs.version }}
-      - name: Setup Node
-        uses: actions/setup-node@v6
-        with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: docs/package-lock.json
-      - name: Setup Pages
-        if: github.event_name != 'pull_request'
-        uses: actions/configure-pages@v6
-      - name: Install dependencies
-        run: npm ci
-        working-directory: docs
-      - name: Build with VitePress
-        run: npm run docs:build
-        working-directory: docs
-      - name: Upload artifact
-        if: github.event_name != 'pull_request'
-        uses: actions/upload-pages-artifact@v5
-        with:
-          path: docs/.vitepress/dist
-
-  deploy:
-    if: github.event_name != 'pull_request'
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    needs: build
-    runs-on: ubuntu-latest
-    name: Deploy
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v5
+  docs:
+    uses: ghostdogpr/.github/.github/workflows/docs.yml@v1
