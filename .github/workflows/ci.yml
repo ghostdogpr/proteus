@@ -20,16 +20,13 @@ jobs:
           fetch-depth: 0
       - name: Cache scala dependencies
         uses: coursier/cache-action@v8
-      - name: Cache Coursier binary
-        uses: actions/cache@v6
+      - name: Setup Java
+        uses: actions/setup-java@v6
         with:
-          path: /opt/hostedtoolcache/cs
-          key: coursier-binary-${{ runner.os }}-${{ runner.arch }}-setup-action-v3
-      - name: Setup Scala and Java
-        uses: coursier/setup-action@v3
-        with:
-          jvm: temurin:25
-          apps: sbt
+          distribution: temurin
+          java-version: 25
+      - name: Setup sbt
+        uses: sbt/setup-sbt@v1
       - name: Lint code
         run: sbt check
 
@@ -44,16 +41,13 @@ jobs:
           fetch-depth: 0
       - name: Cache scala dependencies
         uses: coursier/cache-action@v8
-      - name: Cache Coursier binary
-        uses: actions/cache@v6
+      - name: Setup Java
+        uses: actions/setup-java@v6
         with:
-          path: /opt/hostedtoolcache/cs
-          key: coursier-binary-${{ runner.os }}-${{ runner.arch }}-setup-action-v3
-      - name: Setup Scala and Java
-        uses: coursier/setup-action@v3
-        with:
-          jvm: temurin:25
-          apps: sbt
+          distribution: temurin
+          java-version: 25
+      - name: Setup sbt
+        uses: sbt/setup-sbt@v1
       - name: Run tests
         run: sbt test
 
@@ -68,16 +62,13 @@ jobs:
           fetch-depth: 0
       - name: Cache scala dependencies
         uses: coursier/cache-action@v8
-      - name: Cache Coursier binary
-        uses: actions/cache@v6
+      - name: Setup Java
+        uses: actions/setup-java@v6
         with:
-          path: /opt/hostedtoolcache/cs
-          key: coursier-binary-${{ runner.os }}-${{ runner.arch }}-setup-action-v3
-      - name: Setup Scala and Java
-        uses: coursier/setup-action@v3
-        with:
-          jvm: temurin:25
-          apps: sbt
+          distribution: temurin
+          java-version: 25
+      - name: Setup sbt
+        uses: sbt/setup-sbt@v1
       - name: Release artifacts
         run: sbt ci-release
         env:
