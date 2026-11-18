@@ -239,5 +239,7 @@ lazy val commonSettings = Def.settings(
     "-Wvalue-discard",
     "-Xkind-projector"
   ),
+  // Scala.js output does not run on a JVM, so the JDK release target only applies to JVM builds.
+  scalacOptions ++= (if (platform.value == Platform.jvm) Seq("-release", "17") else Nil),
   Test / fork := true
 )
