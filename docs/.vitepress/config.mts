@@ -6,7 +6,16 @@ export default defineConfig({
   description: "Protobuf library for Scala",
   head: [
     ['link', { rel: 'icon', href: '/proteus/favicon.png' }],
-    ['script', { defer: '', src: 'https://cloud.umami.is/script.js', 'data-website-id': '2ba71608-2c44-4547-804e-ed78f3a41ad1' }]
+    ['script', { defer: '', src: 'https://cloud.umami.is/script.js', 'data-website-id': '2ba71608-2c44-4547-804e-ed78f3a41ad1' }],
+    ['meta', { property: 'og:type', content: 'website' }],
+    ['meta', { property: 'og:url', content: 'https://ghostdogpr.github.io/proteus/' }],
+    ['meta', { property: 'og:title', content: 'Proteus' }],
+    ['meta', { property: 'og:description', content: 'Protobuf library for Scala' }],
+    ['meta', { property: 'og:image', content: 'https://ghostdogpr.github.io/proteus/og.png' }],
+    ['meta', { property: 'og:image:width', content: '1200' }],
+    ['meta', { property: 'og:image:height', content: '630' }],
+    ['meta', { property: 'og:image:alt', content: 'Proteus logo (Scala bars between angle brackets) above the title Proteus: Protobuf library for Scala' }],
+    ['meta', { name: 'twitter:card', content: 'summary_large_image' }]
   ],
 
   themeConfig: {
@@ -17,6 +26,7 @@ export default defineConfig({
       { text: 'Guides', link: '/migrating-to-proteus' },
       { text: 'FAQ', link: '/faq' },
       { text: 'About', link: '/about' },
+      { text: 'Scaladoc', link: 'https://javadoc.io/doc/com.github.ghostdogpr/proteus-core_3/' },
     ],
 
     logo: '/proteus.svg',
