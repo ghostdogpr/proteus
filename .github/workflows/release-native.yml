@@ -36,7 +36,7 @@ jobs:
       - name: Cache scala dependencies
         uses: coursier/cache-action@v8
       - name: Build native image
-        run: sbt 'diff/nativeImageCopy ${{ matrix.artifact }}'
+        run: sbt --server 'diff/nativeImageCopy ${{ matrix.artifact }}'
       - name: Upload release asset
         if: github.event_name == 'release'
         uses: softprops/action-gh-release@v3
