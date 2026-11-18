@@ -21,7 +21,7 @@ inThisBuild(
   List(
     scalaVersion := scala3Version,
     organization := "com.github.ghostdogpr",
-    homepage     := Some(uri("https://github.com/ghostdogpr/proteus")),
+    homepage     := Some(uri("https://ghostdogpr.github.io/proteus/")),
     licenses     := List(License.Apache2),
     scmInfo      := Some(ScmInfo(uri("https://github.com/ghostdogpr/proteus/"), "scm:git:git@github.com:ghostdogpr/proteus.git")),
     developers   := List(Developer("ghostdogpr", "Pierre Ricadat", "ghostdogpr@gmail.com", uri("https://github.com/ghostdogpr"))),
